@@ -4,7 +4,7 @@ version: 0.1
 Author: Yang Zhong
 Date: 2022-11-24 19:03:36
 LastEditors: Yang Zhong
-LastEditTime: 2023-01-16 14:59:17
+LastEditTime: 2023-07-18 03:09:31
 '''
 
 from pymatgen.core.structure import Structure
@@ -13,7 +13,7 @@ from pymatgen.core.structure import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
 import os
 import natsort
-from utils import *
+from utils_openmx.utils import *
 
 ######################## Input parameters begin #######################
 system_name = 'Si'
