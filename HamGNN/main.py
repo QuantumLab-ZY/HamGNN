@@ -36,9 +36,10 @@ def prepare_data(config):
     batch_size = config.dataset_params.batch_size
     split_file = config.dataset_params.split_file
     graph_data_path = config.dataset_params.graph_data_path
-    if not os.path.exists(graph_data_path):
-        os.mkdir(graph_data_path)
-    graph_data_path = os.path.join(graph_data_path, 'graph_data.npz')
+    if not os.path.isfile(graph_data_path):
+        if not os.path.exists(graph_data_path):
+            os.mkdir(graph_data_path)
+        graph_data_path = os.path.join(graph_data_path, 'graph_data.npz')
     if os.path.exists(graph_data_path):
         print(f"Loading graph data from {graph_data_path}!")
     else:

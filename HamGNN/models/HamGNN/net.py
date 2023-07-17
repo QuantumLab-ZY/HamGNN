@@ -1084,12 +1084,6 @@ class HamGNN_out(nn.Module):
                                 79: 19, 80: 20,
                                 81: 13, 82: 14,
                                 83: 15}
-        # ORCA
-        elif self.ham_type == 'orca':
-            self.index_change = None     
-            self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e")
-            self.basis_def = {1:[1,2,4,5,6],6:[1,2,3,4,5,6,7,8,9,10,11,12,13,14],
-                              7:[1,2,3,4,5,6,7,8,9,10,11,12,13,14], 8:[1,2,3,4,5,6,7,8,9,10,11,12,13,14]}
         # pasp
         elif self.ham_type == 'pasp':   
             self.row = self.col = o3.Irreps("1x1o")
@@ -2047,10 +2041,6 @@ class HamGNN_out(nn.Module):
                 result = {'hamiltonian': H, 'band_energy': band_energy, 'wavefunction': wavefunction, 'band_gap':gap, 'H_sym': H_sym}
                 if self.export_reciprocal_values:
                     result.update({'HK':HK, 'SK':SK, 'dSK': dSK})
-        # ORCA
-        elif self.ham_type == 'orca':
-            H = self.convert_to_mole_Ham(data, Hon, Hoff)
-            result = {'hamiltonian': H}
         else:
             raise NotImplementedError
         
@@ -2058,9 +2048,6 @@ class HamGNN_out(nn.Module):
             # openmx
             if self.ham_type in ['openmx','pasp', 'siesta','abacus']:
                 S = self.cat_onsite_and_offsite(data, Son, Soff)
-            # ORCA
-            elif self.ham_type == 'orca':
-                S = self.convert_to_mole_Ham(data, Son, Soff)
             else:
                 raise NotImplementedError
             result.update({'overlap': S})
