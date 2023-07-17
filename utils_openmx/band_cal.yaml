@@ -1,0 +1,8 @@
+
+nao_max: 14
+graph_data_path: '/data/home/yzhong/Tools/HamGNN/Examples/Si/Hamiltonian/graph_data.npz'
+hamiltonian_path: '/data/home/yzhong/Tools/HamGNN/Examples/Si/Hamiltonian/prediction_results/version_0/target_hamiltonian.npy'
+nk: 60          # the number of k points
+save_dir: '/data/home/yzhong/Tools/HamGNN/Examples/Si/Hamiltonian/prediction_results/Bands/target' # The directory to save the results
+strcture_name: 'Si'  # The name of each cif file saved is strcture_name_idx.cif after band calculation
+

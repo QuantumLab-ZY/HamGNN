@@ -1,0 +1,9 @@
+
+nao_max: 14
+graph_data_save_path: '/data/share/HamGNN/HamGNN_utils/Examples/Si/Hamiltonian/graph_preparation'
+read_openmx_path: '/data/home/yzhong/NPJ/HamGNN/utils_openmx/read_openmx'
+max_SCF_skip: 200
+scfout_paths: '/data/share/HamGNN/HamGNN_utils/Examples/Si/Hamiltonian/graph_preparation' # The directory of the .scfout file calculated by openmx/openmx_postprocess, or a wildcard directory name to match multiple directories
+dat_file_name: 'Si.dat'
+std_file_name: null # None if no openmx computation is performed
+scfout_file_name: 'Si.scfout' # If the openmx self-consistent Hamiltonian is not required as the target, "overlap.scfout" can be used instead.
