@@ -1,5 +1,5 @@
 <p align="center">
-  <img height="90" src="logo/logo.png"/>
+  <img height="130" src="logo/logo.png"/>
 </p>
 
 ## Introduction to HamGNN
