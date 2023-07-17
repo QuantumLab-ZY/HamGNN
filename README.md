@@ -35,23 +35,23 @@ read_openmx is a binary executable that can be used to export the matrices from 
 ## Installation
 Run the following command to install HamGNN:
 ```bash
-git clone git@github.com:XXXXXXX.git
+git clone https://github.com/QuantumLab-ZY/HamGNN.git
 cd HamGNN
 python setup.py install
 ```
 
 ## Usage
-### Preparation of Hamiltonian Training Data:
+### Preparation of Hamiltonian Training Data
 First, generate a set of structure files (POSCAR or CIF files) using molecular dynamics or random perturbation. After setting the appropriate path parameters in the `poscar2openmx.py` file,
 run `python poscar2openmx.py` to convert these structures into OpenMX's `.dat` file format. Run OpenMX to perform static calculations on these structure files and obtain the `.scfout` binary files, which store the Hamiltonian and overlap matrix information for each structure. These files serve as the target Hamiltonians during training. Next, run `openmx_postprocess` to process each structure and obtain the `overlap.scfout` file, which contains the Hamiltonian matrix H0 that is independent of the self-consistent charge density. If the constructed dataset is only used for prediction purposes and not for training (i.e., no target Hamiltonian is needed), run `openmx_postprocess` to obtain the `overlap.scfout` file merely. `openmx_postprocess` is executed similarly to OpenMX and supports MPI parallelism.
 
-### Graph Data Conversion:
+### Graph Data Conversion
 After setting the appropriate path information in a `graph_data_gen.yaml` file, run `graph_data_gen --config graph_data_gen.yaml` to package the structural information and Hamiltonian data from all `.scfout` files into a single `graph_data.npz` file, which serves as the input data for the HamGNN network.
 
-### HamGNN Network Training and Prediction:
+### HamGNN Network Training and Prediction
 Prepare the `config.yaml` configuration file and set the network parameters, training parameters, and other details in this file. To run HamGNN, simply enter `HamGNN --config config.yaml`. Running `tensorboard --logdir train_dir` allows real-time monitoring of the training progress, where `train_dir` is the folder where HamGNN saves the training data, corresponding to the `train_dir` parameter in `config.yaml`. To enhance the transferability and prediction accuracy of the network, the training is divided into two steps. The first step involves training with only the loss value of the Hamiltonian in the loss function until the Hamiltonian training converges or the error reaches around 10^-5 Hartree, at which point the training can be stopped. Then, the band energy error is added to the loss function, and the network parameters obtained from the previous step are loaded for further training. After obtaining the final network parameters, the network can be used for prediction. First, convert the structures to be predicted into the input data format (`graph_data.npz`) for the network, following similar steps and procedures as preparing the training set. Then, in the `config.yaml` file, set the `checkpoint_path` to the path of the network parameter file and set the `stage` parameter to `test`. After configuring the parameters in `config.yaml`, running `HamGNN --config config.yaml` will perform the prediction.
 
-### Band Structure Calculation:
+### Band Structure Calculation
 Set the parameters in band_cal.yaml, mainly the path to the Hamiltonian data, then run `band_cal --config band_cal.yaml`
 
 ##  How to set the options in config.yaml

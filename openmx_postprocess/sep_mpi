@@ -1,0 +1,4 @@
+ls *.c *.h *.dat > tmp_ls
+./sep_mpi.prl > tmp_command
+chmod 777 tmp_command
+./tmp_command

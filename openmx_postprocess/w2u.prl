@@ -1,0 +1,12 @@
+#!/usr/bin/perl
+
+$file = "tmp_ls";
+open(INPUTFILE,$file);
+
+while ($name = <INPUTFILE>){
+ chop($name);
+ print"cat $name | tr -d '\\r' > tmp_file\n";
+ print"cp tmp_file $name\n";
+ print"rm tmp_file\n";
+}
+close(INPUTFILE);
