@@ -223,7 +223,7 @@ class Model(pl.LightningModule):
                     self.trainer.logger.log_dir, 'processed_values_'+'epc_mat'+'.npy'), processed_values)
             
     def forward(self, data):
-        torch.set_grad_enabled(True)
+        # torch.set_grad_enabled(True)
         self._enable_grads(data)
         representation = self.representation(data)
         pred = self.output_module(data, representation)
