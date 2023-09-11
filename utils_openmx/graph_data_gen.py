@@ -4,7 +4,7 @@ version: 0.1
 Author: Yang Zhong
 Date: 2022-11-24 19:07:54
 LastEditors: Yang Zhong
-LastEditTime: 2023-07-14 11:03:12
+LastEditTime: 2023-09-11 14:08:36
 '''
 
 import json
@@ -60,7 +60,6 @@ def main():
         f_H0 = os.path.join(scf_path, "overlap.scfout")
         
         # read energy
-    # read energy
         if std_file_name is not None:   
             f_std = os.path.join(scf_path, std_file_name) 
             try:

@@ -4,7 +4,7 @@ version:
 Author: Yang Zhong
 Date: 2023-01-16 13:00:43
 LastEditors: Yang Zhong
-LastEditTime: 2023-01-16 14:53:37
+LastEditTime: 2023-09-11 14:01:53
 '''
 
 from ase import Atoms
@@ -301,7 +301,9 @@ basis_def_19 = {1:np.array([0,1,3,4,5], dtype=int), # H
              24:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13], dtype=int), # Cr 
              53:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int), # I   
              82:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int), # pb
-             55:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int) # Cs
+             55:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int), # Cs
+             33:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int), # As
+             31:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int) # Ga
              }
 
 basis_def_19_siesta = {55:np.array([0,1,4,5,3], dtype=int), # Cs
@@ -336,7 +338,7 @@ basis_def_14 = {1:np.array([0,1,3,4,5], dtype=int), # H
 
 # Warning: this dict is not complete!!!
 num_valence = {1:1,2:2,3:3,4:2,5:3,6:4,7:5,8:6,9:7,10:8,11:9,12:8,13:3,14:4,15:5,16:6,17:7,18:8,19:9,20:10,42:14,83:15,34:6,
-               35:7,55:9,82:14,53:7}
+               35:7,55:9,82:14,53:7,33:15,31:13}
 num_val = np.zeros((99,), dtype=int)
 for k in num_valence.keys():
     num_val[k] = num_valence[k]
@@ -345,7 +347,7 @@ au2ang = 0.5291772490000065
 au2ev = 27.211324570273
 pattern_eng = re.compile(r'Enpy  =(\W+)(\-\d+\.?\d*)')
 pattern_md = re.compile(r'MD= 1  SCF=(\W*)(\d+)')
-pattern_latt = re.compile(r'<Atoms.UnitVectors.+\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+Atoms.UnitVectors>')
+pattern_latt = re.compile(r'<Atoms.UnitVectors.+?\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+Atoms.UnitVectors>')
 pattern_coor = re.compile(r'\s+\d+\s+(\w+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+\-?\d+\.?\d+\s+\-?\d+\.?\d+')
 num = r'-?\d+\.?\d*'
 wht = r'\s+'
