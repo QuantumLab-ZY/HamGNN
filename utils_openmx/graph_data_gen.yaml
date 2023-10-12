@@ -7,3 +7,4 @@ scfout_paths: '/data/share/HamGNN/HamGNN_utils/Examples/Si/Hamiltonian/graph_pre
 dat_file_name: 'Si.dat'
 std_file_name: null # None if no openmx computation is performed
 scfout_file_name: 'Si.scfout' # If the openmx self-consistent Hamiltonian is not required as the target, "overlap.scfout" can be used instead.
+soc_switch: False # generate graph_data.npz for SOC (True) or Non-SOC (False) Hamiltonian
