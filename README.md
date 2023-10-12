@@ -56,6 +56,17 @@ After setting the appropriate path information in a `graph_data_gen.yaml` file, 
 ### HamGNN Network Training and Prediction
 Prepare the `config.yaml` configuration file and set the network parameters, training parameters, and other details in this file. To run HamGNN, simply enter `HamGNN --config config.yaml`. Running `tensorboard --logdir train_dir` allows real-time monitoring of the training progress, where `train_dir` is the folder where HamGNN saves the training data, corresponding to the `train_dir` parameter in `config.yaml`. To enhance the transferability and prediction accuracy of the network, the training is divided into two steps. The first step involves training with only the loss value of the Hamiltonian in the loss function until the Hamiltonian training converges or the error reaches around 10^-5 Hartree, at which point the training can be stopped. Then, the band energy error is added to the loss function, and the network parameters obtained from the previous step are loaded for further training. After obtaining the final network parameters, the network can be used for prediction. First, convert the structures to be predicted into the input data format (`graph_data.npz`) for the network, following similar steps and procedures as preparing the training set. Then, in the `config.yaml` file, set the `checkpoint_path` to the path of the network parameter file and set the `stage` parameter to `test`. After configuring the parameters in `config.yaml`, running `HamGNN --config config.yaml` will perform the prediction. 
 Several pre-trained models and the `config.yaml` file for the test examples are available on Zenodo (https://doi.org/10.5281/zenodo.8147631).
+
+### Details of training for bands (The 2nd training step)
+When the training of the Hamiltonian matrix is completed in the first step, it is necessary to use the trained network weights to initialize the HamGNN network and start training for the energy bands. The parameters related to energy band training are as follows:
++ `checkpoint_path` parameter should be set to path of the weight file obtained after training on the Hamiltonian matrix in the first step.
++ Set `load_from_checkpoint` to True
++ `lr` should not be too large, it is recommended to use 0.0001.
++ In `losses_metrics` and `metrics`, remove the commented section for `band_energy`.
++ Set `calculate_band_energy` to True and specify the parameters `num_k`, `band_num`, and `k_path`.
+
+After setting the above parameters, start the training again.
+
 ### Band Structure Calculation
 Set the parameters in band_cal.yaml, mainly the path to the Hamiltonian data, then run `band_cal --config band_cal.yaml`
 
