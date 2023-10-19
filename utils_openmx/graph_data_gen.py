@@ -4,7 +4,7 @@ version: 0.1
 Author: Yang Zhong
 Date: 2022-11-24 19:07:54
 LastEditors: Yang Zhong
-LastEditTime: 2023-10-12 10:16:49
+LastEditTime: 2023-10-19 16:51:54
 '''
 
 import json
@@ -33,6 +33,8 @@ def main():
     nao_max = input['nao_max']
     graph_data_path = input['graph_data_save_path']
     read_openmx_path = input['read_openmx_path']
+    if os.path.isdir(read_openmx_path):
+        read_openmx_path = os.path.join(read_openmx_path, 'read_openmx')
     max_SCF_skip = input['max_SCF_skip']
     scfout_paths = input['scfout_paths'] # The directory of the .scfout file calculated by openmx/openmx_postprocess, or a wildcard directory name to match multiple directories
     dat_file_name = input['dat_file_name']
@@ -99,7 +101,7 @@ def main():
         
         if soc_switch:
             # read hopping parameters
-            os.system(os.path.join(read_openmx_path, 'read_openmx') + " " + f_sc)
+            os.system(read_openmx_path + " " + f_sc)
             if not os.path.exists("./HS.json"):
                 continue
             
@@ -172,7 +174,7 @@ def main():
             os.system("rm HS.json")
 
             # read H0
-            os.system(os.path.join(read_openmx_path, 'read_openmx') + " " + f_H0)
+            os.system(read_openmx_path + " " + f_H0)
             if not os.path.exists("./HS.json"):
                 continue
             
