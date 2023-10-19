@@ -4,7 +4,7 @@ version: 0.1
 Author: Yang Zhong
 Date: 2022-11-24 19:07:54
 LastEditors: Yang Zhong
-LastEditTime: 2023-10-19 16:51:54
+LastEditTime: 2023-10-19 17:14:31
 '''
 
 import json
@@ -266,7 +266,11 @@ def main():
                 continue
             
             with open("./HS.json",'r') as load_f:
-                load_dict = json.load(load_f)
+                try:
+                    load_dict = json.load(load_f)
+                except:
+                    print(f'{f_sc} is not read successfully!')
+                    continue
                 pos = np.array(load_dict['pos'])
                 edge_index = np.array(load_dict['edge_index'])
                 inv_edge_idx = np.array(load_dict['inv_edge_idx'])
@@ -313,7 +317,11 @@ def main():
                 continue
             
             with open("./HS.json",'r') as load_f:
-                load_dict = json.load(load_f)
+                try:
+                    load_dict = json.load(load_f)
+                except:
+                    print(f'{f_H0} is not read successfully!')
+                    continue
                 Hon0 = load_dict['Hon'][0]
                 Hoff0 = load_dict['Hoff'][0]
         
