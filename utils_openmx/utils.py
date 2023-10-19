@@ -4,7 +4,7 @@ version:
 Author: Yang Zhong
 Date: 2023-01-16 13:00:43
 LastEditors: Yang Zhong
-LastEditTime: 2023-09-11 14:01:53
+LastEditTime: 2023-10-19 16:55:40
 '''
 
 from ase import Atoms
@@ -303,7 +303,8 @@ basis_def_19 = {1:np.array([0,1,3,4,5], dtype=int), # H
              82:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int), # pb
              55:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int), # Cs
              33:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int), # As
-             31:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int) # Ga
+             31:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int), # Ga
+             80:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int), # Hg
              }
 
 basis_def_19_siesta = {55:np.array([0,1,4,5,3], dtype=int), # Cs

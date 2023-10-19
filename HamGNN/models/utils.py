@@ -204,6 +204,8 @@ def get_hparam_dict(config: dict = None):
         hparam_dict = config.representation_nets.schnorb
     elif config.setup.GNN_Net.lower() == 'nequip':
         hparam_dict = config.representation_nets.nequip
+    elif config.setup.GNN_Net.lower() == 'hamgnn_pre':
+        hparam_dict = config.representation_nets.HamGNN_pre
     else:
         print(f"The network: {config.setup.GNN_Net} is not yet supported!")
         quit()
