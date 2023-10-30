@@ -4,7 +4,7 @@ version:
 Author: Yang Zhong
 Date: 2023-01-16 13:00:43
 LastEditors: Yang Zhong
-LastEditTime: 2023-10-27 11:04:45
+LastEditTime: 2023-10-30 22:40:39
 '''
 
 from ase import Atoms
@@ -77,6 +77,8 @@ spin_set = {'H':[0.5, 0.5],
             'Pb':[7.0, 7.0],
             'Te':[8.0, 8.0],
             'Ge':[2.0, 2.0],
+            'V':[6.5, 6.5],
+            'Sb':[7.5, 7.5],
             }
 
 # Warning: this dict is not complete!!!
@@ -110,7 +112,9 @@ PAO_dict = {'H':'H6.0-s2p1',
             'Cs':'Cs12.0-s3p2d2',
             'Pb':'Pb8.0-s3p2d2',
             'Te': 'Te7.0-s3p2d2',
-            'Ge': 'Ge7.0-s3p2d2'
+            'Ge': 'Ge7.0-s3p2d2',
+            'V': 'V6.0-s3p2d1',
+            'Sb': 'Sb7.0-s3p2d2'
             }
 
 # Warning: this dict is not complete!!!
@@ -144,7 +148,10 @@ PBE_dict = {'H':'H_PBE19',
             'Cs':'Cs_PBE19',
             'Pb':'Pb_PBE19',
             'Te':'Te_PBE19',
-            'Ge':'Ge_PBE19'}
+            'Ge':'Ge_PBE19',
+            'V':'V_PBE19',
+            'Sb':'Sb_PBE19',
+            }
 
 def _nice_float(x,just,rnd):
     return str(round(x,rnd)).rjust(just)
@@ -309,6 +316,8 @@ basis_def_19 = {1:np.array([0,1,3,4,5], dtype=int), # H
              33:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int), # As
              31:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int), # Ga
              80:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int), # Hg
+             Element['V'].Z: np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13], dtype=int), # V
+             Element['Sb'].Z: np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], dtype=int), # Sb
              }
 
 basis_def_19_siesta = {55:np.array([0,1,4,5,3], dtype=int), # Cs
@@ -339,11 +348,12 @@ basis_def_14 = {1:np.array([0,1,3,4,5], dtype=int), # H
              18:np.array([0,1,3,4,5,6,7,8,9,10,11,12,13], dtype=int), # Ar
              19:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13], dtype=int), # K
              20:np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13], dtype=int), # Ca 
+             Element['V'].Z: np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13], dtype=int), # V
              }
 
 # Warning: this dict is not complete!!!
 num_valence = {1:1,2:2,3:3,4:2,5:3,6:4,7:5,8:6,9:7,10:8,11:9,12:8,13:3,14:4,15:5,16:6,17:7,18:8,19:9,20:10,42:14,83:15,34:6,
-               35:7,55:9,82:14,53:7,33:15,31:13,32:4}
+               35:7,55:9,82:14,53:7,33:15,31:13,32:4,Element['V'].Z:13, Element['Sb'].Z:15}
 num_val = np.zeros((99,), dtype=int)
 for k in num_valence.keys():
     num_val[k] = num_valence[k]
