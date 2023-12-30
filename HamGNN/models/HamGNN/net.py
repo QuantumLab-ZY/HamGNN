@@ -846,8 +846,24 @@ class HamGNN_out(nn.Module):
         
         # openmx
         if self.ham_type == 'openmx':
-            self.num_valence = {1:1,2:2,3:3,4:2,5:3,6:4,7:5,8:6,9:7,10:8,11:9,12:8,13:3,14:4,15:5,16:6,17:7,
-                                18:8,19:9,20:10,35:7,83:15,33:15,31:13,32:4,Element['V'].Z:13,Element['Sb'].Z:15}
+            self.num_valence = {Element['H'].Z: 1, Element['He'].Z: 2, Element['Li'].Z: 3, Element['Be'].Z: 2, Element['B'].Z: 3,
+                                Element['C'].Z: 4, Element['N'].Z: 5,  Element['O'].Z: 6,  Element['F'].Z: 7,  Element['Ne'].Z: 8,
+                                Element['Na'].Z: 9, Element['Mg'].Z: 8, Element['Al'].Z: 3, Element['Si'].Z: 4, Element['P'].Z: 5,
+                                Element['S'].Z: 6,  Element['Cl'].Z: 7, Element['Ar'].Z: 8, Element['K'].Z: 9,  Element['Ca'].Z: 10,
+                                Element['Sc'].Z: 11, Element['Ti'].Z: 12, Element['V'].Z: 13, Element['Cr'].Z: 14, Element['Mn'].Z: 15,
+                                Element['Fe'].Z: 16, Element['Co'].Z: 17, Element['Ni'].Z: 18, Element['Cu'].Z: 19, Element['Zn'].Z: 20,
+                                Element['Ga'].Z: 13, Element['Ge'].Z: 4,  Element['As'].Z: 15, Element['Se'].Z: 6,  Element['Br'].Z: 7,
+                                Element['Kr'].Z: 8,  Element['Rb'].Z: 9,  Element['Sr'].Z: 10, Element['Y'].Z: 11, Element['Zr'].Z: 12,
+                                Element['Nb'].Z: 13, Element['Mo'].Z: 14, Element['Tc'].Z: 15, Element['Ru'].Z: 14, Element['Rh'].Z: 15,
+                                Element['Pd'].Z: 16, Element['Ag'].Z: 17, Element['Cd'].Z: 12, Element['In'].Z: 13, Element['Sn'].Z: 14,
+                                Element['Sb'].Z: 15, Element['Te'].Z: 16, Element['I'].Z: 7, Element['Xe'].Z: 8, Element['Cs'].Z: 9,
+                                Element['Ba'].Z: 10, Element['La'].Z: 11, Element['Ce'].Z: 12, Element['Pr'].Z: 13, Element['Nd'].Z: 14,
+                                Element['Pm'].Z: 15, Element['Sm'].Z: 16, Element['Dy'].Z: 20, Element['Ho'].Z: 21, Element['Lu'].Z: 11,
+                                Element['Hf'].Z: 12, Element['Ta'].Z: 13, Element['W'].Z: 12,  Element['Re'].Z: 15, Element['Os'].Z: 14,
+                                Element['Ir'].Z: 15, Element['Pt'].Z: 16, Element['Au'].Z: 17, Element['Hg'].Z: 18, Element['Tl'].Z: 19,
+                                Element['Pb'].Z: 14, Element['Bi'].Z: 15
+                            }
+            
             if self.nao_max == 14:
                 self.index_change = torch.LongTensor([0,1,2,5,3,4,8,6,7,11,13,9,12,10])       
                 self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e")
@@ -874,6 +890,7 @@ class HamGNN_out(nn.Module):
                                     35:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Br  
                                     Element['V'].Z: [0,1,2,3,4,5,6,7,8,9,10,11,12,13], # V
                                 }
+            
             elif self.nao_max == 13:
                 self.basis_def = {  1:[0,1,2,3,4], # H
                                     5:[0,1,2,3,4,5,6,7,8,9,10,11,12], # B
@@ -883,6 +900,7 @@ class HamGNN_out(nn.Module):
                                 }
                 self.index_change = torch.LongTensor([0,1,4,2,3,7,5,6,10,12,8,11,9])       
                 self.row = self.col = o3.Irreps("1x0e+1x0e+1x1o+1x1o+1x2e")
+            
             elif self.nao_max == 19:
                 self.index_change = torch.LongTensor([0,1,2,5,3,4,8,6,7,11,13,9,12,10,16,18,14,17,15])       
                 self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e+1x2e")
@@ -919,8 +937,92 @@ class HamGNN_out(nn.Module):
                                     Element['V'].Z: [0,1,2,3,4,5,6,7,8,9,10,11,12,13], # V
                                     Element['Sb'].Z: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # Sb
                                 }
+            
+            elif self.nao_max == 26:
+                self.index_change = torch.LongTensor([0,1,2,5,3,4,8,6,7,11,13,9,12,10,16,18,14,17,15,22,23,21,24,20,25,19])       
+                self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e+1x2e+1x3o")
+                self.basis_def = (lambda s1=[0],s2=[1],s3=[2],p1=[3,4,5],p2=[6,7,8],d1=[9,10,11,12,13],d2=[14,15,16,17,18],f1=[19,20,21,22,23,24,25]: {
+                    Element['H'].Z : s1+s2+p1,  # H6.0-s2p1
+                    Element['He'].Z : s1+s2+p1,  # He8.0-s2p1
+                    Element['Li'].Z : s1+s2+s3+p1+p2,  # Li8.0-s3p2
+                    Element['Be'].Z : s1+s2+p1+p2,  # Be7.0-s2p2
+                    Element['B'].Z : s1+s2+p1+p2+d1,  # B7.0-s2p2d1
+                    Element['C'].Z : s1+s2+p1+p2+d1,  # C6.0-s2p2d1
+                    Element['N'].Z : s1+s2+p1+p2+d1,  # N6.0-s2p2d1
+                    Element['O'].Z : s1+s2+p1+p2+d1,  # O6.0-s2p2d1
+                    Element['F'].Z : s1+s2+p1+p2+d1,  # F6.0-s2p2d1
+                    Element['Ne'].Z: s1+s2+p1+p2+d1,  # Ne9.0-s2p2d1
+                    Element['Na'].Z: s1+s2+s3+p1+p2+d1,  # Na9.0-s3p2d1
+                    Element['Mg'].Z: s1+s2+s3+p1+p2+d1,  # Mg9.0-s3p2d1
+                    Element['Al'].Z: s1+s2+p1+p2+d1,  # Al7.0-s2p2d1
+                    Element['Si'].Z: s1+s2+p1+p2+d1,  # Si7.0-s2p2d1
+                    Element['P'].Z: s1+s2+p1+p2+d1,  # P7.0-s2p2d1
+                    Element['S'].Z: s1+s2+p1+p2+d1,  # S7.0-s2p2d1
+                    Element['Cl'].Z: s1+s2+p1+p2+d1,  # Cl7.0-s2p2d1
+                    Element['Ar'].Z: s1+s2+p1+p2+d1,  # Ar9.0-s2p2d1
+                    Element['K'].Z: s1+s2+s3+p1+p2+d1,  # K10.0-s3p2d1
+                    Element['Ca'].Z: s1+s2+s3+p1+p2+d1,  # Ca9.0-s3p2d1
+                    Element['Sc'].Z: s1+s2+s3+p1+p2+d1,  # Sc9.0-s3p2d1
+                    Element['Ti'].Z: s1+s2+s3+p1+p2+d1,  # Ti7.0-s3p2d1
+                    Element['V'].Z: s1+s2+s3+p1+p2+d1,  # V6.0-s3p2d1
+                    Element['Cr'].Z: s1+s2+s3+p1+p2+d1,  # Cr6.0-s3p2d1
+                    Element['Mn'].Z: s1+s2+s3+p1+p2+d1,  # Mn6.0-s3p2d1
+                    Element['Fe'].Z: s1+s2+s3+p1+p2+d1,  # Fe5.5H-s3p2d1
+                    Element['Co'].Z: s1+s2+s3+p1+p2+d1,  # Co6.0H-s3p2d1
+                    Element['Ni'].Z: s1+s2+s3+p1+p2+d1,  # Ni6.0H-s3p2d1
+                    Element['Cu'].Z: s1+s2+s3+p1+p2+d1,  # Cu6.0H-s3p2d1
+                    Element['Zn'].Z: s1+s2+s3+p1+p2+d1,  # Zn6.0H-s3p2d1
+                    Element['Ga'].Z: s1+s2+s3+p1+p2+d1+d2,  # Ga7.0-s3p2d2
+                    Element['Ge'].Z: s1+s2+s3+p1+p2+d1+d2,  # Ge7.0-s3p2d2
+                    Element['As'].Z: s1+s2+s3+p1+p2+d1+d2,  # As7.0-s3p2d2
+                    Element['Se'].Z: s1+s2+s3+p1+p2+d1+d2,  # Se7.0-s3p2d2
+                    Element['Br'].Z: s1+s2+s3+p1+p2+d1+d2,  # Br7.0-s3p2d2
+                    Element['Kr'].Z: s1+s2+s3+p1+p2+d1+d2,  # Kr10.0-s3p2d2
+                    Element['Rb'].Z: s1+s2+s3+p1+p2+d1+d2,  # Rb11.0-s3p2d2
+                    Element['Sr'].Z: s1+s2+s3+p1+p2+d1+d2,  # Sr10.0-s3p2d2
+                    Element['Y'].Z: s1+s2+s3+p1+p2+d1+d2,  # Y10.0-s3p2d2
+                    Element['Zr'].Z: s1+s2+s3+p1+p2+d1+d2,  # Zr7.0-s3p2d2
+                    Element['Nb'].Z: s1+s2+s3+p1+p2+d1+d2,  # Nb7.0-s3p2d2
+                    Element['Mo'].Z: s1+s2+s3+p1+p2+d1+d2,  # Mo7.0-s3p2d2
+                    Element['Tc'].Z: s1+s2+s3+p1+p2+d1+d2,  # Tc7.0-s3p2d2
+                    Element['Ru'].Z: s1+s2+s3+p1+p2+d1+d2,  # Ru7.0-s3p2d2
+                    Element['Rh'].Z: s1+s2+s3+p1+p2+d1+d2,  # Rh7.0-s3p2d2
+                    Element['Pd'].Z: s1+s2+s3+p1+p2+d1+d2,  # Pd7.0-s3p2d2
+                    Element['Ag'].Z: s1+s2+s3+p1+p2+d1+d2,  # Ag7.0-s3p2d2
+                    Element['Cd'].Z: s1+s2+s3+p1+p2+d1+d2,  # Cd7.0-s3p2d2
+                    Element['In'].Z: s1+s2+s3+p1+p2+d1+d2,  # In7.0-s3p2d2
+                    Element['Sn'].Z: s1+s2+s3+p1+p2+d1+d2,  # Sn7.0-s3p2d2
+                    Element['Sb'].Z: s1+s2+s3+p1+p2+d1+d2,  # Sb7.0-s3p2d2
+                    Element['Te'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Te7.0-s3p2d2f1
+                    Element['I'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # I7.0-s3p2d2f1
+                    Element['Xe'].Z: s1+s2+s3+p1+p2+d1+d2,  # Xe11.0-s3p2d2
+                    Element['Cs'].Z: s1+s2+s3+p1+p2+d1+d2,  # Cs12.0-s3p2d2
+                    Element['Ba'].Z: s1+s2+s3+p1+p2+d1+d2,  # Ba10.0-s3p2d2
+                    Element['La'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # La8.0-s3p2d2f1
+                    Element['Ce'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Ce8.0-s3p2d2f1
+                    Element['Pr'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Pr8.0-s3p2d2f1
+                    Element['Nd'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Nd8.0-s3p2d2f1
+                    Element['Pm'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Pm8.0-s3p2d2f1
+                    Element['Sm'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Sm8.0-s3p2d2f1
+                    Element['Dy'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Dy8.0-s3p2d2f1
+                    Element['Ho'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Ho8.0-s3p2d2f1
+                    Element['Lu'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Lu8.0-s3p2d2f1
+                    Element['Hf'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Hf9.0-s3p2d2f1
+                    Element['Ta'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Ta7.0-s3p2d2f1
+                    Element['W'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # W7.0-s3p2d2f1
+                    Element['Re'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Re7.0-s3p2d2f1
+                    Element['Os'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Os7.0-s3p2d2f1
+                    Element['Ir'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Ir7.0-s3p2d2f1
+                    Element['Pt'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Pt7.0-s3p2d2f1
+                    Element['Au'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Au7.0-s3p2d2f1
+                    Element['Hg'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Hg8.0-s3p2d2f1
+                    Element['Tl'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Tl8.0-s3p2d2f1
+                    Element['Pb'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Pb8.0-s3p2d2f1
+                    Element['Bi'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Bi8.0-s3p2d2f1 
+                })()
             else:
                 raise NotImplementedError
+        
         elif self.ham_type == 'siesta':
             self.num_valence = {
                 1:1,2:2,
@@ -1798,7 +1900,17 @@ class HamGNN_out(nn.Module):
         return Hsoc
     
     def reduce(self, coefficient):
-        if self.nao_max == 19:
+        if self.nao_max == 14:
+            coefficient = coefficient.reshape(coefficient.shape[0], self.nao_max, self.nao_max)
+            coefficient[:, 3:6] = torch.mean(coefficient[:, 3:6], dim=1, keepdim=True).expand(coefficient.shape[0], 3, self.nao_max)
+            coefficient[:, 6:9] = torch.mean(coefficient[:, 6:9], dim=1, keepdim=True).expand(coefficient.shape[0], 3, self.nao_max)
+            coefficient[:, 9:14] = torch.mean(coefficient[:, 9:14], dim=1, keepdim=True).expand(coefficient.shape[0], 5, self.nao_max)
+            #
+            coefficient[:, :, 3:6] = torch.mean(coefficient[:, :, 3:6], dim=2, keepdim=True).expand(coefficient.shape[0], self.nao_max, 3)
+            coefficient[:, :, 6:9] = torch.mean(coefficient[:, :, 6:9], dim=2, keepdim=True).expand(coefficient.shape[0], self.nao_max, 3)
+            coefficient[:, :, 9:14] = torch.mean(coefficient[:, :, 9:14], dim=2, keepdim=True).expand(coefficient.shape[0], self.nao_max, 5)
+            
+        elif self.nao_max == 19:
             coefficient = coefficient.reshape(coefficient.shape[0], self.nao_max, self.nao_max)
             coefficient[:, 3:6] = torch.mean(coefficient[:, 3:6], dim=1, keepdim=True).expand(coefficient.shape[0], 3, self.nao_max)
             coefficient[:, 6:9] = torch.mean(coefficient[:, 6:9], dim=1, keepdim=True).expand(coefficient.shape[0], 3, self.nao_max)
@@ -1809,9 +1921,29 @@ class HamGNN_out(nn.Module):
             coefficient[:, :, 6:9] = torch.mean(coefficient[:, :, 6:9], dim=2, keepdim=True).expand(coefficient.shape[0], self.nao_max, 3)
             coefficient[:, :, 9:14] = torch.mean(coefficient[:, :, 9:14], dim=2, keepdim=True).expand(coefficient.shape[0], self.nao_max, 5)
             coefficient[:, :, 14:19] = torch.mean(coefficient[:, :, 14:19], dim=2, keepdim=True).expand(coefficient.shape[0], self.nao_max, 5)
+
+        elif self.nao_max == 26:
+            coefficient = coefficient.reshape(coefficient.shape[0], self.nao_max, self.nao_max)
+            coefficient[:, 3:6] = torch.mean(coefficient[:, 3:6], dim=1, keepdim=True).expand(coefficient.shape[0], 3, self.nao_max)
+            coefficient[:, 6:9] = torch.mean(coefficient[:, 6:9], dim=1, keepdim=True).expand(coefficient.shape[0], 3, self.nao_max)
+            coefficient[:, 9:14] = torch.mean(coefficient[:, 9:14], dim=1, keepdim=True).expand(coefficient.shape[0], 5, self.nao_max)
+            coefficient[:, 14:19] = torch.mean(coefficient[:, 14:19], dim=1, keepdim=True).expand(coefficient.shape[0], 5, self.nao_max)
+            coefficient[:, 19:26] = torch.mean(coefficient[:, 19:26], dim=1, keepdim=True).expand(coefficient.shape[0], 7, self.nao_max)
+            #
+            coefficient[:, :, 3:6] = torch.mean(coefficient[:, :, 3:6], dim=2, keepdim=True).expand(coefficient.shape[0], self.nao_max, 3)
+            coefficient[:, :, 6:9] = torch.mean(coefficient[:, :, 6:9], dim=2, keepdim=True).expand(coefficient.shape[0], self.nao_max, 3)
+            coefficient[:, :, 9:14] = torch.mean(coefficient[:, :, 9:14], dim=2, keepdim=True).expand(coefficient.shape[0], self.nao_max, 5)
+            coefficient[:, :, 14:19] = torch.mean(coefficient[:, :, 14:19], dim=2, keepdim=True).expand(coefficient.shape[0], self.nao_max, 5)
+            coefficient[:, :, 19:26] = torch.mean(coefficient[:, :, 19:26], dim=2, keepdim=True).expand(coefficient.shape[0], self.nao_max, 7)
         return coefficient.view(coefficient.shape[0], -1)
          
     def forward(self, data, graph_representation: dict = None):
+        # prepare data.hamiltonian & data.overlap
+        if 'hamiltonian' not in data:
+            data.hamiltonian = torch.cat([data.Hon, data.Hoff], dim=0)
+        if 'overlap' not in data:
+            data.overlap = torch.cat([data.Son, data.Soff], dim=0)
+        
         node_attr = graph_representation['node_attr']
         edge_attr = graph_representation['edge_attr']  # mji
         j, i = data.edge_index
@@ -1835,7 +1967,7 @@ class HamGNN_out(nn.Module):
         
             # Impose Hermitian symmetry for Son
             Son = self.symmetrize_Hon(Son)
-               
+
             # Calculate the off-site overlap
             # Calculate the contribution of the edges       
             edge_sph = self.offsitenet_s(edge_attr)

@@ -1,10 +1,10 @@
 '''
-Descripttion: The script to calculat bands from the results of HamNet
+Descripttion: The script to calculat bands from the results of HamGNN
 version: 1.0
 Author: Yang Zhong
 Date: 2022-12-20 14:08:52
 LastEditors: Yang Zhong
-LastEditTime: 2023-10-12 10:53:33
+LastEditTime: 2023-12-30 11:36:07
 '''
 
 import numpy as np
@@ -107,8 +107,8 @@ def main():
                 basis_def = basis_def_14
             elif nao_max == 19:
                 basis_def = basis_def_19
-            elif nao_max == 27:
-                basis_def = basis_def_27
+            elif nao_max == 26:
+                basis_def = basis_def_26
             else:
                 raise NotImplementedError
         
@@ -289,8 +289,8 @@ def main():
                 basis_def = basis_def_14
             elif nao_max == 19:
                 basis_def = basis_def_19
-            elif nao_max == 27:
-                basis_def = basis_def_27
+            elif nao_max == 26:
+                basis_def = basis_def_26
             else:
                 raise NotImplementedError
         

@@ -113,7 +113,7 @@ The input parameters in config.yaml are divided into different modules, which ma
     + `invariant_neurons`: The number of the neurons of the MLP used to map the invariant edge embeddings to the weights of each tensor product path
 
 + `HamGNN_out`: The output layer to transform the representation of crystals into Hamiltonian matrix
-    + `nao_max`: It is modified according to the maximum number of atomic orbitals in the data set, which can be `14`, `19`
+    + `nao_max`: It is modified according to the maximum number of atomic orbitals in the data set, which can be `14`, `19`, `26`.For short-period elements such as C, Si, O, etc., a nao_max of 14 is sufficient; the number of atomic bases for most common elements does not exceed 19. Setting nao_max to 26 would allow the description of all elements supported by OpenMX.
     + `add_H0`: Generally true, the complete Hamiltonian is predicted as the sum of H_scf plus H_nonscf (H0)
     + `symmetrize`：if set to true, the Hermitian symmetry constraint is imposed on the Hamiltonian
     + `calculate_band_energy`: Whether to calculate the energy bands to train the model 
