@@ -4,7 +4,7 @@ version: 0.1
 Author: Yang Zhong
 Date: 2022-11-24 19:07:54
 LastEditors: Yang Zhong
-LastEditTime: 2023-10-19 17:14:31
+LastEditTime: 2023-12-18 16:13:22
 '''
 
 import json
@@ -47,6 +47,8 @@ def main():
         basis_def = basis_def_14
     elif nao_max == 19:
         basis_def = basis_def_19
+    elif nao_max == 26:
+        basis_def = basis_def_26
     else:
         raise NotImplementedError
     

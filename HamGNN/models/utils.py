@@ -217,38 +217,38 @@ def get_hparam_dict(config: dict = None):
     return out
 
 def triplets(edge_index, nbr_shift, nbr_counts):
-        row_k, col_j = edge_index  # k->j
-        row_j, col_i = edge_index  # j->i
-        idx_k, idx_j, idx_i, idx_kj, idx_ji = [], [], [], [], []
+    row_k, col_j = edge_index  # k->j
+    row_j, col_i = edge_index  # j->i
+    idx_k, idx_j, idx_i, idx_kj, idx_ji = [], [], [], [], []
 
-        nbr_counts_cumsum = [0] + torch.cumsum(nbr_counts, dim=0).tolist()
+    nbr_counts_cumsum = [0] + torch.cumsum(nbr_counts, dim=0).tolist()
 
-        for edge_kj, j in enumerate(col_j):
-            j_j = torch.arange(nbr_counts_cumsum[j], nbr_counts_cumsum[j+1]).tolist()
-            idx_kj += [edge_kj]*len(j_j)
-            idx_ji += j_j
-            idx_k += [row_k[edge_kj]]*len(j_j)
-            idx_j += [j]*len(j_j)
-            idx_i += col_i[j_j].tolist()      
+    for edge_kj, j in enumerate(col_j):
+        j_j = torch.arange(nbr_counts_cumsum[j], nbr_counts_cumsum[j+1]).tolist()
+        idx_kj += [edge_kj]*len(j_j)
+        idx_ji += j_j
+        idx_k += [row_k[edge_kj]]*len(j_j)
+        idx_j += [j]*len(j_j)
+        idx_i += col_i[j_j].tolist()      
 
-        idx_k = torch.LongTensor(idx_k).type_as(edge_index)
-        idx_j = torch.LongTensor(idx_j).type_as(edge_index)
-        idx_i = torch.LongTensor(idx_i).type_as(edge_index)
-        idx_kj = torch.LongTensor(idx_kj).type_as(edge_index)
-        idx_ji = torch.LongTensor(idx_ji).type_as(edge_index)
+    idx_k = torch.LongTensor(idx_k).type_as(edge_index)
+    idx_j = torch.LongTensor(idx_j).type_as(edge_index)
+    idx_i = torch.LongTensor(idx_i).type_as(edge_index)
+    idx_kj = torch.LongTensor(idx_kj).type_as(edge_index)
+    idx_ji = torch.LongTensor(idx_ji).type_as(edge_index)
 
-        # Remove i == k triplets.
-        mask = (idx_i != idx_k) | ((nbr_shift[idx_kj]+nbr_shift[idx_ji]).pow(2).sum(dim=-1).sqrt() > 1.0e-3)
-        idx_i, idx_j, idx_k = idx_i[mask], idx_j[mask], idx_k[mask]
+    # Remove i == k triplets.
+    mask = (idx_i != idx_k) | ((nbr_shift[idx_kj]+nbr_shift[idx_ji]).pow(2).sum(dim=-1).sqrt() > 1.0e-3)
+    idx_i, idx_j, idx_k = idx_i[mask], idx_j[mask], idx_k[mask]
 
-        # Edge indices (k-j, j->i) for triplets.
-        idx_kj = idx_kj[mask]
-        idx_ji = idx_ji[mask]
+    # Edge indices (k-j, j->i) for triplets.
+    idx_kj = idx_kj[mask]
+    idx_ji = idx_ji[mask]
 
-        """
-        idx_i -> pos[idx_i]
-        idx_j -> pos[idx_j] - nbr_shift[idx_ji]
-        idx_k -> pos[idx_k] - nbr_shift[idx_ji] - nbr_shift[idx_kj] 
-        """
-
-        return col_i, row_j, idx_i, idx_j, idx_k, idx_kj, idx_ji
+    """
+    idx_i -> pos[idx_i]
+    idx_j -> pos[idx_j] - nbr_shift[idx_ji]
+    idx_k -> pos[idx_k] - nbr_shift[idx_ji] - nbr_shift[idx_kj] 
+    """
+    
+    return col_i, row_j, idx_i, idx_j, idx_k, idx_kj, idx_ji
