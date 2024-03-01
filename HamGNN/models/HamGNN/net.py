@@ -1700,6 +1700,10 @@ class HamGNN_out(nn.Module):
                     orbital_energies = orbital_energies[:,:band_num_win[idx]]   
                     orbital_coefficients = orbital_coefficients[:,:band_num_win[idx],:]
                 else:
+                    if isinstance(self.band_num_control, float):
+                        self.band_num_control = max([1, int(self.band_num_control*numc)])
+                    else:
+                        self.band_num_control = min([self.band_num_control, numc])
                     orbital_energies = orbital_energies[:,numc-self.band_num_control:numc+self.band_num_control]   
                     orbital_coefficients = orbital_coefficients[:,numc-self.band_num_control:numc+self.band_num_control,:]               
             band_energy.append(torch.transpose(orbital_energies, dim0=-1, dim1=-2)) # [shape:(Nbands, num_k)]
