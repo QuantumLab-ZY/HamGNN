@@ -1,0 +1,14 @@
+filename: graphene
+graph_data_path: /public/home/zhongyang/STRU_16/graph_data.npz
+hamiltonian_path: null # The path to the prediction_hamiltonian.npy file. If it is null, then the hamiltonian in graph_data.npz will be used instead. 
+
+# if k_path and lable are null, then the k_path will be set automatically.
+k_path: null 
+label: null
+nk: 120 # The total number of k points in all k paths
+
+nao_max: 40
+num_wfns: 3 # Export the wave functions in the interval of [VBM-num_wfn, VBM+num_wfn]
+save_dir: /public/home/zhongyang/STRU_16
+soc_switch: False
+Ham_type: abacus # openmx or abacus

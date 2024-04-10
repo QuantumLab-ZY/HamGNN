@@ -57,7 +57,7 @@ After setting the appropriate path information in a `graph_data_gen.yaml` file, 
 Prepare the `config.yaml` configuration file and set the network parameters, training parameters, and other details in this file. To run HamGNN, simply enter `HamGNN --config config.yaml`. Running `tensorboard --logdir train_dir` allows real-time monitoring of the training progress, where `train_dir` is the folder where HamGNN saves the training data, corresponding to the `train_dir` parameter in `config.yaml`. To enhance the transferability and prediction accuracy of the network, the training is divided into two steps. The first step involves training with only the loss value of the Hamiltonian in the loss function until the Hamiltonian training converges or the error reaches around 10^-5 Hartree, at which point the training can be stopped. Then, the band energy error is added to the loss function, and the network parameters obtained from the previous step are loaded for further training. After obtaining the final network parameters, the network can be used for prediction. First, convert the structures to be predicted into the input data format (`graph_data.npz`) for the network, following similar steps and procedures as preparing the training set. Then, in the `config.yaml` file, set the `checkpoint_path` to the path of the network parameter file and set the `stage` parameter to `test`. After configuring the parameters in `config.yaml`, running `HamGNN --config config.yaml` will perform the prediction. 
 Several pre-trained models and the `config.yaml` file for the test examples are available on Zenodo (https://doi.org/10.5281/zenodo.8147631).
 
-### Details of training for bands (The 2nd training step)
+### Details of training for bands (The 2nd training/fine-tuning step)
 When the training of the Hamiltonian matrix is completed in the first step, it is necessary to use the trained network weights to initialize the HamGNN network and start training for the energy bands. The parameters related to energy band training are as follows:
 + `checkpoint_path` parameter should be set to path of the weight file obtained after training on the Hamiltonian matrix in the first step.
 + Set `load_from_checkpoint` to True
@@ -70,6 +70,22 @@ After setting the above parameters, start the training again.
 ### Band Structure Calculation
 Set the parameters in band_cal.yaml, mainly the path to the Hamiltonian data, then run `band_cal --config band_cal.yaml`
 
+## The support for ABACUS software
+The utilities to support ABACUS software have been uploaded in the `utils_abacus` directory. Users need to modify the parameters in the scripts within this directory. The code in `utils_abacus/abacus_H0_export` is derived from modifying the `abacus-postprocess` program based on ABACUS-3.5.3. Its function is similar to `openmx_postprocess`, used for exporting the Hamiltonian part `H0` independent of the self-consistent field (SCF) charge density. Compilation of `abacus-postprocess` is the same as the original ABACUS compilation.
+
+`poscar2abacus.py` and `graph_data_gen_abacus.py` scripts are respectively utilized for generating ABACUS structure files and packaging the Hamiltonian matrix into the `graph_data.npz` file. Users can explore the usage of these tools independently. Later on, I'll briefly introduce the meanings of the parameters within these scripts.
+
+## Diagonalizing Hamiltonian matrices for large scale systems
+For crystal structures containing thousands of atoms, diagonalizing the Hamiltonian matrix using the serial `band_cal` script can be quite challenging. To address this, we've introduced a multi-core parallel `band_cal_parallel` script within band_cal_parallel directory.
+### Installation
+pip install mpitool-0.0.1-cp39-cp39-manylinux1_x86_64.whl
+
+pip install band_cal_parallel-0.1.12-py3-none-any.whl
+
+### Usage
+In the Python environment with `band_cal_parallel` installed, execute the following command with multiple cpus to compute the band structure:
+mpirun -np ncpus band_cal_parallel --config band_cal_parallel.yaml
+
 ##  How to set the options in config.yaml
 The input parameters in config.yaml are divided into different modules, which mainly include `'setup'`, `'dataset_params'`, `'losses_metrics'`, `'optim_params'` and network-related parameters (`'HamGNN_pre'` and `'HamGNN_out'`). Most of the parameters work well using the default values. The following introduces some commonly used parameters in each module.
 + `setup`:
@@ -78,6 +94,7 @@ The input parameters in config.yaml are divided into different modules, which ma
     + `num_gpus`: number of gpus to train on (`int`) or which GPUs to train on (`list` or `str`) applied per node.
     + `resume`: resume training (`true`) or start from scratch (`false`).
     + `checkpoint_path`: Path of the checkpoint from which training is resumed (`stage` = `fit`) or path to the checkpoint you wish to test (`stage` = `test`).
+    + `load_from_checkpoint`: If set to `true`, the model will be initialized with weights from the checkpoint_path.
 + `dataset_params`:
     + `graph_data_path`: The directory where the processed compressed graph data files (`grah_data.npz`) are stored.
     + `batch_size`: The number of samples or data points that are processed together in a single forward and backward pass during the training of a neural network. defaut: 1. 
@@ -113,7 +130,7 @@ The input parameters in config.yaml are divided into different modules, which ma
     + `invariant_neurons`: The number of the neurons of the MLP used to map the invariant edge embeddings to the weights of each tensor product path
 
 + `HamGNN_out`: The output layer to transform the representation of crystals into Hamiltonian matrix
-    + `nao_max`: It is modified according to the maximum number of atomic orbitals in the data set, which can be `14`, `19`, `26`.For short-period elements such as C, Si, O, etc., a nao_max of 14 is sufficient; the number of atomic bases for most common elements does not exceed 19. Setting nao_max to 26 would allow the description of all elements supported by OpenMX.
+    + `nao_max`: It is modified according to the maximum number of atomic orbitals in the data set, which can be `14`, `19`, `26`.For short-period elements such as C, Si, O, etc., a nao_max of 14 is sufficient; the number of atomic bases for most common elements does not exceed 19. Setting nao_max to 26 would allow the description of all elements supported by OpenMX. For the Hamiltonian of ABACUS, `nao_max` can be set to either `27` (without Al, Hf, Ta, W) or `40` (supporting all elements in ABACUS).
     + `add_H0`: Generally true, the complete Hamiltonian is predicted as the sum of H_scf plus H_nonscf (H0)
     + `symmetrize`：if set to true, the Hermitian symmetry constraint is imposed on the Hamiltonian
     + `calculate_band_energy`: Whether to calculate the energy bands to train the model 
@@ -122,3 +139,22 @@ The input parameters in config.yaml are divided into different modules, which ma
     + `k_path`: `auto`: Automatically determine the k-point path; `null`: random k-point path; `list`: list of k-point paths provided by the user
     + `soc_switch`: if true, Fit the SOC Hamiltonian
     + `nonlinearity_type`: `norm` activation or `gate` activation as the nonlinear activation function
+
+## References
+
+The papers related to HamGNN:
+
+[[1] Transferable equivariant graph neural networks for the Hamiltonians of molecules and solids](https://doi.org/10.1038/s41524-023-01130-4)
+
+[[2] Universal Machine Learning Kohn-Sham Hamiltonian for Materials](https://arxiv.org/abs/2402.09251)
+
+[[3] Topological interfacial states in ferroelectric domain walls of two-dimensional bismuth](https://arxiv.org/abs/2308.04633)
+
+[[4] Transferable Machine Learning Approach for Predicting Electronic Structures of Charged Defects](https://arxiv.org/abs/2306.08017)
+
+## Code contributors
++ Yang Zhong (Fudan University)
++ Changwei Zhang (Fudan University)
++ Zhenxin Dai (Fudan University)
+
+
