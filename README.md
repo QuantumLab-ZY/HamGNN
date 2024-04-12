@@ -155,6 +155,6 @@ The papers related to HamGNN:
 ## Code contributors
 + Yang Zhong (Fudan University)
 + Changwei Zhang (Fudan University)
-+ Zhenxin Dai (Fudan University)
++ Zhenxing Dai (Fudan University)
 
 
