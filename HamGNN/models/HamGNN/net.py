@@ -1123,7 +1123,27 @@ class HamGNN_out(nn.Module):
                             81: 13, 82: 14,
                             83: 15}
             
-            if self.nao_max == 27:
+            if self.nao_max == 13:
+                self.index_change = torch.LongTensor([0,1,3,4,2,6,7,5,10,11,9,12,8])
+                self.row = self.col = o3.Irreps("1x0e+1x0e+1x1o+1x1o+1x2e")
+                self.minus_index = torch.LongTensor([3,4,6,7,9,10])
+                self.basis_def = (lambda s1=[0],s2=[1],p1=[2,3,4],p2=[5,6,7],d1=[8,9,10,11,12]: {
+                    1 : np.array(s1+s2+p1, dtype=int), # H
+                    2 : np.array(s1+s2+p1, dtype=int), # He
+                    5 : np.array(s1+s2+p1+p2+d1, dtype=int), # B
+                    6 : np.array(s1+s2+p1+p2+d1, dtype=int), # C
+                    7 : np.array(s1+s2+p1+p2+d1, dtype=int), # N
+                    8 : np.array(s1+s2+p1+p2+d1, dtype=int), # O
+                    9 : np.array(s1+s2+p1+p2+d1, dtype=int), # F
+                    10: np.array(s1+s2+p1+p2+d1, dtype=int), # Ne
+                    14: np.array(s1+s2+p1+p2+d1, dtype=int), # Si
+                    15: np.array(s1+s2+p1+p2+d1, dtype=int), # P
+                    16: np.array(s1+s2+p1+p2+d1, dtype=int), # S
+                    17: np.array(s1+s2+p1+p2+d1, dtype=int), # Cl
+                    18: np.array(s1+s2+p1+p2+d1, dtype=int), # Ar
+                })()           
+            
+            elif self.nao_max == 27:
                 self.index_change = torch.LongTensor([0,1,2,3,5,6,4,8,9,7,12,13,11,14,10,17,18,16,19,15,23,24,22,25,21,26,20])       
                 self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x0e+1x1o+1x1o+1x2e+1x2e+1x3o")
                 self.minus_index = torch.LongTensor([5,6,8,9,11,12,16,17,21,22,25,26]) # this list should follow the order in abacus.
