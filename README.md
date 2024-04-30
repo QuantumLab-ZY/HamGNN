@@ -76,7 +76,8 @@ The utilities to support ABACUS software have been uploaded in the `utils_abacus
 `poscar2abacus.py` and `graph_data_gen_abacus.py` scripts are respectively utilized for generating ABACUS structure files and packaging the Hamiltonian matrix into the `graph_data.npz` file. Users can explore the usage of these tools independently. Later on, I'll briefly introduce the meanings of the parameters within these scripts.
 
 ## Diagonalizing Hamiltonian matrices for large scale systems
-For crystal structures containing thousands of atoms, diagonalizing the Hamiltonian matrix using the serial `band_cal` script can be quite challenging. To address this, we've introduced a multi-core parallel `band_cal_parallel` script within band_cal_parallel directory.
+For crystal structures containing thousands of atoms, diagonalizing the Hamiltonian matrix using the serial `band_cal` script can be quite challenging. To address this, we've introduced a multi-core parallel `band_cal_parallel` script within band_cal_parallel directory. Note: It seems that currently `band_cal_parallel` can only be used with the traditional Intel compiler's MKL library instead of oneAPI's MKL library. The version of the my MKL library is intel2018u4.
+
 ### Installation
 pip install mpitool-0.0.1-cp39-cp39-manylinux1_x86_64.whl
 
