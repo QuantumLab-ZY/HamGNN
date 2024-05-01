@@ -158,4 +158,7 @@ The papers related to HamGNN:
 + Changwei Zhang (Fudan University)
 + Zhenxing Dai (Fudan University)
 
+## Project leaders: 
++ Hongjun Xiang  (Fudan University)
++ Xingao Gong  (Fudan University)
 
