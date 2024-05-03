@@ -67,7 +67,7 @@ def generate_graph_data(idx:int, scf_path:str):
     try:
         fH = ABACUSHS(os.path.join(scf_path, 'data-H0R-sparse_SPIN0.csr'))
         graphH = fH.getGraph(crystal, graph={}, isH=True, isSOC=soc)
-        fS = ABACUSHS(os.path.join(scf_path, 'data-SR-sparse_SPIN0.csr'))
+        fS = ABACUSHS(os.path.join(scf_path, 'data-S0R-sparse_SPIN0.csr'))
         graphS = fS.getGraph(crystal, graph=graphH, skip=True, isSOC=soc)
         fH.close()
         fS.close()
