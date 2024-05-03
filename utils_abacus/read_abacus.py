@@ -413,26 +413,23 @@ class ABACUSHS:
 
 if __name__ == '__main__':
   poscar = STRU(os.path.join('../', r'STRU'))
-  H = ABACUSHS(os.path.join('./', r'data-HR-sparse_SPIN0.csr'))
+  H = ABACUSHS(os.path.join('./', r'data-H0R-sparse_SPIN0.csr'))
   graphH = H.getGraph(stru=poscar, graph={}, isH=True, tojson=True)
-  S = ABACUSHS(os.path.join('./', r'data-SR-sparse_SPIN0.csr'))
+  S = ABACUSHS(os.path.join('./', r'data-S0R-sparse_SPIN0.csr'))
   graphS = S.getGraph(stru=poscar, graph=graphH, skip=True, tojson=True)
-  T = ABACUSHS(os.path.join('./', r'data-TR-sparse_SPIN0.csr'))
-  graphT = T.getGraph(stru=poscar, graph=graphH, skip=True, tojson=True)
   H.close()
   S.close()
-  T.close()
-  for graph, fname in zip([graphH, graphT], ['HS.json', 'H0S.json']):
-    g = deepcopy(graphH)
-    g['Hon'] = [graph['Hon']]
-    g['Hoff']= [graph['Hoff']]
-    g['Son'] = graphS['Hon']
-    g['Soff']= graphS['Hoff']
+  graph, fname = graphH, 'HS.json'
+  g = deepcopy(graphH)
+  g['Hon'] = [graph['Hon']]
+  g['Hoff']= [graph['Hoff']]
+  g['Son'] = graphS['Hon']
+  g['Soff']= graphS['Hoff']
 
-    with open(fname, 'w') as f:
-      json.dump(g, f, separators=[',',':'])
-    with open(fname, 'r') as f:
-      file = f.read()
-      file = re.sub(r', *"', ',\n"', file)
-    with open(fname, 'w') as f:
-      f.write(file)
+  with open(fname, 'w') as f:
+    json.dump(g, f, separators=[',',':'])
+  with open(fname, 'r') as f:
+    file = f.read()
+    file = re.sub(r', *"', ',\n"', file)
+  with open(fname, 'w') as f:
+    f.write(file)
