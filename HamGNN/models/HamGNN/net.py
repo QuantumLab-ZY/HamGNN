@@ -21,7 +21,7 @@ from ..layers import GaussianSmearing, cuttoff_envelope, CosineCutoff, BesselBas
 from .nequip.data import AtomicDataDict, AtomicDataset
 import math
 from .clebsch_gordan import ClebschGordan
-from e3nn.o3._wigner import _so3_clebsch_gordan
+# from e3nn.o3._wigner import _so3_clebsch_gordan
 import copy
 from typing import Dict, Callable
 from .nequip.nn.nonlinearities import ShiftedSoftPlus
