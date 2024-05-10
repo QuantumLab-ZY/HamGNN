@@ -41,6 +41,10 @@ def main():
     std_file_name = input['std_file_name'] # None if no openmx computation is performed
     scfout_file_name = input['scfout_file_name'] # If the openmx self-consistent Hamiltonian is not required as the target, "overlap.scfout" can be used instead.
     soc_switch = input['soc_switch'] # generate graph_data.npz for SOC (True) or Non-SOC (False) Hamiltonian
+    if 'doping_charge' in input:
+        doping_charge = input['doping_charge']
+    else:
+        doping_charge = 0.0
     ################################ Input parameters end ######################
     
     if nao_max == 14:
@@ -239,7 +243,7 @@ def main():
                 hamiltonian_imag0 = hamiltonian_imag0.reshape(-1, (2*nao_max)**2)
             os.system("rm HS.json")
 
-            graphs[idx] = Data(z=torch.LongTensor(z),
+            graphs[idx] = Data( z=torch.LongTensor(z),
                                 cell = torch.Tensor(latt[None,:,:]),
                                 total_energy=Enpy,
                                 pos=torch.FloatTensor(pos),
@@ -260,7 +264,8 @@ def main():
                                 Son = torch.FloatTensor(S[:pos.shape[0],:]),
                                 Soff = torch.FloatTensor(S[pos.shape[0]:,:]),
                                 Lon = torch.FloatTensor(L[:pos.shape[0],:,:]),
-                                Loff = torch.FloatTensor(L[pos.shape[0]:,:,:]))
+                                Loff = torch.FloatTensor(L[pos.shape[0]:,:,:]),
+                                doping_charge = torch.FloatTensor([doping_charge]))
         else:            
             # read hopping parameters
             os.system(read_openmx_path + " " + f_sc)
@@ -365,7 +370,8 @@ def main():
                                 Hon0 = torch.FloatTensor(H0[:pos.shape[0],:]),
                                 Hoff0 = torch.FloatTensor(H0[pos.shape[0]:,:]),
                                 Son = torch.FloatTensor(S[:pos.shape[0],:]),
-                                Soff = torch.FloatTensor(S[pos.shape[0]:,:]))
+                                Soff = torch.FloatTensor(S[pos.shape[0]:,:]),
+                                doping_charge = torch.FloatTensor([doping_charge]))
     
     graph_data_path = os.path.join(graph_data_path, 'graph_data.npz')
     np.savez(graph_data_path, graph=graphs)

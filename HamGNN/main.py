@@ -20,7 +20,7 @@ import pytorch_lightning as pl
 from .models.Model import Model
 from .models.version import soft_logo
 from pytorch_lightning.loggers import TensorBoardLogger
-from .models.HamGNN.net import (HamGNN_pre, HamGNN_pre2, HamGNN_out)
+from .models.HamGNN.net import (HamGNN_pre, HamGNN_pre2, HamGNN_pre_charge, HamGNN_out)
 from torch.nn import functional as F
 import pprint
 import warnings
@@ -61,6 +61,8 @@ def build_model(config):
         Gnn_net = HamGNN_pre(config.representation_nets)
     elif config.setup.GNN_Net.lower() == 'hamgnn_pre2':
         Gnn_net = HamGNN_pre2(config.representation_nets)
+    elif config.setup.GNN_Net.lower() == 'hamgnn_pre_charge':
+        Gnn_net = HamGNN_pre_charge(config.representation_nets)
     else:
         print(f"The network: {config.setup.GNN_Net} is not yet supported!")
         quit()

@@ -52,7 +52,8 @@ from .nequip.nn.embedding import (
     OneHotAtomEncoding,
     RadialBasisEdgeEncoding,
     SphericalHarmonicEdgeAttrs,
-    Embedding_block
+    Embedding_block,
+    Embedding_block_q
 )
 
 
@@ -738,6 +739,126 @@ class HamGNN_pre2(nn.Module):
         
         self.num_node_attr_feas = config.HamGNN_pre.num_node_attr_feas
         self.emb = Embedding_block(num_node_attr_feas = self.num_node_attr_feas, set_features=self.set_features)
+        
+        # Embed the direction of the edge as a spherical harmonic feature, irreps_edge_sh is the irreducible representations of the direction of the edge
+        self.spharm_edges = SphericalHarmonicEdgeAttrs(irreps_edge_sh=self.irreps_edge_sh, edge_sh_normalization=self.edge_sh_normalization,
+                                                       edge_sh_normalize = self.edge_sh_normalize) 
+        
+        # Embed edge distances as features of 'num_basis*0e'
+        self.radial_basis = RadialBasisEdgeEncoding(basis=self.rbf_func, cutoff=self.cutoff_func)
+        
+        self.chemical_embedding = AtomwiseLinear(irreps_in={AtomicDataDict.NODE_FEATURES_KEY: self.emb.irreps_out['node_attrs']}, 
+                                                 irreps_out=self.irreps_node_features)
+        
+        self.convnet = nn.ModuleList([ConvNetLayer(irreps_in={AtomicDataDict.EDGE_ATTRS_KEY: self.irreps_edge_sh, AtomicDataDict.EDGE_EMBEDDING_KEY:self.radial_basis.irreps_out[AtomicDataDict.EDGE_EMBEDDING_KEY], 
+                                                              AtomicDataDict.NODE_FEATURES_KEY: self.irreps_node_features, AtomicDataDict.NODE_ATTRS_KEY:self.emb.irreps_out[AtomicDataDict.NODE_ATTRS_KEY]}, 
+                                                   feature_irreps_hidden=self.feature_irreps_hidden, 
+                                                   convolution_kwargs = convolution_kwargs, resnet=self.resnet) for _ in range(self.num_interaction_layers)])
+        
+        self.conv_to_output_node = AtomwiseLinear(irreps_in={AtomicDataDict.NODE_FEATURES_KEY: self.irreps_node_features}, irreps_out=self.irreps_node_output)
+        
+        #"""
+        self.conv_to_output_edge = Edge_builder(irreps_in={AtomicDataDict.NODE_FEATURES_KEY: self.irreps_node_output, 
+                                                           AtomicDataDict.EDGE_ATTRS_KEY: self.irreps_edge_sh,
+                                                           AtomicDataDict.EDGE_EMBEDDING_KEY:self.radial_basis.irreps_out[AtomicDataDict.EDGE_EMBEDDING_KEY]}, 
+                                                irreps_out= self.irreps_edge_output, **convolution_kwargs)
+        
+        self.add_edge_tp = config.HamGNN_pre.add_edge_tp
+        if self.add_edge_tp:
+            self.irreps_node_prev = config.HamGNN_pre.irreps_node_prev
+            self.conv_to_output_edge_tp = Edge_builder_tp(irreps_in={AtomicDataDict.NODE_FEATURES_KEY: self.irreps_node_output, 
+                                                           AtomicDataDict.EDGE_ATTRS_KEY: self.irreps_edge_sh,
+                                                           AtomicDataDict.EDGE_EMBEDDING_KEY:self.radial_basis.irreps_out[AtomicDataDict.EDGE_EMBEDDING_KEY]}, 
+                                                            irreps_node_prev=self.irreps_node_prev,
+                                                            irreps_out= self.irreps_edge_output, **convolution_kwargs)
+        
+        if self.export_triplet:
+            self.num_spherical = config.HamGNN_pre.num_spherical
+            self.irreps_triplet_output = config.HamGNN_pre.irreps_triplet_output
+            self.conv_to_output_triplet = Triplet_builder(irreps_in={AtomicDataDict.EDGE_FEATURES_KEY: self.irreps_edge_output, 
+                                                           AtomicDataDict.ANGLE_EMBEDDING_KEY: o3.Irreps([(self.num_spherical, (0, 1))])}, 
+                                                          irreps_out= self.irreps_triplet_output, **convolution_kwargs)
+        #"""
+        
+        #self.conv_to_output_edge = AtomwiseLinear(field=AtomicDataDict.EDGE_FEATURES_KEY, out_field=AtomicDataDict.EDGE_FEATURES_KEY, 
+                                                  #irreps_in={AtomicDataDict.EDGE_FEATURES_KEY: self.convnet[-1].conv.linear_2.irreps_in}, irreps_out= self.irreps_edge_output)
+    
+    def forward(self, data, batch=None):
+        #self.one_hot(data)
+        self.emb(data)
+        self.spharm_edges(data)
+        self.radial_basis(data)
+        self.chemical_embedding(data)
+        # orbital convolution
+        for i in range(self.num_interaction_layers):
+            self.convnet[i](data)
+        self.conv_to_output_node(data)    
+        self.conv_to_output_edge(data)  
+        if self.add_edge_tp:
+            self.conv_to_output_edge_tp(data)  
+        graph_representation = EasyDict()
+        graph_representation['node_attr'] = data[AtomicDataDict.NODE_FEATURES_KEY]
+        graph_representation['edge_attr'] = data[AtomicDataDict.EDGE_FEATURES_KEY]
+        if self.export_triplet:
+            self.conv_to_output_triplet(data)
+            graph_representation['triplet_attr'] = data[AtomicDataDict.TRIPLET_FEATURES_KEY] 
+            graph_representation['triplet_index'] = data[AtomicDataDict.TRIPLET_INDEX_KEY]    
+        return graph_representation
+
+class HamGNN_pre_charge(nn.Module):
+    def __init__(self, config):
+        super(HamGNN_pre_charge, self).__init__()
+        
+        #self.num_types = config.HamGNN_pre.num_types # number of atomic species in the dataset
+        self.set_features = config.HamGNN_pre.set_features # Whether to set one_hot encoding as node_features in data
+        
+        self.export_triplet = config.HamGNN_pre.export_triplet # Whether to export the features of the triplet
+        #
+        self.irreps_edge_sh = config.HamGNN_pre.irreps_edge_sh
+        self.edge_sh_normalization = config.HamGNN_pre.edge_sh_normalization
+        self.edge_sh_normalize = config.HamGNN_pre.edge_sh_normalize
+        #
+        self.irreps_node_output = config.HamGNN_pre.irreps_node_output
+        self.irreps_edge_output = config.HamGNN_pre.irreps_edge_output
+        
+        # Cosine basis function expansion layer
+        self.cutoff = config.HamGNN_pre.cutoff
+        self.cutoff_func = config.HamGNN_pre.cutoff_func
+        if 'e' == self.cutoff_func.lower()[0]:  # "envelope func used in Dimnet"
+            self.cutoff_func = cuttoff_envelope(cutoff=self.cutoff, exponent=6)
+        elif 'c' == self.cutoff_func.lower()[0]:  # "cosinecutoff" func
+            self.cutoff_func = CosineCutoff(cutoff=self.cutoff)
+        else:
+            print(f'There is no {self.cutoff_func} cutoff function!')
+            quit()
+            
+        self.rbf_func = config.HamGNN_pre.rbf_func
+        self.num_radial = config.HamGNN_pre.num_radial
+        if self.rbf_func.lower() == 'gaussian': 
+            self.rbf_func = GaussianSmearing(start=0.0, stop=self.cutoff, num_gaussians=self.num_radial, cutoff_func=self.cutoff_func)
+        elif self.rbf_func.lower() == 'bessel':
+            self.rbf_func = BesselBasis(cutoff=self.cutoff, n_rbf=self.num_radial, cutoff_func=self.cutoff_func)
+        else:
+            print(f'There is no {self.rbf_func} rbf function!')
+            quit()
+        # 
+        self.num_interaction_layers = config.HamGNN_pre.num_interaction_layers # number of interaction layers
+        self.resnet = config.HamGNN_pre.resnet # Whether to add residual layer       
+        #
+        self.irreps_node_features = config.HamGNN_pre.irreps_node_features # irreducible representations of the node
+        #
+        self.feature_irreps_hidden = config.HamGNN_pre.feature_irreps_hidden # Hidden irreducible representation of nodes in convolutional layers
+        self.invariant_layers = config.HamGNN_pre.invariant_layers 
+        self.invariant_neurons = config.HamGNN_pre.invariant_neurons
+        convolution_kwargs : dict = {'invariant_layers':self.invariant_layers, 'invariant_neurons': self.invariant_neurons} # Additional initialization parameters for the conv layer
+        
+        #self.one_hot = OneHotAtomEncoding(num_types=self.num_types, set_features=self.set_features) # The atomic number of the node is mapped to the one_hot encoding of "num_types*0e"
+
+        self.num_node_attr_feas = config.HamGNN_pre.num_node_attr_feas
+        self.apply_charge_doping = True 
+        self.num_charge_attr_feas = config.HamGNN_pre.num_charge_attr_feas
+        self.emb = Embedding_block_q(num_node_attr_feas = self.num_node_attr_feas, apply_charge_doping=self.apply_charge_doping, 
+                                   num_charge_attr_feas = self.num_charge_attr_feas, set_features=self.set_features)
         
         # Embed the direction of the edge as a spherical harmonic feature, irreps_edge_sh is the irreducible representations of the direction of the edge
         self.spharm_edges = SphericalHarmonicEdgeAttrs(irreps_edge_sh=self.irreps_edge_sh, edge_sh_normalization=self.edge_sh_normalization,

@@ -153,10 +153,11 @@ The papers related to HamGNN:
 
 [[4] Transferable Machine Learning Approach for Predicting Electronic Structures of Charged Defects](https://arxiv.org/abs/2306.08017)
 
-## Code contributors
+## Code contributors:
 + Yang Zhong (Fudan University)
 + Changwei Zhang (Fudan University)
 + Zhenxing Dai (Fudan University)
++ Yuxing Ma (Fudan University)
 
 ## Project leaders: 
 + Hongjun Xiang  (Fudan University)
