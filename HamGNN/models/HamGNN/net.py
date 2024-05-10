@@ -31,6 +31,7 @@ from pymatgen.core.periodic_table import Element
 from torch_sparse import SparseTensor
 from pymatgen.core.structure import Structure
 from pymatgen.symmetry.kpath import KPathSeek
+from ..e3_layers import e3TensorDecomp
 
 au2ang = 0.5291772083
 
@@ -929,7 +930,7 @@ class HamGNN_out(nn.Module):
     
     def __init__(self, irreps_in_node: Union[int, str, o3.Irreps]=None, irreps_in_edge: Union[int, str, o3.Irreps]=None, irreps_in_triplet: Union[int, str, o3.Irreps]=None, nao_max: int = 14, return_forces=False, create_graph=False, 
                  ham_type: str='openmx', ham_only: bool = False, symmetrize: bool=True, include_triplet: bool = False, calculate_band_energy: bool = False, num_k: int = 8, 
-                 k_path:Union[list, np.array, tuple]=None, band_num_control:dict=None, soc_switch:bool=True, nonlinearity_type:str='norm', export_reciprocal_values: bool = False, add_H0:bool= False):
+                 k_path:Union[list, np.array, tuple]=None, band_num_control:dict=None, soc_switch:bool=True, nonlinearity_type:str='norm', export_reciprocal_values: bool = False, add_H0:bool= False, soc_basis: str='so3'):
 
         
         """
@@ -956,6 +957,8 @@ class HamGNN_out(nn.Module):
         self.calculate_band_energy = calculate_band_energy
         self.num_k = num_k
         self.k_path = k_path
+        
+        self.soc_basis = soc_basis.lower()
         
         # band_num_control      
         if (band_num_control is not None) and (not self.export_reciprocal_values) and (isinstance(band_num_control, dict)):      
@@ -1429,23 +1432,40 @@ class HamGNN_out(nn.Module):
         self._init_irreps()
         self.cg_cal = ClebschGordan()
 
-        # hamiltonian                        
-        self.onsitenet_residual = residual_block(irreps_in=irreps_in_node, feature_irreps_hidden=irreps_in_node, 
-                                                 nonlinearity_type = self.nonlinearity_type, resnet=True) 
-        self.onsitenet_linear = Linear(irreps_in=irreps_in_node, irreps_out=self.ham_irreps)
-           
-        self.offsitenet_residual = residual_block(irreps_in=irreps_in_edge, feature_irreps_hidden=irreps_in_edge, 
-                                                 nonlinearity_type = self.nonlinearity_type, resnet=True)  
-        self.offsitenet_linear = Linear(irreps_in=irreps_in_edge, irreps_out=self.ham_irreps)
-        
+        # hamiltonian     
         if soc_switch:
-            self.onsitenet_residual_ksi = residual_block(irreps_in=irreps_in_node, feature_irreps_hidden=irreps_in_node, 
-                                                 nonlinearity_type = self.nonlinearity_type, resnet=True) 
-            self.ksi_on_scalar = Linear(irreps_in=irreps_in_node, irreps_out=(self.nao_max**2*o3.Irreps("0e")).simplify())
+            if self.ham_type is not 'openmx':
+                self.soc_basis == 'su2'
             
-            self.offsitenet_residual_ksi = residual_block(irreps_in=irreps_in_edge, feature_irreps_hidden=irreps_in_edge, 
-                                                 nonlinearity_type = self.nonlinearity_type, resnet=True)
-            self.ksi_off_scalar = Linear(irreps_in=irreps_in_edge, irreps_out=(self.nao_max**2*o3.Irreps("0e")).simplify())
+            if self.soc_basis == 'su2':
+                self.onsitenet_residual = residual_block(irreps_in=irreps_in_node, feature_irreps_hidden=irreps_in_node, 
+                                                         nonlinearity_type = self.nonlinearity_type, resnet=True) 
+                self.onsitenet_linear = Linear(irreps_in=irreps_in_node, irreps_out=2*self.ham_irreps)
+
+                self.offsitenet_residual = residual_block(irreps_in=irreps_in_edge, feature_irreps_hidden=irreps_in_edge, 
+                                                         nonlinearity_type = self.nonlinearity_type, resnet=True)  
+                self.offsitenet_linear = Linear(irreps_in=irreps_in_edge, irreps_out=2*self.ham_irreps)
+            
+            elif self.soc_basis == 'so3':
+                self.onsitenet_residual_ksi = residual_block(irreps_in=irreps_in_node, feature_irreps_hidden=irreps_in_node, 
+                                                         nonlinearity_type = self.nonlinearity_type, resnet=True) 
+                self.ksi_on_scalar = Linear(irreps_in=irreps_in_node, irreps_out=(self.nao_max**2*o3.Irreps("0e")).simplify())
+    
+                self.offsitenet_residual_ksi = residual_block(irreps_in=irreps_in_edge, feature_irreps_hidden=irreps_in_edge, 
+                                                         nonlinearity_type = self.nonlinearity_type, resnet=True)
+                self.ksi_off_scalar = Linear(irreps_in=irreps_in_edge, irreps_out=(self.nao_max**2*o3.Irreps("0e")).simplify()) 
+            
+            else:
+                raise NotImplementedError(f"{soc_basis} not supportted!")
+                                
+        else: # non-soc
+            self.onsitenet_residual = residual_block(irreps_in=irreps_in_node, feature_irreps_hidden=irreps_in_node, 
+                                                     nonlinearity_type = self.nonlinearity_type, resnet=True) 
+            self.onsitenet_linear = Linear(irreps_in=irreps_in_node, irreps_out=self.ham_irreps)
+               
+            self.offsitenet_residual = residual_block(irreps_in=irreps_in_edge, feature_irreps_hidden=irreps_in_edge, 
+                                                     nonlinearity_type = self.nonlinearity_type, resnet=True)  
+            self.offsitenet_linear = Linear(irreps_in=irreps_in_edge, irreps_out=self.ham_irreps)
         
         if not self.ham_only:            
             self.onsitenet_s = Ham_layer(irreps_in=irreps_in_node, feature_irreps_hidden=irreps_in_node,irreps_out=self.ham_irreps, 
@@ -1460,10 +1480,19 @@ class HamGNN_out(nn.Module):
         self.ham_irreps_dim = []
         self.ham_irreps = o3.Irreps()
 
-        for _, li in self.row:
-            for _, lj in self.col:
-                for L in range(abs(li.l-lj.l), li.l+lj.l+1):
-                    self.ham_irreps += o3.Irrep(L, (-1)**(li.l+lj.l)) 
+        if self.soc_switch and (self.soc_basis == 'su2'): 
+            out_js_list = []
+            for _, li in self.row:
+                for _, lj in self.col:
+                    out_js_list.append((li.l, lj.l))
+
+            self.hamDecomp = e3TensorDecomp(None, out_js_list, default_dtype_torch=torch.float32, nao_max=self.nao_max, spinful=True)
+            self.ham_irreps = self.hamDecomp.required_irreps_out
+        else:
+            for _, li in self.row:
+                for _, lj in self.col:
+                    for L in range(abs(li.l-lj.l), li.l+lj.l+1):
+                        self.ham_irreps += o3.Irrep(L, (-1)**(li.l+lj.l))
 
         for irs in self.ham_irreps:
             self.ham_irreps_dim.append(irs.dim)
@@ -2107,6 +2136,15 @@ class HamGNN_out(nn.Module):
         for k in self.basis_def.keys():
             basis_definition[k][self.basis_def[k]] = 1
         
+        # Save the original shape
+        original_shape_on = Hon.shape
+        original_shape_off = Hoff.shape
+        
+        if len(original_shape_on) > 2:
+            Hon = Hon.reshape(original_shape_on[0], -1)
+        if len(original_shape_off) > 2:
+            Hoff = Hoff.reshape(original_shape_off[0], -1)
+        
         # mask Hon first        
         orb_mask = basis_definition[data.z].view(-1, self.nao_max) # shape: [Natoms, nao_max] 
         orb_mask = orb_mask[:,:,None] * orb_mask[:,None,:]       # shape: [Natoms, nao_max, nao_max]
@@ -2124,6 +2162,10 @@ class HamGNN_out(nn.Module):
         
         Hoff_mask = torch.zeros_like(Hoff)
         Hoff_mask[orb_mask>0] = Hoff[orb_mask>0]
+
+        # Output the result in the original shape
+        Hon_mask = Hon_mask.reshape(original_shape_on)
+        Hoff_mask = Hoff_mask.reshape(original_shape_off)
         
         return Hon_mask, Hoff_mask    
     
@@ -2215,65 +2257,100 @@ class HamGNN_out(nn.Module):
                 Son, Soff = self.mask_Ham(Son, Soff, data)
 
         if self.soc_switch:
-            node_sph = self.onsitenet_residual(node_attr)     
-            node_sph = self.onsitenet_linear(node_sph) 
-            node_sph = torch.split(node_sph, self.ham_irreps_dim.tolist(), dim=-1)
-            Hon = self.matrix_merge(node_sph) # shape (Nnodes, nao_max**2)
+            if self.soc_basis == 'so3':
+                node_sph = self.onsitenet_residual(node_attr)     
+                node_sph = self.onsitenet_linear(node_sph) 
+                node_sph = torch.split(node_sph, self.ham_irreps_dim.tolist(), dim=-1)
+                Hon = self.matrix_merge(node_sph) # shape (Nnodes, nao_max**2)
+                
+                Hon = self.change_index(Hon)
+    
+                # Impose Hermitian symmetry for Hon
+                Hon = self.symmetrize_Hon(Hon)            
+    
+                # Calculate the off-site Hamiltonian
+                # Calculate the contribution of the edges       
+                edge_sph = self.offsitenet_residual(edge_attr)
+                edge_sph = self.offsitenet_linear(edge_sph)
+                edge_sph = torch.split(edge_sph, self.ham_irreps_dim.tolist(), dim=-1)        
+                Hoff = self.matrix_merge(edge_sph)
             
-            Hon = self.change_index(Hon)
-
-            # Impose Hermitian symmetry for Hon
-            Hon = self.symmetrize_Hon(Hon)            
-               
-            # Calculate the off-site Hamiltonian
-            # Calculate the contribution of the edges       
-            edge_sph = self.offsitenet_residual(edge_attr)
-            edge_sph = self.offsitenet_linear(edge_sph)
-            edge_sph = torch.split(edge_sph, self.ham_irreps_dim.tolist(), dim=-1)        
-            Hoff = self.matrix_merge(edge_sph)
-        
-            Hoff = self.change_index(Hoff)        
-            # Impose Hermitian symmetry for Hoff
-            Hoff = self.symmetrize_Hoff(Hoff, inv_edge_idx)
+                Hoff = self.change_index(Hoff)        
+                # Impose Hermitian symmetry for Hoff
+                Hoff = self.symmetrize_Hoff(Hoff, inv_edge_idx)
+                
+                Hon, Hoff = self.mask_Ham(Hon, Hoff, data)
+                
+                # build Hsoc
+                node_sph = self.onsitenet_residual_ksi(node_attr)
+                ksi_on = self.ksi_on_scalar(node_sph)
+                ksi_on = self.reduce(ksi_on)
+                
+                edge_sph = self.offsitenet_residual_ksi(edge_attr)
+                ksi_off = self.ksi_off_scalar(edge_sph)
+                ksi_off = self.reduce(ksi_off)  
+                
+                Hsoc_on_real = torch.zeros((Hon.shape[0], 2*self.nao_max, 2*self.nao_max)).type_as(Hon)
+                Hsoc_on_real[:,:self.nao_max,:self.nao_max] = Hon.reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_on_real[:,:self.nao_max,self.nao_max:] = self.symmetrize_Hon((ksi_on*data.Lon[:,:,1]), sign='-').reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_on_real[:,self.nao_max:,:self.nao_max] = self.symmetrize_Hon((ksi_on*data.Lon[:,:,1]), sign='-').reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_on_real[:,self.nao_max:,self.nao_max:] = Hon.reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_on_real = Hsoc_on_real.reshape(-1, (2*self.nao_max)**2)
+                
+                Hsoc_on_imag = torch.zeros((Hon.shape[0], 2*self.nao_max, 2*self.nao_max)).type_as(Hon)
+                Hsoc_on_imag[:,:self.nao_max,:self.nao_max] = self.symmetrize_Hon((ksi_on*data.Lon[:,:,2]), sign='-').reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_on_imag[:,:self.nao_max, self.nao_max:] = self.symmetrize_Hon((ksi_on*data.Lon[:,:,0]), sign='-').reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_on_imag[:,self.nao_max:,:self.nao_max] = -self.symmetrize_Hon((ksi_on*data.Lon[:,:,0]), sign='-').reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_on_imag[:,self.nao_max:,self.nao_max:] = -self.symmetrize_Hon((ksi_on*data.Lon[:,:,2]), sign='-').reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_on_imag = Hsoc_on_imag.reshape(-1, (2*self.nao_max)**2)
+                
+                Hsoc_off_real = torch.zeros((Hoff.shape[0], 2*self.nao_max, 2*self.nao_max)).type_as(Hoff)
+                Hsoc_off_real[:,:self.nao_max,:self.nao_max] = Hoff.reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_off_real[:,:self.nao_max,self.nao_max:] = self.symmetrize_Hoff((ksi_off*data.Loff[:,:,1]), inv_edge_idx, sign='-').reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_off_real[:,self.nao_max:,:self.nao_max] = self.symmetrize_Hoff((ksi_off*data.Loff[:,:,1]), inv_edge_idx, sign='-').reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_off_real[:,self.nao_max:,self.nao_max:] = Hoff.reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_off_real = Hsoc_off_real.reshape(-1, (2*self.nao_max)**2)
+                
+                Hsoc_off_imag = torch.zeros((Hoff.shape[0], 2*self.nao_max, 2*self.nao_max)).type_as(Hoff)
+                Hsoc_off_imag[:,:self.nao_max,:self.nao_max] = self.symmetrize_Hoff((ksi_off*data.Loff[:,:,2]), inv_edge_idx, sign='-').reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_off_imag[:,:self.nao_max, self.nao_max:] = self.symmetrize_Hoff((ksi_off*data.Loff[:,:,0]), inv_edge_idx, sign='-').reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_off_imag[:,self.nao_max:,:self.nao_max] = -self.symmetrize_Hoff((ksi_off*data.Loff[:,:,0]), inv_edge_idx, sign='-').reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_off_imag[:,self.nao_max:,self.nao_max:] = -self.symmetrize_Hoff((ksi_off*data.Loff[:,:,2]), inv_edge_idx, sign='-').reshape(-1, self.nao_max, self.nao_max)
+                Hsoc_off_imag = Hsoc_off_imag.reshape(-1, (2*self.nao_max)**2)
             
-            Hon, Hoff = self.mask_Ham(Hon, Hoff, data)
-            
-            # build Hsoc
-            node_sph = self.onsitenet_residual_ksi(node_attr)
-            ksi_on = self.ksi_on_scalar(node_sph)
-            ksi_on = self.reduce(ksi_on)
-            
-            edge_sph = self.offsitenet_residual_ksi(edge_attr)
-            ksi_off = self.ksi_off_scalar(edge_sph)
-            ksi_off = self.reduce(ksi_off)  
-            
-            Hsoc_on_real = torch.zeros((Hon.shape[0], 2*self.nao_max, 2*self.nao_max)).type_as(Hon)
-            Hsoc_on_real[:,:self.nao_max,:self.nao_max] = Hon.reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_on_real[:,:self.nao_max,self.nao_max:] = self.symmetrize_Hon((ksi_on*data.Lon[:,:,1]), sign='-').reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_on_real[:,self.nao_max:,:self.nao_max] = self.symmetrize_Hon((ksi_on*data.Lon[:,:,1]), sign='-').reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_on_real[:,self.nao_max:,self.nao_max:] = Hon.reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_on_real = Hsoc_on_real.reshape(-1, (2*self.nao_max)**2)
-            
-            Hsoc_on_imag = torch.zeros((Hon.shape[0], 2*self.nao_max, 2*self.nao_max)).type_as(Hon)
-            Hsoc_on_imag[:,:self.nao_max,:self.nao_max] = self.symmetrize_Hon((ksi_on*data.Lon[:,:,2]), sign='-').reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_on_imag[:,:self.nao_max, self.nao_max:] = self.symmetrize_Hon((ksi_on*data.Lon[:,:,0]), sign='-').reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_on_imag[:,self.nao_max:,:self.nao_max] = -self.symmetrize_Hon((ksi_on*data.Lon[:,:,0]), sign='-').reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_on_imag[:,self.nao_max:,self.nao_max:] = -self.symmetrize_Hon((ksi_on*data.Lon[:,:,2]), sign='-').reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_on_imag = Hsoc_on_imag.reshape(-1, (2*self.nao_max)**2)
-            
-            Hsoc_off_real = torch.zeros((Hoff.shape[0], 2*self.nao_max, 2*self.nao_max)).type_as(Hoff)
-            Hsoc_off_real[:,:self.nao_max,:self.nao_max] = Hoff.reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_off_real[:,:self.nao_max,self.nao_max:] = self.symmetrize_Hoff((ksi_off*data.Loff[:,:,1]), inv_edge_idx, sign='-').reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_off_real[:,self.nao_max:,:self.nao_max] = self.symmetrize_Hoff((ksi_off*data.Loff[:,:,1]), inv_edge_idx, sign='-').reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_off_real[:,self.nao_max:,self.nao_max:] = Hoff.reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_off_real = Hsoc_off_real.reshape(-1, (2*self.nao_max)**2)
-            
-            Hsoc_off_imag = torch.zeros((Hoff.shape[0], 2*self.nao_max, 2*self.nao_max)).type_as(Hoff)
-            Hsoc_off_imag[:,:self.nao_max,:self.nao_max] = self.symmetrize_Hoff((ksi_off*data.Loff[:,:,2]), inv_edge_idx, sign='-').reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_off_imag[:,:self.nao_max, self.nao_max:] = self.symmetrize_Hoff((ksi_off*data.Loff[:,:,0]), inv_edge_idx, sign='-').reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_off_imag[:,self.nao_max:,:self.nao_max] = -self.symmetrize_Hoff((ksi_off*data.Loff[:,:,0]), inv_edge_idx, sign='-').reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_off_imag[:,self.nao_max:,self.nao_max:] = -self.symmetrize_Hoff((ksi_off*data.Loff[:,:,2]), inv_edge_idx, sign='-').reshape(-1, self.nao_max, self.nao_max)
-            Hsoc_off_imag = Hsoc_off_imag.reshape(-1, (2*self.nao_max)**2)
+            elif self.soc_basis == 'su2':
+                node_sph = self.onsitenet_residual(node_attr)
+                node_sph = self.onsitenet_linear(node_sph) 
+                
+                Hon = self.hamDecomp.get_H(node_sph) # shape [Nbatchs, (4 spin components,) H_flattened_concatenated]
+                Hon = self.change_index(Hon)
+                Hon = Hon.reshape(-1, 2, 2, self.nao_max, self.nao_max)                
+                Hon = torch.swapaxes(Hon, 2, 3) # shape (Nnodes, 2, nao_max, 2, nao_max)
+    
+                # Calculate the off-site Hamiltonian
+                # Calculate the contribution of the edges       
+                edge_sph = self.offsitenet_residual(edge_attr)
+                edge_sph = self.offsitenet_linear(edge_sph)
+                
+                Hoff = self.hamDecomp.get_H(edge_sph) # shape [Nbatchs, (4 spin components,) H_flattened_concatenated]
+                Hoff = self.change_index(Hoff)
+                Hoff = Hoff.reshape(-1, 2, 2, self.nao_max, self.nao_max)
+                Hoff = torch.swapaxes(Hoff, 2, 3) # shape (Nedges, 2, nao_max, 2, nao_max)    
+                
+                # mask zeros         
+                for i in range(2):
+                    for j in range(2):
+                        Hon[:,i,:,j,:], Hoff[:,i,:,j,:] = self.mask_Ham(Hon[:,i,:,j,:], Hoff[:,i,:,j,:], data)
+                Hon = Hon.reshape(-1, (2*self.nao_max)**2)
+                Hoff = Hoff.reshape(-1, (2*self.nao_max)**2)
+                # build four parts
+                Hsoc_on_real =  Hon.real
+                Hsoc_off_real = Hoff.real
+                Hsoc_on_imag = Hon.imag
+                Hsoc_off_imag = Hoff.imag
+                
+            else:
+                raise NotImplementedError
             
             if self.add_H0:
                 Hsoc_on_real =  Hsoc_on_real + data.Hon0
