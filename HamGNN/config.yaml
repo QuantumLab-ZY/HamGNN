@@ -118,6 +118,8 @@ representation_nets:
     add_edge_tp: false
     irreps_node_prev: 16x0o+16x0e+8x1o+8x1e+8x2e+8x2o+8x3o+8x3e+8x4o+8x4e
     num_node_attr_feas: 64
+    # charge
+    # num_charge_attr_feas: 64 # the number of features for charge
 
 setup:
   GNN_Net: HamGNN_pre
