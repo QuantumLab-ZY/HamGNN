@@ -150,9 +150,11 @@ The papers related to HamGNN:
 
 [[2] Universal Machine Learning Kohn-Sham Hamiltonian for Materials](https://arxiv.org/abs/2402.09251)
 
-[[3] Topological interfacial states in ferroelectric domain walls of two-dimensional bismuth](https://arxiv.org/abs/2308.04633)
+[[3] Accelerating the calculation of electron-phonon coupling by machine learning methods] (https://arxiv.org/abs/2302.00439)
 
-[[4] Transferable Machine Learning Approach for Predicting Electronic Structures of Charged Defects](https://arxiv.org/abs/2306.08017)
+[[4] Topological interfacial states in ferroelectric domain walls of two-dimensional bismuth](https://arxiv.org/abs/2308.04633)
+
+[[5] Transferable Machine Learning Approach for Predicting Electronic Structures of Charged Defects](https://arxiv.org/abs/2306.08017)
 
 ## Code contributors:
 + Yang Zhong (Fudan University)
