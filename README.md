@@ -20,7 +20,7 @@
 - [Diagonalizing Hamiltonian matrices for large scale systems](#diagonalizing-hamiltonian-matrices-for-large-scale-systems)
   - [Installation](#installation-1)
   - [Usage](#usage-1)
-- [How to set the options in config.yaml](#how-to-set-the-options-in-configyaml)
+- [Explanation of the parameters in config.yaml](#explanation-of-the-parameters-in-config.yaml)
 - [References](#references)
 - [Code contributors](#code-contributors)
 - [Project leaders](#project-leaders)
@@ -111,7 +111,7 @@ pip install band_cal_parallel-0.1.12-py3-none-any.whl
 In the Python environment with `band_cal_parallel` installed, execute the following command with multiple cpus to compute the band structure:
 mpirun -np ncpus band_cal_parallel --config band_cal_parallel.yaml
 
-##  How to set the options in config.yaml
+##  Explanation of the parameters in config.yaml
 The input parameters in config.yaml are divided into different modules, which mainly include `'setup'`, `'dataset_params'`, `'losses_metrics'`, `'optim_params'` and network-related parameters (`'HamGNN_pre'` and `'HamGNN_out'`). Most of the parameters work well using the default values. The following introduces some commonly used parameters in each module.
 + `setup`:
     + `stage`: Select the state of the network: training (`fit`) or testing (`test`).
