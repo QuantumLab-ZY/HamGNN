@@ -20,7 +20,7 @@
 - [Diagonalizing Hamiltonian matrices for large scale systems](#diagonalizing-hamiltonian-matrices-for-large-scale-systems)
   - [Installation](#installation-1)
   - [Usage](#usage-1)
-- [Explanation of the parameters in config.yaml](#explanation-of-the-parameters-in-config.yaml)
+- [Explanation of the parameters in config.yaml](#explanation-of-the-parameters-in-configyaml)
 - [References](#references)
 - [Code contributors](#code-contributors)
 - [Project leaders](#project-leaders)
