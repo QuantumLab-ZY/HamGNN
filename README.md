@@ -2,6 +2,29 @@
   <img height="130" src="logo/logo.png"/>
 </p>
 
+## Contents
+- [Introduction to HamGNN](#introduction-to-hamgnn)
+- [Requirements](#requirements)
+  - [Python libraries](#python-libraries)
+  - [OpenMX](#openmx)
+  - [openmx_postprocess](#openmx_postprocess)
+  - [read_openmx](#read_openmx)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Preparation of Hamiltonian Training Data](#preparation-of-hamiltonian-training-data)
+  - [Graph Data Conversion](#graph-data-conversion)
+  - [HamGNN Network Training and Prediction](#hamgnn-network-training-and-prediction)
+  - [Details of training for bands (The 2nd training/fine-tuning step)](#details-of-training-for-bands-the-2nd-trainingfine-tuning-step)
+  - [Band Structure Calculation](#band-structure-calculation)
+- [The support for ABACUS software](#the-support-for-abacus-software)
+- [Diagonalizing Hamiltonian matrices for large scale systems](#diagonalizing-hamiltonian-matrices-for-large-scale-systems)
+  - [Installation](#installation-1)
+  - [Usage](#usage-1)
+- [How to set the options in config.yaml](#how-to-set-the-options-in-configyaml)
+- [References](#references)
+- [Code contributors](#code-contributors)
+- [Project leaders](#project-leaders)
+
 ## Introduction to HamGNN
 The HamGNN model is an E(3) equivariant graph neural network designed for the purpose of training and predicting tight-binding (TB) Hamiltonians of molecules and solids. Currently, HamGNN can be used in common ab initio DFT software that is based on numerical atomic orbitals, such as OpenMX, Siesta, and Abacus. HamGNN supports predictions of SU(2) equivariant Hamiltonians with spin-orbit coupling effects. HamGNN not only achieves a high fidelity approximation of DFT but also enables transferable predictions across material structures, making it suitable for high-throughput electronic structure calculations and accelerating computations on large-scale systems.
 
