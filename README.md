@@ -150,7 +150,7 @@ The papers related to HamGNN:
 
 [[2] Universal Machine Learning Kohn-Sham Hamiltonian for Materials](https://arxiv.org/abs/2402.09251)
 
-[[3] Accelerating the calculation of electron-phonon coupling by machine learning methods] (https://arxiv.org/abs/2302.00439)
+[[3] Accelerating the calculation of electron-phonon coupling by machine learning methods](https://arxiv.org/abs/2302.00439)
 
 [[4] Topological interfacial states in ferroelectric domain walls of two-dimensional bismuth](https://arxiv.org/abs/2308.04633)
 
