@@ -95,7 +95,7 @@ After setting the above parameters, start the training again.
 Set the parameters in band_cal.yaml, mainly the path to the Hamiltonian data, then run `band_cal --config band_cal.yaml`
 
 ## The support for ABACUS software
-The utilities to support ABACUS software have been uploaded in the `utils_abacus` directory. Users need to modify the parameters in the scripts within this directory. The code in `utils_abacus/abacus_H0_export` is derived from modifying the `abacus-postprocess` program based on ABACUS-3.5.3. Its function is similar to `openmx_postprocess`, used for exporting the Hamiltonian part `H0` independent of the self-consistent field (SCF) charge density. Compilation of `abacus-postprocess` is the same as the original ABACUS compilation.
+The utilities to support ABACUS software have been uploaded in the `utils_abacus` directory. Users need to modify the parameters in the scripts within this directory. The code for `abacus_postprocess` in `utils_abacus/abacus_H0_export` is derived from modifying the `abacus` program based on ABACUS-3.5.3. The function of this tool is similar to `openmx_postprocess` and it is used to export the Hamiltonian part `H0`, which is independent of the self-consistent field (SCF) charge density. Compilation of `abacus-postprocess` is the same as that of the original ABACUS.
 
 `poscar2abacus.py` and `graph_data_gen_abacus.py` scripts are respectively utilized for generating ABACUS structure files and packaging the Hamiltonian matrix into the `graph_data.npz` file. Users can explore the usage of these tools independently. Later on, I'll briefly introduce the meanings of the parameters within these scripts.
 
