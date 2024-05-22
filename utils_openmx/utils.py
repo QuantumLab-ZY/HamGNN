@@ -16,9 +16,13 @@ from pymatgen.core.periodic_table import Element
 from ase import Atoms
 import re
 
+def ordered_set(sequence):
+    seen = set()
+    return [x for x in sequence if not (x in seen or seen.add(x))]
+
 def ase_atoms_to_openmxfile(atoms:Atoms, basic_commad:str, spin_set:dict, PAO_dict:dict, PBE_dict:dict, filename:str):
     chemical_symbols = atoms.get_chemical_symbols()
-    species = set(chemical_symbols)
+    species = ordered_set(chemical_symbols)
     positions = atoms.get_array(name='positions')
     cell = atoms.get_cell().array
     openmx = basic_commad
