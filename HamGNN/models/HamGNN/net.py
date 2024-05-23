@@ -2215,9 +2215,9 @@ class HamGNN_out(nn.Module):
     def forward(self, data, graph_representation: dict = None):
         # prepare data.hamiltonian & data.overlap
         if 'hamiltonian' not in data:
-            data.hamiltonian = self.cat_onsite_and_offsite(data, Hon, Hoff)
+            data.hamiltonian = self.cat_onsite_and_offsite(data, data.Hon, data.Hoff)
         if 'overlap' not in data:
-            data.overlap = self.cat_onsite_and_offsite(data, Hon, Hoff)
+            data.overlap = self.cat_onsite_and_offsite(data, data.Son, data.Soff)
         
         node_attr = graph_representation['node_attr']
         edge_attr = graph_representation['edge_attr']  # mji
