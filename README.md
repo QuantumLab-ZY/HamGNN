@@ -115,6 +115,7 @@ mpirun -np ncpus band_cal_parallel --config band_cal_parallel.yaml
 The input parameters in config.yaml are divided into different modules, which mainly include `'setup'`, `'dataset_params'`, `'losses_metrics'`, `'optim_params'` and network-related parameters (`'HamGNN_pre'` and `'HamGNN_out'`). Most of the parameters work well using the default values. The following introduces some commonly used parameters in each module.
 + `setup`:
     + `stage`: Select the state of the network: training (`fit`) or testing (`test`).
+    + `GNN_Net`: Use `HamGNN_pre` for normal Hamiltonian fitting and use 'HamGNN_pre_charge' for fitting the Hamiltonian of charged defects.
     + `property`：Select the type of physical quantity to be output by the network, generally set to `hamiltonian`
     + `num_gpus`: number of gpus to train on (`int`) or which GPUs to train on (`list` or `str`) applied per node.
     + `resume`: resume training (`true`) or start from scratch (`false`).
@@ -153,6 +154,7 @@ The input parameters in config.yaml are divided into different modules, which ma
     + `irreps_triplet_output(deprecated)`: O(3) irreducible representations of the triplet features to output
     + `invariant_layers`: The layers of the MLP used to map the invariant edge embeddings to the weights of each tensor product path
     + `invariant_neurons`: The number of the neurons of the MLP used to map the invariant edge embeddings to the weights of each tensor product path
+    + `num_charge_attr_feas`: The number of features used for doping charge when `GNN_Net` is set to 'HamGNN_pre_charge'
 
 + `HamGNN_out`: The output layer to transform the representation of crystals into Hamiltonian matrix
     + `nao_max`: It is modified according to the maximum number of atomic orbitals in the data set, which can be `14`, `19`, `26`.For short-period elements such as C, Si, O, etc., a nao_max of 14 is sufficient; the number of atomic bases for most common elements does not exceed 19. Setting nao_max to 26 would allow the description of all elements supported by OpenMX. For the Hamiltonian of ABACUS, `nao_max` can be set to either `27` (without Al, Hf, Ta, W) or `40` (supporting all elements in ABACUS).
