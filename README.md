@@ -68,6 +68,7 @@ git clone https://github.com/QuantumLab-ZY/HamGNN.git
 cd HamGNN
 python setup.py install
 ```
+Please note that if you have previously installed an older version of HamGNN, you need to uninstall the old version first by using `pip uninstall HamGNN`. After uninstalling, there may still be a residual installation package in the `site-packages` directory named `'HamGNN-x.x.x-py3.9.egg/HamGNN'`. In this case, you need to manually delete this directory before installing the new version of HamGNN; otherwise, the new version of HamGNN may call functions from the old one.
 
 ## Usage
 ### Preparation of Hamiltonian Training Data
