@@ -1447,6 +1447,14 @@ class HamGNN_out(nn.Module):
                 self.offsitenet_linear = Linear(irreps_in=irreps_in_edge, irreps_out=2*self.ham_irreps)
             
             elif self.soc_basis == 'so3':
+                self.onsitenet_residual = residual_block(irreps_in=irreps_in_node, feature_irreps_hidden=irreps_in_node, 
+                                                         nonlinearity_type = self.nonlinearity_type, resnet=True) 
+                self.onsitenet_linear = Linear(irreps_in=irreps_in_node, irreps_out=self.ham_irreps)
+
+                self.offsitenet_residual = residual_block(irreps_in=irreps_in_edge, feature_irreps_hidden=irreps_in_edge, 
+                                                         nonlinearity_type = self.nonlinearity_type, resnet=True)  
+                self.offsitenet_linear = Linear(irreps_in=irreps_in_edge, irreps_out=self.ham_irreps)
+                
                 self.onsitenet_residual_ksi = residual_block(irreps_in=irreps_in_node, feature_irreps_hidden=irreps_in_node, 
                                                          nonlinearity_type = self.nonlinearity_type, resnet=True) 
                 self.ksi_on_scalar = Linear(irreps_in=irreps_in_node, irreps_out=(self.nao_max**2*o3.Irreps("0e")).simplify())
