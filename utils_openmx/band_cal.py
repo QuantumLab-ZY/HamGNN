@@ -18,6 +18,7 @@ import os
 from utils_openmx.utils import *
 import argparse
 import yaml
+import torch
 
 def main():
     parser = argparse.ArgumentParser(description='band calculation')
@@ -165,19 +166,21 @@ def main():
                 HK_list.append(HK)
     
             HK = np.block([[HK_list[0],HK_list[1]],[HK_list[2],HK_list[3]]])
-    
+            
             eigen = []
-            eigen_vecs = []
             for ik in range(nk):
-                w, v = eigh(a=HK[ik], b=SK[ik])
-                eigen.append(w)
-                eigen_vecs.append(v)
+                SK_cuda = torch.complex(torch.Tensor(SK[ik].real), torch.Tensor(SK[ik].imag)).unsqueeze(0)
+                HK_cuda = torch.complex(torch.Tensor(HK[ik].real), torch.Tensor(HK[ik].imag)).unsqueeze(0)
+                L = torch.linalg.cholesky(SK_cuda)
+                L_t = torch.transpose(L.conj(), dim0=-1, dim1=-2)
+                L_inv = torch.linalg.inv(L)
+                L_t_inv = torch.linalg.inv(L_t)
+                Hs = torch.bmm(torch.bmm(L_inv, HK_cuda), L_t_inv)
+                orbital_energies, _ = torch.linalg.eigh(Hs)
+                orbital_energies = orbital_energies.squeeze(0)
+                eigen.append(orbital_energies.cpu().numpy())
+            
             eigen = np.swapaxes(np.array(eigen), 0, 1)*au2ev # (nbands, nk)
-            eigen_vecs = np.array(eigen_vecs) # (nk, nbands, nbands)
-            eigen_vecs = np.swapaxes(eigen_vecs, -1, -2)
-            lamda = np.einsum('nai, nij, naj -> na', np.conj(eigen_vecs), SK, eigen_vecs).real
-            lamda = 1/np.sqrt(lamda) # shape: (numk, norbs)
-            eigen_vecs = eigen_vecs*lamda[:,:,None]
     
             # plot fermi line    
             num_electrons = np.sum(num_val[species])
@@ -337,21 +340,21 @@ def main():
             SK = SK[:,orb_mask > 0]
             norbs = int(math.sqrt(SK.size/nk))
             SK = SK.reshape(nk, norbs, norbs)
-            
+
             eigen = []
-            eigen_vecs = []
             for ik in range(nk):
-                w, v = eigh(a=HK[ik], b=SK[ik])
-                eigen.append(w)
-                eigen_vecs.append(v)
+                SK_cuda = torch.complex(torch.Tensor(SK[ik].real), torch.Tensor(SK[ik].imag)).unsqueeze(0)
+                HK_cuda = torch.complex(torch.Tensor(HK[ik].real), torch.Tensor(HK[ik].imag)).unsqueeze(0)
+                L = torch.linalg.cholesky(SK_cuda)
+                L_t = torch.transpose(L.conj(), dim0=-1, dim1=-2)
+                L_inv = torch.linalg.inv(L)
+                L_t_inv = torch.linalg.inv(L_t)
+                Hs = torch.bmm(torch.bmm(L_inv, HK_cuda), L_t_inv)
+                orbital_energies, _ = torch.linalg.eigh(Hs)
+                orbital_energies = orbital_energies.squeeze(0)
+                eigen.append(orbital_energies.cpu().numpy())
             
             eigen = np.swapaxes(np.array(eigen), 0, 1)*au2ev # (nbands, nk)
-            eigen_vecs = np.array(eigen_vecs) # (nk, nbands, nbands)
-            eigen_vecs = np.swapaxes(eigen_vecs, -1, -2)
-                
-            lamda = np.einsum('nai, nij, naj -> na', np.conj(eigen_vecs), SK, eigen_vecs).real
-            lamda = 1/np.sqrt(lamda) # shape: (numk, norbs)
-            eigen_vecs = eigen_vecs*lamda[:,:,None]
             
             # plot fermi line    
             num_electrons = np.sum(num_val[species])
@@ -415,3 +418,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
