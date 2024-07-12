@@ -168,6 +168,25 @@ The input parameters in config.yaml are divided into different modules, which ma
     + `soc_switch`: if true, Fit the SOC Hamiltonian
     + `nonlinearity_type`: `norm` activation or `gate` activation as the nonlinear activation function
 
+##  Minimum irreps for node and edge features in config.yaml
+```
+from e3nn import o3
+
+row=col=o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e+1x2e") # for 'sssppd'
+ham_irreps_dim = []
+ham_irreps = o3.Irreps()
+
+for _, li in row:
+    for _, lj in col:
+        for L in range(abs(li.l-lj.l), li.l+lj.l+1):
+            ham_irreps += o3.Irrep(L, (-1)**(li.l+lj.l)) 
+
+print(ham_irreps.sort()[0].simplify())
+```
+```
+Output: 17x0e+20x1o+8x1e+8x2o+20x2e+8x3o+4x3e+4x4e
+```
+
 ## References
 
 The papers related to HamGNN:
