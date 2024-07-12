@@ -2,7 +2,7 @@
   <img height="130" src="logo/logo.png"/>
 </p>
 
-## Contents
+## Table of Contents
 - [Introduction to HamGNN](#introduction-to-hamgnn)
 - [Requirements](#requirements)
   - [Python libraries](#python-libraries)
@@ -21,7 +21,7 @@
   - [Installation](#installation-1)
   - [Usage](#usage-1)
 - [Explanation of the parameters in config.yaml](#explanation-of-the-parameters-in-configyaml)
-- [Minimum irreps for node and edge features in config.yaml](#Minimum irreps for node and edge features in config.yaml)
+- [Minimum irreps for node and edge features in config.yaml](#minimum-irreps-for-node-and-edge-features-in-configyaml)
 - [References](#references)
 - [Code contributors](#code-contributors)
 - [Project leaders](#project-leaders)
