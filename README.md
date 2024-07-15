@@ -2,7 +2,7 @@
   <img height="130" src="logo/logo.png"/>
 </p>
 
-## Contents
+## Table of Contents
 - [Introduction to HamGNN](#introduction-to-hamgnn)
 - [Requirements](#requirements)
   - [Python libraries](#python-libraries)
@@ -21,6 +21,7 @@
   - [Installation](#installation-1)
   - [Usage](#usage-1)
 - [Explanation of the parameters in config.yaml](#explanation-of-the-parameters-in-configyaml)
+- [Minimum irreps for node and edge features in config.yaml](#minimum-irreps-for-node-and-edge-features-in-configyaml)
 - [References](#references)
 - [Code contributors](#code-contributors)
 - [Project leaders](#project-leaders)
@@ -167,6 +168,25 @@ The input parameters in config.yaml are divided into different modules, which ma
     + `k_path`: `auto`: Automatically determine the k-point path; `null`: random k-point path; `list`: list of k-point paths provided by the user
     + `soc_switch`: if true, Fit the SOC Hamiltonian
     + `nonlinearity_type`: `norm` activation or `gate` activation as the nonlinear activation function
+
+##  Minimum irreps for node and edge features in config.yaml
+```
+from e3nn import o3
+
+row=col=o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e+1x2e") # for 'sssppd'
+ham_irreps_dim = []
+ham_irreps = o3.Irreps()
+
+for _, li in row:
+    for _, lj in col:
+        for L in range(abs(li.l-lj.l), li.l+lj.l+1):
+            ham_irreps += o3.Irrep(L, (-1)**(li.l+lj.l)) 
+
+print(ham_irreps.sort()[0].simplify())
+```
+```
+Output: 17x0e+20x1o+8x1e+8x2o+20x2e+8x3o+4x3e+4x4e
+```
 
 ## References
 
