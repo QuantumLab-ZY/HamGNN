@@ -18,7 +18,8 @@ setup(
         "console_scripts": [
             "HamGNN = HamGNN.main:HamGNN",
             "band_cal = utils_openmx.band_cal:main",
-            "graph_data_gen = utils_openmx.graph_data_gen:main"
+            "graph_data_gen = utils_openmx.graph_data_gen:main"，
+            "poscar2openmx = utils_openmx.poscar2openmx:main"
         ]
     },
     install_requires=[
