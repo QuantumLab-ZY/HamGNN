@@ -224,7 +224,7 @@ def main():
         
             text_file.write("# k_lable: ")
             for ik in range(len(label)):
-                text_file.write("%s " % klabels[ik])
+                text_file.write("%s " % label[ik])
             text_file.write("\n")
         
             text_file.write("# k_node: ")
@@ -398,7 +398,7 @@ def main():
         
             text_file.write("# k_lable: ")
             for ik in range(len(label)):
-                text_file.write("%s " % klabels[ik])
+                text_file.write("%s " % label[ik])
             text_file.write("\n")
         
             text_file.write("# k_node: ")
