@@ -11,4 +11,5 @@ nao_max: 40
 num_wfns: 3 # Export the wave functions in the interval of [VBM-num_wfn, VBM+num_wfn]
 save_dir: /public/home/zhongyang/STRU_16
 soc_switch: False
+spin_colinear: False
 Ham_type: abacus # openmx or abacus
