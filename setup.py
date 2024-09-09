@@ -10,7 +10,7 @@ setup(
     description="Hamiltonian prediction via Graph Neural Network",
     download_url="",
     author="Yang Zhong",
-    python_requires=">=3.9",
+    python_requires=">=3.8",
     packages=find_packages(),
     package_dir={},
     package_data={'': ['*.npz', '*.json'],},
