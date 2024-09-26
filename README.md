@@ -30,8 +30,17 @@
 The HamGNN model is an E(3) equivariant graph neural network designed for the purpose of training and predicting tight-binding (TB) Hamiltonians of molecules and solids. Currently, HamGNN can be used in common ab initio DFT software that is based on numerical atomic orbitals, such as OpenMX, Siesta, and Abacus. HamGNN supports predictions of SU(2) equivariant Hamiltonians with spin-orbit coupling effects. HamGNN not only achieves a high fidelity approximation of DFT but also enables transferable predictions across material structures, making it suitable for high-throughput electronic structure calculations and accelerating computations on large-scale systems.
 
 ## Requirements
-
-The following environments and packages are required to use HamGNN:
+We recommend using the Python 3.9 interpreter. HamGNN needs the following python libraries:
+- numpy == 1.21.2
+- PyTorch == 1.11.0
+- PyTorch Geometric == 2.0.4
+- pytorch_lightning == 1.5.10
+- e3nn == 0.5.0
+- pymatgen == 2022.3.7
+- tensorboard == 2.8.0
+- tqdm
+- scipy == 1.7.3
+- yaml
 
 ### Python libraries
 The user can create a Python environment for HamGNN using `conda env create -f environment.yaml`.
