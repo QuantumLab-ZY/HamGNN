@@ -4,7 +4,7 @@ version:
 Author: Yang Zhong
 Date: 2024-08-24 16:14:48
 LastEditors: Yang Zhong
-LastEditTime: 2024-11-13 20:33:18
+LastEditTime: 2024-11-14 17:17:29
 '''
 import torch
 from torch import nn
@@ -112,7 +112,6 @@ class HamGNNConvE3(BaseModel):
                                                  irreps_out=self.irreps_node_features)
         
         # Define the OrbTransformer layers
-        self.num_heads = config.HamGNN_pre.num_heads
         correlation = config.HamGNN_pre.correlation
         num_hidden_features = config.HamGNN_pre.num_hidden_features
         
