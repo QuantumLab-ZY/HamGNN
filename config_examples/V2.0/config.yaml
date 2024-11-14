@@ -110,7 +110,6 @@ representation_nets:
     num_types: 96
     rbf_func: bessel
     set_features: true
-    num_heads: 4
     radial_MLP: [64, 64]
     correlation: 2
     num_hidden_features: 32
