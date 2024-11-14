@@ -12,7 +12,6 @@ import torch.nn as nn
 import numpy as np
 from torch.nn import (Linear, Bilinear, Sigmoid, Softplus, ELU, ReLU, SELU, SiLU,
                       CELU, BatchNorm1d, ModuleList, Sequential, Tanh, BatchNorm1d as BN)
-from torch_geometric.nn.acts import swish
 from typing import Callable, Union
 import re
 import torch.nn.functional as F
@@ -20,6 +19,8 @@ import matplotlib.pyplot as plt
 from easydict import EasyDict
 from scipy.stats import gaussian_kde
 
+def swish(x):
+    return x * x.sigmoid()
 
 def linear_bn_act(in_features: int, out_features: int, lbias: bool = False, activation: Callable = None, use_batch_norm: bool = False):
     if use_batch_norm:
