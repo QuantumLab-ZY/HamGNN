@@ -2,6 +2,8 @@
   <img height="130" src="logo/logo.png"/>
 </p>
 
+# <span style="color:#3498db; font-weight:bold;">News:</span> <span style="color:#e74c3c; font-weight:bold;">HamGNNV2.0 Now Available!</span>
+
 ## Table of Contents
 - [Introduction to HamGNN](#introduction-to-hamgnn)
 - [Requirements](#requirements)
@@ -80,7 +82,7 @@ run `poscar2openmx --config path/to/the/poscar2openmx.yaml` to convert these str
 After setting the appropriate path information in a `graph_data_gen.yaml` file, run `graph_data_gen --config graph_data_gen.yaml` to package the structural information and Hamiltonian data from all `.scfout` files into a single `graph_data.npz` file, which serves as the input data for the HamGNN network.
 
 ### HamGNN Network Training and Prediction
-Prepare the `config.yaml` configuration file and set the network parameters, training parameters, and other details in this file. To run HamGNN, simply enter `HamGNN --config config.yaml`. Running `tensorboard --logdir train_dir` allows real-time monitoring of the training progress, where `train_dir` is the folder where HamGNN saves the training data, corresponding to the `train_dir` parameter in `config.yaml`. To enhance the transferability and prediction accuracy of the network, the training is divided into two steps. The first step involves training with only the loss value of the Hamiltonian in the loss function until the Hamiltonian training converges or the error reaches around 10^-5 Hartree, at which point the training can be stopped. Then, the band energy error is added to the loss function, and the network parameters obtained from the previous step are loaded for further training. After obtaining the final network parameters, the network can be used for prediction. First, convert the structures to be predicted into the input data format (`graph_data.npz`) for the network, following similar steps and procedures as preparing the training set. Then, in the `config.yaml` file, set the `checkpoint_path` to the path of the network parameter file and set the `stage` parameter to `test`. After configuring the parameters in `config.yaml`, running `HamGNN --config config.yaml` will perform the prediction. 
+Prepare the `config.yaml` configuration file and set the network parameters, training parameters, and other details in this file. To run HamGNN, simply enter `HamGNN2.0/HamGNN1.0 --config config.yaml`. Running `tensorboard --logdir train_dir` allows real-time monitoring of the training progress, where `train_dir` is the folder where HamGNN saves the training data, corresponding to the `train_dir` parameter in `config.yaml`. To enhance the transferability and prediction accuracy of the network, the training is divided into two steps. The first step involves training with only the loss value of the Hamiltonian in the loss function until the Hamiltonian training converges or the error reaches around 10^-5 Hartree, at which point the training can be stopped. Then, the band energy error is added to the loss function, and the network parameters obtained from the previous step are loaded for further training. After obtaining the final network parameters, the network can be used for prediction. First, convert the structures to be predicted into the input data format (`graph_data.npz`) for the network, following similar steps and procedures as preparing the training set. Then, in the `config.yaml` file, set the `checkpoint_path` to the path of the network parameter file and set the `stage` parameter to `test`. After configuring the parameters in `config.yaml`, running `HamGNN --config config.yaml` will perform the prediction. 
 Several pre-trained models and the `config.yaml` file for the test examples are available on Zenodo (https://doi.org/10.5281/zenodo.8147631).
 
 ### Details of training for bands (The 2nd training/fine-tuning step)
@@ -114,7 +116,7 @@ In the Python environment with `band_cal_parallel` installed, execute the follow
 mpirun -np ncpus band_cal_parallel --config band_cal_parallel.yaml
 
 ##  Explanation of the parameters in config.yaml
-The input parameters in config.yaml are divided into different modules, which mainly include `'setup'`, `'dataset_params'`, `'losses_metrics'`, `'optim_params'` and network-related parameters (`'HamGNN_pre'` and `'HamGNN_out'`). Most of the parameters work well using the default values. The following introduces some commonly used parameters in each module.
+The input parameters in config.yaml are divided into different modules, which mainly include `'setup'`, `'dataset_params'`, `'losses_metrics'`, `'optim_params'` and network-related parameters (`'HamGNN_pre'` and `'HamGNN_out'`). Most of the parameters work well using the default values. The following introduces some commonly used parameters in each module.Please note that the parameters listed here are specific to HamGNNV1.0. We plan to add annotations for the parameters in HamGNN2.0 in the future. However, users can typically understand the purpose of each parameter based on its name.
 + `setup`:
     + `stage`: Select the state of the network: training (`fit`) or testing (`test`).
     + `GNN_Net`: Use `HamGNN_pre` for normal Hamiltonian fitting and use 'HamGNN_pre_charge' for fitting the Hamiltonian of charged defects.

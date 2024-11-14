@@ -1,0 +1,134 @@
+dataset_params:
+  batch_size: 1
+  split_file: null
+  test_ratio: 0.1
+  train_ratio: 0.8
+  val_ratio: 0.1
+  graph_data_path: ./Examples/pentadiamond/ # Directory where graph_data.npz is located
+
+losses_metrics:
+  losses:
+  - loss_weight: 1.0
+    metric: mae
+    prediction: hamiltonian
+    target: hamiltonian
+  #- loss_weight: 1.0
+  #  metric: mae
+  #  prediction: band_gap
+  #  target: band_gap
+  #- loss_weight: 0.001
+  #  metric: mae
+  #  prediction: band_energy
+  #  target: band_energy
+  #- loss_weight: 1.0
+  #  metric: mae
+  #  prediction: overlap
+  #  target: overlap
+  #- loss_weight: 1.0
+  #  metric: mae
+  #  prediction: peak
+  #  target: peak
+  #- loss_weight: 0.0
+  #  metric: mae
+  #  prediction: hamiltonian_imag
+  #  target: hamiltonian_imag
+  #- loss_weight: 0.0001
+  #  metric: abs_mae
+  #  prediction: wavefunction
+  #  target: wavefunction
+  metrics:
+  - metric: mae
+    prediction: hamiltonian
+    target: hamiltonian
+  #- metric: mae
+  #  prediction: band_gap
+  #  target: band_gap
+  #- metric: mae
+  #  prediction: peak
+  #  target: peak
+  #- metric: mae
+  #  prediction: overlap
+  #  target: overlap
+  #- metric: mae
+  #  prediction: hamiltonian_imag
+  #  target: hamiltonian_imag
+  #- metric: mae
+  #  prediction: hamiltonian_imag
+  #  target: hamiltonian_imag
+  #- metric: mae
+  #  prediction: band_energy
+  #  target: band_energy
+  #- metric: abs_mae
+  #  prediction: wavefunction
+  #  target: wavefunction
+
+# Generally, the optim_params module only needs to set the initial learning rate (lr)
+optim_params:
+  lr: 0.001
+  lr_decay: 0.5
+  lr_patience: 5
+  gradient_clip_val: 0.0
+  max_epochs: 3000
+  min_epochs: 100
+  stop_patience: 30
+
+output_nets:
+  output_module: HamGNN_out
+  HamGNN_out:
+    ham_only: true # true: Only the Hamiltonian H is computed; 'false': Fit both H and S
+    ham_type: openmx # openmx: fit openmx Hamiltonian; abacus: fit abacus Hamiltonian
+    nao_max: 14 # The maximum number of atomic orbitals in the data set, which can be 14, 19 or 27
+    add_H0: true # Generally true, the complete Hamiltonian is predicted as the sum of H_scf plus H_nonscf (H0)
+    symmetrize: true # if set to true, the Hermitian symmetry constraint is imposed on the Hamiltonian
+    calculate_band_energy: false # Whether to calculate the energy bands to train the model
+    num_k: 5 # When calculating the energy bands, the number of K points to use
+    band_num_control: null # `dict`: controls how many orbitals are considered for each atom in energy bands; `int`: [vbm-num, vbm+num]; `null`: all bands
+    k_path: null # `auto`: Automatically determine the k-point path; `null`: random k-point path; `list`: list of k-point paths provided by the user
+    soc_switch: false # if true, fit the SOC Hamiltonian
+    nonlinearity_type: norm # norm or gate
+
+profiler_params:
+  progress_bar_refresh_rat: 1
+  train_dir: ./Examples/pentadiamond #The folder for saving training information and prediction results. This directory can be read by tensorboard to monitor the training process.
+
+representation_nets:
+  # Network parameters usually do not need to be changed.
+  HamGNN_pre:
+    cutoff: 20.0
+    resnet: True
+    cutoff_func: cos
+    edge_sh_normalization: component
+    edge_sh_normalize: true
+    ######## Irreps set 1 (crystal): ################
+    feature_irreps_hidden: 32x0o+32x0e+32x1o+32x1e+32x2e+32x2o+32x3o+32x3e+32x4o+32x4e
+    irreps_edge_output: 32x0o+32x0e+32x1o+32x1e+32x2e+32x2o+32x3o+32x3e+32x4o+32x4e
+    irreps_edge_sh: 0e + 1o + 2e + 3o + 4e
+    irreps_node_features: 32x0o+32x0e+32x1o+32x1e+32x2e+32x2o+32x3o+32x3e+32x4o+32x4e
+    irreps_node_output: 32x0o+32x0e+32x1o+32x1e+32x2e+32x2o+32x3o+32x3e+32x4o+32x4e
+    irreps_triplet_output: 32x0o+32x0e+32x1o+32x1e+32x2e+32x2o+32x3o+32x3e+32x4o+32x4e
+    invariant_layers: 2
+    invariant_neurons: 64
+    num_interaction_layers: 5
+    num_radial: 8
+    num_spherical: 8
+    num_types: 60
+    export_triplet: false
+    rbf_func: bessel
+    set_features: true
+    add_edge_tp: false
+    irreps_node_prev: 16x0o+16x0e+8x1o+8x1e+8x2e+8x2o+8x3o+8x3e+8x4o+8x4e
+    num_node_attr_feas: 64
+    # charge
+    # num_charge_attr_feas: 64 # the number of features for charge
+
+setup:
+  GNN_Net: HamGNN_pre
+  accelerator: null
+  ignore_warnings: true
+  checkpoint_path: ./network_weights_carbon.ckpt # Path to the model weights file
+  load_from_checkpoint: false
+  resume: false
+  num_gpus: null # null: use cpu; [i]: use the ith GPU device
+  precision: 32
+  property: hamiltonian
+  stage: test # fit: training; test: inference
