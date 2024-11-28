@@ -4,7 +4,7 @@ version:
 Author: Yang Zhong
 Date: 2024-08-24 14:22:19
 LastEditors: Yang Zhong
-LastEditTime: 2024-08-24 21:05:41
+LastEditTime: 2024-11-28 22:14:26
 '''
 
 from __future__ import annotations
@@ -35,7 +35,9 @@ ATOMIC_RADII = {
         'Pm': 8.0, 'Sm': 8.0, 'Dy': 8.0, 'Ho': 8.0, 'Lu': 8.0, 'Hf': 9.0,
         'Ta': 7.0, 'W': 7.0, 'Re': 7.0, 'Os': 7.0, 'Ir': 7.0, 'Pt': 7.0,
         'Au': 7.0, 'Hg': 8.0, 'Tl': 8.0, 'Pb': 8.0, 'Bi': 8.0
-    }
+    },
+    'siesta':{},
+    'abacus':{}
 }
 
 DEFAULT_RADIUS = 10.0

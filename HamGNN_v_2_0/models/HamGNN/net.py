@@ -4,7 +4,7 @@ version:
 Author: Yang Zhong
 Date: 2024-08-24 16:14:48
 LastEditors: Yang Zhong
-LastEditTime: 2024-11-14 17:17:29
+LastEditTime: 2024-11-28 23:23:04
 '''
 import torch
 from torch import nn
@@ -62,6 +62,7 @@ class HamGNNConvE3(BaseModel):
         self.irreps_edge_sh = o3.Irreps(config.HamGNN_pre.irreps_edge_sh)  # Irreps for edge spherical harmonics
         self.edge_sh_normalization = config.HamGNN_pre.edge_sh_normalization
         self.edge_sh_normalize = config.HamGNN_pre.edge_sh_normalize
+        self.build_internal_graph = config.HamGNN_pre.build_internal_graph
         
         # Radial basis function
         self.cutoff = config.HamGNN_pre.cutoff
@@ -150,7 +151,10 @@ class HamGNNConvE3(BaseModel):
             self.pair_interactions.append(pair_interaction)
     
     def forward(self, data):
-        graph = self.generate_graph(data)    
+        if self.build_internal_graph:
+            graph = self.generate_graph(data) 
+        else:
+            graph = data      
         self.atomic_embedding(graph)
         self.spharm_edges(graph)
         self.radial_basis(graph)
@@ -163,7 +167,10 @@ class HamGNNConvE3(BaseModel):
             self.pair_interactions[i](graph)
         graph_representation = EasyDict()
         graph_representation['node_attr'] = graph[AtomicDataDict.NODE_FEATURES_KEY]
-        graph_representation['edge_attr'] = graph[AtomicDataDict.EDGE_FEATURES_KEY][graph.matching_edges]
+        if self.build_internal_graph:
+            graph_representation['edge_attr'] = graph[AtomicDataDict.EDGE_FEATURES_KEY][graph.matching_edges]
+        else:
+            graph_representation['edge_attr'] = graph[AtomicDataDict.EDGE_FEATURES_KEY]
         return graph_representation
 
 
@@ -181,6 +188,7 @@ class HamGNNTransformer(BaseModel):
         self.irreps_edge_sh = o3.Irreps(config.HamGNN_pre.irreps_edge_sh)  # Irreps for edge spherical harmonics
         self.edge_sh_normalization = config.HamGNN_pre.edge_sh_normalization
         self.edge_sh_normalize = config.HamGNN_pre.edge_sh_normalize
+        self.build_internal_graph = config.HamGNN_pre.build_internal_graph
 
         # Radial basis function
         self.cutoff = config.HamGNN_pre.cutoff
@@ -273,7 +281,10 @@ class HamGNNTransformer(BaseModel):
             self.pair_interactions.append(pair_interaction)
     
     def forward(self, data):
-        graph = self.generate_graph(data)    
+        if self.build_internal_graph:
+            graph = self.generate_graph(data) 
+        else:
+            graph = data       
         self.atomic_embedding(graph)
         self.spharm_edges(graph)
         self.radial_basis(graph)
@@ -286,7 +297,10 @@ class HamGNNTransformer(BaseModel):
             self.pair_interactions[i](graph)
         graph_representation = EasyDict()
         graph_representation['node_attr'] = graph[AtomicDataDict.NODE_FEATURES_KEY]
-        graph_representation['edge_attr'] = graph[AtomicDataDict.EDGE_FEATURES_KEY][graph.matching_edges]
+        if self.build_internal_graph:
+            graph_representation['edge_attr'] = graph[AtomicDataDict.EDGE_FEATURES_KEY][graph.matching_edges]
+        else:
+            graph_representation['edge_attr'] = graph[AtomicDataDict.EDGE_FEATURES_KEY]
         return graph_representation
 
 
