@@ -113,7 +113,7 @@ representation_nets:
     num_heads: 4
     radial_MLP: [64, 64]
     correlation: 2
-    num_hidden_features: 32
+    num_hidden_features: 16
     use_kan: False
     radius_scale: 1.01
     build_internal_graph: False
