@@ -6,7 +6,7 @@ nk: 120          # the number of k points
 save_dir: '/data/home/yzhong/ZHR/version_1/prediction' # The directory to save the results
 strcture_name: 'Nb3I8'  # The name of each cif file saved is strcture_name_idx.cif after band calculation
 soc_switch: False
-spin_colinear: True
+spin_colinear: False
 auto_mode: True # If the auto_mode is used, users can omit providing k_path and label, as the program will automatically generate them based on the crystal symmetry.
 k_path: [[0.,0.,-0.5],[0.,0.,0.0],[0.,0.,0.5]]
 label: ['$Mbar$','$G$','$M$'] # The lable for each k points in K_path
