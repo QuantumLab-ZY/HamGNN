@@ -2,12 +2,12 @@
   <img height="130" src="logo/logo.png"/>
 </p>
 
-# <span style="color:#3498db; font-weight:bold;">News:</span> <span style="color:#e74c3c; font-weight:bold;">HamGNNV2.0 Now Available!</span>
+# 🚀 HamGNN v2.0 Now Available!
 
 ## Table of Contents
 - [Introduction to HamGNN](#introduction-to-hamgnn)
 - [Requirements](#requirements)
-  - [Python libraries](#python-libraries)
+  - [Python Libraries](#python-libraries)
   - [OpenMX](#openmx)
   - [openmx_postprocess](#openmx_postprocess)
   - [read_openmx](#read_openmx)
@@ -16,103 +16,167 @@
   - [Preparation of Hamiltonian Training Data](#preparation-of-hamiltonian-training-data)
   - [Graph Data Conversion](#graph-data-conversion)
   - [HamGNN Network Training and Prediction](#hamgnn-network-training-and-prediction)
-  - [Details of training for bands (The 2nd training/fine-tuning step)](#details-of-training-for-bands-the-2nd-trainingfine-tuning-step)
+  - [Training for Bands (Second Step)](#training-for-bands-second-step)
   - [Band Structure Calculation](#band-structure-calculation)
-- [The support for ABACUS software](#the-support-for-abacus-software)
-- [Diagonalizing Hamiltonian matrices for large scale systems](#diagonalizing-hamiltonian-matrices-for-large-scale-systems)
+- [Support for ABACUS Software](#support-for-abacus-software)
+- [Diagonalizing Hamiltonian Matrices for Large-Scale Systems](#diagonalizing-hamiltonian-matrices-for-large-scale-systems)
   - [Installation](#installation-1)
   - [Usage](#usage-1)
 - [Explanation of the parameters in config.yaml](#explanation-of-the-parameters-in-configyaml)
 - [Minimum irreps for node and edge features in config.yaml](#minimum-irreps-for-node-and-edge-features-in-configyaml)
 - [References](#references)
-- [Code contributors](#code-contributors)
-- [Project leaders](#project-leaders)
+- [Code Contributors](#code-contributors)
+- [Project Leaders](#project-leaders)
 
 ## Introduction to HamGNN
-The HamGNN model is an E(3) equivariant graph neural network designed for the purpose of training and predicting tight-binding (TB) Hamiltonians of molecules and solids. Currently, HamGNN can be used in common ab initio DFT software that is based on numerical atomic orbitals, such as OpenMX, Siesta, and Abacus. HamGNN supports predictions of SU(2) equivariant Hamiltonians with spin-orbit coupling effects. HamGNN not only achieves a high fidelity approximation of DFT but also enables transferable predictions across material structures, making it suitable for high-throughput electronic structure calculations and accelerating computations on large-scale systems.
+HamGNN is an E(3) equivariant graph neural network designed to train and predict ab initio tight-binding (TB) Hamiltonians for molecules and solids. It can be used with common ab initio DFT software that rely on numerical atomic orbitals, such as OpenMX, Siesta, and ABACUS. Additionally, it supports predictions of SU(2) equivariant Hamiltonians with spin-orbit coupling effects. HamGNN provides a high-fidelity approximation of DFT results and offers transferable predictions across material structures. This makes it ideal for high-throughput electronic structure calculations, accelerating computations on large-scale systems.
 
 ## Requirements
-We recommend using the Python 3.9 interpreter. HamGNN needs the following python libraries:
-- numpy == 1.21.2
-- PyTorch == 1.11.0
-- PyTorch Geometric == 2.0.4
-- pytorch_lightning == 1.5.10
-- e3nn == 0.5.0
-- pymatgen == 2022.3.7
-- tensorboard == 2.8.0
-- tqdm
-- scipy == 1.7.3
-- yaml
+We recommend using Python 3.9. HamGNN requires the following Python libraries:
+- `numpy == 1.21.2`
+- `PyTorch == 1.11.0`
+- `PyTorch Geometric == 2.0.4`
+- `pytorch_lightning == 1.5.10`
+- `e3nn == 0.5.0`
+- `pymatgen == 2022.3.7`
+- `tensorboard == 2.8.0`
+- `tqdm`
+- `scipy == 1.7.3`
+- `yaml`
 
-### Python libraries
-The user can create a Python environment for HamGNN using `conda env create -f environment.yaml`.
+### Python Libraries
+To set up the Python environment for HamGNN, you have two options:
 
-A another way to set up the Python environment for HamGNN is to use the HamGNN conda environment I have uploaded to this [website](https://zenodo.org/records/11064223). Users can simply extract this conda environment directly to their own `conda/envs` directory.
+1. **Using `environment.yaml`:**  
+   Run the following command to create the environment:  
+   ```bash
+   conda env create -f environment.yaml
+   ```
+   **Note:** The environment created with the current `environment.yaml` may result in the following error during training of the SOC Hamiltonian:  
+   ```
+   RuntimeError: one of the variables needed for gradient computation has been modified by an inplace operation
+   ```
+
+2. **Using the Prebuilt Conda Environment:**  
+   Alternatively, you can download the prebuilt HamGNN Conda environment from [Zenodo](https://zenodo.org/records/11064223). After downloading the `ML.tar.gz` file, extract it into your `conda/envs` directory.  
+
+   **Recommendation:** While this approach may seem less elegant, it is currently the more reliable option.  
+
 ### OpenMX
-HamGNN aims to fit the TB Hamiltonian generated by `OpenMX`. The user need to know the basic OpenMX parameters and how to use them properly. OpenMX can be downloaded from this [site](https://www.openmx-square.org/).
+HamGNN requires the tight-binding Hamiltonian generated by OpenMX. You should be familiar with the basic OpenMX parameters and how to use them. OpenMX can be downloaded from [here](https://www.openmx-square.org/).
 
 ### openmx_postprocess
-openmx_postprocess is a modified OpenMX package used for computing overlap matrices and other Hamiltonian matrices that can be calculated analytically. The data computed by openmx_postprocess will be stored in a binary file `overlap.scfout`. The installation and usage of openmx_postprocess is essentially the same as that of OpenMX. To install openmx_postprocess, you need to install the [GSL](https://www.gnu.org/software/gsl/) library first.Then enter the openmx_postprocess directory and modify the following parameters in the makefile:
-+ `GSL_lib`: The lib path of GSL
-+ `GSL_include`: The include path of GSL
-+ `MKLROOT`: The intel MKL path
-+ `CMPLR_ROOT`: The path where the intel compiler is installed
+`openmx_postprocess` is a modified version of OpenMX for computing overlap matrices and other Hamiltonian matrices analytically. It stores the computed data in a binary file called `overlap.scfout`. To install `openmx_postprocess`:
+1. First, install the [GSL](https://www.gnu.org/software/gsl/) library.
+2. Modify the `makefile` in the `openmx_postprocess` directory:
+   - Set `GSL_lib` to the path of the GSL library.
+   - Set `GSL_include` to the include path of GSL.
+   - Set `MKLROOT` to the Intel MKL path.
+   - Set `CMPLR_ROOT` to the Intel compiler path.
 
-After modifying the makefile, you can directly execute the make command to generate two executable programs, `openmx_postprocess` and `read_openmx`.
+After modifying the `makefile`, execute `make` to generate the executable programs: `openmx_postprocess` and `read_openmx`.
 
 ### read_openmx
-read_openmx is a binary executable that can be used to export the matrices from the binary file overlap.scfout to a file called `HS.json`.
+`read_openmx` is a binary executable used to export matrices from the `overlap.scfout` file to `HS.json`.
 
 ## Installation
-Run the following command to install HamGNN:
+To install HamGNN, run the following commands:
 ```bash
 git clone https://github.com/QuantumLab-ZY/HamGNN.git
 cd HamGNN
 python setup.py install
 ```
-Please note that if you have previously installed an older version of HamGNN, you need to uninstall the old version first by using `pip uninstall HamGNN`. After uninstalling, there may still be a residual installation package in the `site-packages` directory named `'HamGNN-x.x.x-py3.9.egg/HamGNN'`. In this case, you need to manually delete this directory before installing the new version of HamGNN; otherwise, the new version of HamGNN may call functions from the old one.
+If you are upgrading from an older version of HamGNN, uninstall the previous version first:
+```bash
+pip uninstall HamGNN
+```
+Ensure that any residual files in the `site-packages` directory (e.g., `'HamGNN-x.x.x-py3.9.egg/HamGNN'`) are deleted before installing the new version.
 
 ## Usage
+
 ### Preparation of Hamiltonian Training Data
-First, generate a set of structure files (POSCAR or CIF files) using molecular dynamics or random perturbation. After setting the appropriate path parameters in the `poscar2openmx.yaml` file,
-run `poscar2openmx --config path/to/the/poscar2openmx.yaml` to convert these structures into OpenMX's `.dat` file format. Run OpenMX to perform static calculations on these structure files and obtain the `.scfout` binary files, which store the Hamiltonian and overlap matrix information for each structure. These files serve as the target Hamiltonians during training. Next, run `openmx_postprocess` to process each structure and obtain the `overlap.scfout` file, which contains the Hamiltonian matrix H0 that is independent of the self-consistent charge density. If the constructed dataset is only used for prediction purposes and not for training (i.e., no target Hamiltonian is needed), run `openmx_postprocess` to obtain the `overlap.scfout` file merely. `openmx_postprocess` is executed similarly to OpenMX and supports MPI parallelism.
+1. **Generate Structure Files**: Create structure files (e.g., POSCAR or CIF) via molecular dynamics or random perturbation.
+2. **Convert to OpenMX Format**: Edit the `poscar2openmx.yaml` file with appropriate path settings and run:
+    ```bash
+    poscar2openmx --config path/to/poscar2openmx.yaml
+    ```
+   This converts the structures into OpenMX’s `.dat` format.
+3. **Run OpenMX**: Perform static calculations on the structure files to generate `.scfout` binary files containing Hamiltonian and overlap matrix information.
+4. **Process with openmx_postprocess**: Run `openmx_postprocess` to generate the `overlap.scfout` file, which contains the Hamiltonian matrix `H0`, independent of the self-consistent charge density.
 
 ### Graph Data Conversion
-After setting the appropriate path information in a `graph_data_gen.yaml` file, run `graph_data_gen --config graph_data_gen.yaml` to package the structural information and Hamiltonian data from all `.scfout` files into a single `graph_data.npz` file, which serves as the input data for the HamGNN network.
+1. Set the appropriate paths in the `graph_data_gen.yaml` file.
+2. Run the following to convert the structural and Hamiltonian data into a single input file for the HamGNN network:
+    ```bash
+    graph_data_gen --config graph_data_gen.yaml
+    ```
+This generates the `graph_data.npz` file, which will be used as input to HamGNN.
 
 ### HamGNN Network Training and Prediction
-Prepare the `config.yaml` configuration file and set the network parameters, training parameters, and other details in this file. To run HamGNN, simply enter `HamGNN2.0/HamGNN1.0 --config config.yaml`. Running `tensorboard --logdir train_dir` allows real-time monitoring of the training progress, where `train_dir` is the folder where HamGNN saves the training data, corresponding to the `train_dir` parameter in `config.yaml`. To enhance the transferability and prediction accuracy of the network, the training is divided into two steps. The first step involves training with only the loss value of the Hamiltonian in the loss function until the Hamiltonian training converges or the error reaches around 10^-5 Hartree, at which point the training can be stopped. Then, the band energy error is added to the loss function, and the network parameters obtained from the previous step are loaded for further training. After obtaining the final network parameters, the network can be used for prediction. First, convert the structures to be predicted into the input data format (`graph_data.npz`) for the network, following similar steps and procedures as preparing the training set. Then, in the `config.yaml` file, set the `checkpoint_path` to the path of the network parameter file and set the `stage` parameter to `test`. After configuring the parameters in `config.yaml`, running `HamGNN --config config.yaml` will perform the prediction. 
-Several pre-trained models and the `config.yaml` file for the test examples are available on Zenodo (https://doi.org/10.5281/zenodo.8147631).
+1. **Configure the Network**: Set the appropriate parameters in the `config.yaml` file for network and training configurations.
+2. **Train HamGNN**: Run the training process with:
+    ```bash
+    HamGNN2.0/HamGNN1.0 --config config.yaml
+    ```
+3. **Monitor Training**: Use TensorBoard to track training progress:
+    ```bash
+    tensorboard --logdir train_dir
+    ```
+   where `train_dir` is the directory where HamGNN saves training logs, as specified in `config.yaml`.
+4. **Prediction**: After training, the model can be used for predictions:
+    - Convert the structures to be predicted into `graph_data.npz`.
+    - Set `checkpoint_path` in `config.yaml` to the trained model's path and `stage` to `test`.
+    - Run:
+    ```bash
+    HamGNN --config config.yaml
+    ```
 
-### Details of training for bands (The 2nd training/fine-tuning step)
-When the training of the Hamiltonian matrix is completed in the first step, it is necessary to use the trained network weights to initialize the HamGNN network and start training for the energy bands. The parameters related to energy band training are as follows:
-+ `checkpoint_path` parameter should be set to path of the weight file obtained after training on the Hamiltonian matrix in the first step.
-+ Set `load_from_checkpoint` to True
-+ `lr` should not be too large, it is recommended to use 0.0001.
-+ In `losses_metrics` and `metrics`, remove the commented section for `band_energy`.
-+ Set `calculate_band_energy` to True and specify the parameters `num_k`, `band_num`, and `k_path`.
-
-After setting the above parameters, start the training again.
+### Training for Bands (Second Step)
+After the Hamiltonian matrix training, use the trained network to fine-tune the model for energy band predictions:
+1. Set `checkpoint_path` to the trained model's weight file.
+2. Enable `load_from_checkpoint = True`.
+3. Set a smaller learning rate (`lr = 0.0001`).
+4. Add `band_energy` loss to the `losses_metrics` and `metrics` sections. Set its `loss_weight` to 0.01 of the Hamiltonian's `loss_weight`.
+5. Enable `calculate_band_energy` and set the required parameters (`num_k`, `band_num`, `k_path`).
+6. Start training again.
 
 ### Band Structure Calculation
-Set the parameters in band_cal.yaml, mainly the path to the Hamiltonian data, then run `band_cal --config band_cal.yaml`
+To calculate the band structure:
+1. Update the `band_cal.yaml` configuration file with the correct path to the Hamiltonian data.
+2. Execute the band structure calculation:
+    ```bash
+    band_cal --config band_cal.yaml
+    ```
+3. **Enable Parallelism**: To run in parallel, add this to your job script:
+    ```bash
+    export OMP_NUM_THREADS=<ncpus_per_node>
+    ```
 
-## The support for ABACUS software
-The utilities to support ABACUS software have been uploaded in the `utils_abacus` directory. Users need to modify the parameters in the scripts within this directory. The code for `abacus_postprocess` in `utils_abacus/abacus_H0_export` is derived from modifying the `abacus` program based on ABACUS-3.5.3. The function of this tool is similar to `openmx_postprocess` and it is used to export the Hamiltonian part `H0`, which is independent of the self-consistent field (SCF) charge density. Compilation of `abacus-postprocess` is the same as that of the original ABACUS.
+## Support for ABACUS Software
+HamGNN includes utilities for supporting ABACUS software. These tools, located in the `utils_abacus` directory, include:
+- `abacus_postprocess` to export the Hamiltonian matrix `H0`.
+- `poscar2abacus.py` for generating ABACUS structure files.
+- `graph_data_gen_abacus.py` for generating graph data in the `graph_data.npz` format.
 
-`poscar2abacus.py` and `graph_data_gen_abacus.py` scripts are respectively utilized for generating ABACUS structure files and packaging the Hamiltonian matrix into the `graph_data.npz` file. Users can explore the usage of these tools independently. Later on, I'll briefly introduce the meanings of the parameters within these scripts.
+For detailed instructions on using these tools, refer to the provided scripts.
 
-## Diagonalizing Hamiltonian matrices for large scale systems
-For crystal structures containing thousands of atoms, diagonalizing the Hamiltonian matrix using the serial `band_cal` script can be quite challenging. To address this, we've introduced a multi-core parallel `band_cal_parallel` script within band_cal_parallel directory. Note: In certain MKL environments, using the `band_cal_parallel` may trigger a bug that reports the error message 'Intel MKL FATAL ERROR: Cannot load symbol MKLMPI_Get_wrappers'. Users can try the solutions provided in Issues [#18](https://github.com/QuantumLab-ZY/HamGNN/issues/18) and [#12](https://github.com/QuantumLab-ZY/HamGNN/issues/12) to resolve this issue (thanks to the help from `flamingoXu` and `newplay`).
+## Diagonalizing Hamiltonian Matrices for Large-Scale Systems
+For large systems, diagonalizing the Hamiltonian matrix with the serial `band_cal` script may be challenging. To address this, we provide a parallelized version, `band_cal_parallel`. However, note that some MKL environments may trigger a bug (`Intel MKL FATAL ERROR: Cannot load symbol MKLMPI_Get_wrappers`). Users can try the solutions provided in Issues [#18](https://github.com/QuantumLab-ZY/HamGNN/issues/18) and [#12](https://github.com/QuantumLab-ZY/HamGNN/issues/12) to resolve this issue (thanks to the help from `flamingoXu` and `newplay`).
 
 ### Installation
-pip install mpitool-0.0.1-cp39-cp39-manylinux1_x86_64.whl
 
+```bash
+pip install mpitool-0.0.1-cp39-cp39-manylinux1_x86_64.whl
 pip install band_cal_parallel-0.1.12-py3-none-any.whl
+```
 
 ### Usage
-In the Python environment with `band_cal_parallel` installed, execute the following command with multiple cpus to compute the band structure:
+
+Run the following command with multiple CPUs:
+
+```bash
 mpirun -np ncpus band_cal_parallel --config band_cal_parallel.yaml
+```
 
 ##  Explanation of the parameters in config.yaml
 The input parameters in config.yaml are divided into different modules, which mainly include `'setup'`, `'dataset_params'`, `'losses_metrics'`, `'optim_params'` and network-related parameters (`'HamGNN_pre'` and `'HamGNN_out'`). Most of the parameters work well using the default values. The following introduces some commonly used parameters in each module.Please note that the parameters listed here are specific to HamGNNV1.0. We plan to add annotations for the parameters in HamGNN2.0 in the future. However, users can typically understand the purpose of each parameter based on its name.
@@ -170,7 +234,7 @@ The input parameters in config.yaml are divided into different modules, which ma
     + `soc_switch`: if true, Fit the SOC Hamiltonian
     + `nonlinearity_type`: `norm` activation or `gate` activation as the nonlinear activation function
 
-##  Minimum irreps for node and edge features in config.yaml
+##  Minimum Irreps for Node and Edge Features in config.yaml
 ```
 from e3nn import o3
 
