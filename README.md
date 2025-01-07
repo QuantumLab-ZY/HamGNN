@@ -135,7 +135,7 @@ This generates the `graph_data.npz` file, which will be used as input to HamGNN.
     - Set `checkpoint_path` in `config.yaml` to the trained model's path and `stage` to `test`.
     - Run:
     ```bash
-    HamGNN --config config.yaml
+    HamGNN2.0 --config config.yaml
     ```
 
 ### Training for Bands (Second Step)
