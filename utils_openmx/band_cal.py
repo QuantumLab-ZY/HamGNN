@@ -34,6 +34,12 @@ def main():
     nk = input['nk']          # the number of k points
     save_dir = input['save_dir'] # The directory to save the results
     filename = input['strcture_name']  # The name of each cif file saved is filename_idx.cif after band calculation band from graph_data.npz
+
+    # Ham_type
+    if 'Ham_type' in input:
+        Ham_type = input['Ham_type'].lower()
+    else:
+        Ham_type = 'openmx'
     
     # soc_switch
     if 'soc_switch' in input:
@@ -59,6 +65,39 @@ def main():
     graph_data = np.load(graph_data_path, allow_pickle=True)
     graph_data = graph_data['graph'].item()
     graph_dataset = list(graph_data.values())
+
+    num_val = np.zeros((99,), dtype=int)
+    if Ham_type == 'openmx':
+        for k in num_valence_openmx.keys():
+            num_val[k] = num_valence_openmx[k]
+    elif Ham_type == 'abacus':
+        for k in num_valence_abacus.keys():
+            num_val[k] = num_valence_abacus[k]
+    else:
+        raise NotImplementedError
+
+    # parse the Atomic Orbital Basis Sets
+    basis_definition = np.zeros((99, nao_max))
+    # key is the atomic number, value is the index of the occupied orbits.
+    if Ham_type == 'openmx':
+        if nao_max == 14:
+            basis_def = basis_def_14
+        elif nao_max == 19:
+            basis_def = basis_def_19
+        else:
+            basis_def = basis_def_26
+    elif Ham_type == 'abacus':
+        if nao_max == 27:
+            basis_def = basis_def_27_abacus
+        elif nao_max == 40:
+            basis_def = basis_def_40_abacus
+        else:
+            raise NotImplementedError     
+    else:
+        raise NotImplementedError
+
+    for k in basis_def.keys():
+        basis_definition[k][basis_def[k]] = 1
     
     if soc_switch:
         # Calculate the length of H for each structure
@@ -66,14 +105,18 @@ def main():
         for i in range(len(graph_dataset)):
             len_H.append(2*(len(graph_dataset[i].Hon)+len(graph_dataset[i].Hoff)))
     
-        H = np.load(hamiltonian_path).reshape(-1, 2*nao_max, 2*nao_max)
-    
-        Hsoc_all = []
-        idx = 0
-        for i in range(0, len(len_H)):
-            Hsoc_all.append(H[idx:idx + len_H[i]])
-            idx = idx+len_H[i]
-    
+        if hamiltonian_path is not None:
+            H = np.load(hamiltonian_path)
+            Hsoc_all = []
+            idx = 0
+            for i in range(0, len(len_H)):
+                Hsoc_all.append(H[idx:idx + len_H[i]])
+                idx = idx+len_H[i]
+        else:
+            Hsoc_all = []
+            for data in graph_dataset:
+                Hsoc_all.append(torch.cat([data.Hon, data.Hoff, data.iHon, data.iHoff], dim=0).numpy())
+        
         wfn_all = []
         for idx, data in enumerate(graph_dataset):
             # build crystal structure
@@ -112,22 +155,7 @@ def main():
             k_vec, k_dist, k_node, lat_per_inv, node_index = kpts.k_path(k_path, nk)
             k_vec = k_vec.dot(lat_per_inv[np.newaxis,:,:]) # shape (nk,1,3)
             k_vec = k_vec.reshape(-1,3) # shape (nk, 3)
-    
-            # parse the Atomic Orbital Basis Sets
-            basis_definition = np.zeros((99, nao_max))
-            # key is the atomic number, value is the index of the occupied orbits.
-            if nao_max == 14:
-                basis_def = basis_def_14
-            elif nao_max == 19:
-                basis_def = basis_def_19
-            elif nao_max == 26:
-                basis_def = basis_def_26
-            else:
-                raise NotImplementedError
-        
-            for k in basis_def.keys():
-                basis_definition[k][basis_def[k]] = 1
-    
+            
             orb_mask = basis_definition[species].reshape(-1) # shape: [natoms*nao_max] 
             orb_mask = orb_mask[:,None] * orb_mask[None,:]       # shape: [natoms*nao_max, natoms*nao_max]
     
@@ -261,14 +289,20 @@ def main():
             len_H.append(len(graph_dataset[i].Hon))
             len_H.append(len(graph_dataset[i].Hoff))
 
-        H = np.load(hamiltonian_path).reshape(-1, 2, nao_max, nao_max)
-        Hon_all, Hoff_all = [], []
-        idx = 0
-        for i in range(0, len(len_H), 2):
-            Hon_all.append(H[idx:idx + len_H[i]])
-            idx = idx+len_H[i]
-            Hoff_all.append(H[idx:idx + len_H[i+1]])
-            idx = idx+len_H[i+1]
+        if hamiltonian_path is not None:
+            H = np.load(hamiltonian_path)
+            Hon_all, Hoff_all = [], []
+            idx = 0
+            for i in range(0, len(len_H), 2):
+                Hon_all.append(H[idx:idx + len_H[i]])
+                idx = idx+len_H[i]
+                Hoff_all.append(H[idx:idx + len_H[i+1]])
+                idx = idx+len_H[i+1]
+        else:
+            Hon_all, Hoff_all = [], []
+            for data in graph_dataset:
+                Hon_all.append(data.Hon.numpy())
+                Hoff_all.append(data.Hoff.numpy())
         
         wfn_all = []
         for idx, data in enumerate(graph_dataset):
@@ -297,22 +331,7 @@ def main():
                 klabels = res
                 k_path = [kpath_seek.kpath['kpoints'][k] for k in klabels]
                 label = [rf'${lb}$' for lb in klabels]            
-        
-            # parse the Atomic Orbital Basis Sets
-            basis_definition = np.zeros((99, nao_max))
-            # key is the atomic number, value is the index of the occupied orbits.
-            if nao_max == 14:
-                basis_def = basis_def_14
-            elif nao_max == 19:
-                basis_def = basis_def_19
-            elif nao_max == 26:
-                basis_def = basis_def_26
-            else:
-                raise NotImplementedError
-        
-            for k in basis_def.keys():
-                basis_definition[k][basis_def[k]] = 1
-        
+                
             orb_mask = basis_definition[species].reshape(-1) # shape: [natoms*nao_max] 
             orb_mask = orb_mask[:,None] * orb_mask[None,:]       # shape: [natoms*nao_max, natoms*nao_max]
         
@@ -438,15 +457,21 @@ def main():
         for i in range(len(graph_dataset)):
             len_H.append(len(graph_dataset[i].Hon))
             len_H.append(len(graph_dataset[i].Hoff))
-        
-        H = np.load(hamiltonian_path).reshape(-1, nao_max, nao_max)
-        Hon_all, Hoff_all = [], []
-        idx = 0
-        for i in range(0, len(len_H), 2):
-            Hon_all.append(H[idx:idx + len_H[i]])
-            idx = idx+len_H[i]
-            Hoff_all.append(H[idx:idx + len_H[i+1]])
-            idx = idx+len_H[i+1]
+               
+        if hamiltonian_path is not None:
+            H = np.load(hamiltonian_path)
+            Hon_all, Hoff_all = [], []
+            idx = 0
+            for i in range(0, len(len_H), 2):
+                Hon_all.append(H[idx:idx + len_H[i]])
+                idx = idx+len_H[i]
+                Hoff_all.append(H[idx:idx + len_H[i+1]])
+                idx = idx+len_H[i+1]
+        else:
+            Hon_all, Hoff_all = [], []
+            for data in graph_dataset:
+                Hon_all.append(data.Hon.numpy())
+                Hoff_all.append(data.Hoff.numpy())
         
         wfn_all = []
         for idx, data in enumerate(graph_dataset):
@@ -475,21 +500,6 @@ def main():
                 klabels = res
                 k_path = [kpath_seek.kpath['kpoints'][k] for k in klabels]
                 label = [rf'${lb}$' for lb in klabels]            
-        
-            # parse the Atomic Orbital Basis Sets
-            basis_definition = np.zeros((99, nao_max))
-            # key is the atomic number, value is the index of the occupied orbits.
-            if nao_max == 14:
-                basis_def = basis_def_14
-            elif nao_max == 19:
-                basis_def = basis_def_19
-            elif nao_max == 26:
-                basis_def = basis_def_26
-            else:
-                raise NotImplementedError
-        
-            for k in basis_def.keys():
-                basis_definition[k][basis_def[k]] = 1
         
             orb_mask = basis_definition[species].reshape(-1) # shape: [natoms*nao_max] 
             orb_mask = orb_mask[:,None] * orb_mask[None,:]       # shape: [natoms*nao_max, natoms*nao_max]
