@@ -1365,22 +1365,19 @@ class AttentionHeadsToVector(nn.Module):
     def __init__(self, irreps_head: o3.Irreps):
         super().__init__()
         self.irreps_head = irreps_head
-        self.head_indices = []
-        start_idx = 0
-        for mul, ir in self.irreps_head:
-            self.head_indices.append((start_idx, start_idx + mul * ir.dim))
-            start_idx = start_idx + mul * ir.dim
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        N, _, _ = x.shape
-        reshaped_tensors = [
-            x.narrow(2, start_idx, end_idx - start_idx).reshape(N, -1)
-            for start_idx, end_idx in self.head_indices
-        ]
-        return torch.cat(reshaped_tensors, dim=1)
+        self.head_sizes = [mul * ir.dim for mul, ir in self.irreps_head]
+        self.cumsum_sizes = torch.cumsum(torch.tensor(self.head_sizes), dim=0)
 
     def __repr__(self):
         return f'{self.__class__.__name__}(irreps_head={self.irreps_head})'
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        N, num_heads, input_dim = x.shape
+        if sum(self.head_sizes) != input_dim:
+            raise ValueError("The sum of head_sizes does not match the input tensor's last dimension size.")
+
+        split_tensors = torch.split(x, self.head_sizes, dim=2)
+        return torch.cat([tensor.contiguous().reshape(N, -1) for tensor in split_tensors], dim=1)
 
 @compile_mode("script")
 class ConvBlockE3(nn.Module):
