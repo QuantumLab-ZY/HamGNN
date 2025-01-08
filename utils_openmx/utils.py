@@ -568,90 +568,182 @@ basis_def_14 = {1:np.array([0,1,3,4,5], dtype=int), # H
 # num_valence = {1:1,2:2,3:3,4:2,5:3,6:4,7:5,8:6,9:7,10:8,11:9,12:8,13:3,14:4,15:5,16:6,17:7,18:8,19:9,20:10,42:14,83:15,34:6,
 #                35:7,55:9,82:14,53:7,33:15,31:13,32:4,Element['V'].Z:13, Element['Sb'].Z:15}
 
-# This dict is complete
-num_valence = {
-    Element['H'].Z: 1,
-    Element['He'].Z: 2,
-    Element['Li'].Z: 3,
-    Element['Be'].Z: 2,
-    Element['B'].Z: 3,
-    Element['C'].Z: 4,
-    Element['N'].Z: 5,
-    Element['O'].Z: 6,
-    Element['F'].Z: 7,
-    Element['Ne'].Z: 8,
-    Element['Na'].Z: 9,
-    Element['Mg'].Z: 8,
-    Element['Al'].Z: 3,
-    Element['Si'].Z: 4,
-    Element['P'].Z: 5,
-    Element['S'].Z: 6,
-    Element['Cl'].Z: 7,
-    Element['Ar'].Z: 8,
-    Element['K'].Z: 9,
-    Element['Ca'].Z: 10,
-    Element['Sc'].Z: 11,
-    Element['Ti'].Z: 12,
-    Element['V'].Z: 13,
-    Element['Cr'].Z: 14,
-    Element['Mn'].Z: 15,
-    Element['Fe'].Z: 16,
-    Element['Co'].Z: 17,
-    Element['Ni'].Z: 18,
-    Element['Cu'].Z: 19,
-    Element['Zn'].Z: 20,
-    Element['Ga'].Z: 13,
-    Element['Ge'].Z: 4,
-    Element['As'].Z: 15,
-    Element['Se'].Z: 6,
-    Element['Br'].Z: 7,
-    Element['Kr'].Z: 8,
-    Element['Rb'].Z: 9,
-    Element['Sr'].Z: 10,
-    Element['Y'].Z: 11,
-    Element['Zr'].Z: 12,
-    Element['Nb'].Z: 13,
-    Element['Mo'].Z: 14,
-    Element['Tc'].Z: 15,
-    Element['Ru'].Z: 14,
-    Element['Rh'].Z: 15,
-    Element['Pd'].Z: 16,
-    Element['Ag'].Z: 17,
-    Element['Cd'].Z: 12,
-    Element['In'].Z: 13,
-    Element['Sn'].Z: 14,
-    Element['Sb'].Z: 15,
-    Element['Te'].Z: 16,
-    Element['I'].Z: 7,
-    Element['Xe'].Z: 8,
-    Element['Cs'].Z: 9,
-    Element['Ba'].Z: 10,
-    Element['La'].Z: 11,
-    Element['Ce'].Z: 12,
-    Element['Pr'].Z: 13,
-    Element['Nd'].Z: 14,
-    Element['Pm'].Z: 15,
-    Element['Sm'].Z: 16,
-    Element['Dy'].Z: 20,
-    Element['Ho'].Z: 21,
-    Element['Lu'].Z: 11,
-    Element['Hf'].Z: 12,
-    Element['Ta'].Z: 13,
-    Element['W'].Z: 12,
-    Element['Re'].Z: 15,
-    Element['Os'].Z: 14,
-    Element['Ir'].Z: 15,
-    Element['Pt'].Z: 16,
-    Element['Au'].Z: 17,
-    Element['Hg'].Z: 18,
-    Element['Tl'].Z: 19,
-    Element['Pb'].Z: 14,
-    Element['Bi'].Z: 15
-}
+basis_def_27_abacus = (lambda s1=[0],s2=[1],s3=[2],s4=[3],p1=[4,5,6],p2=[7,8,9],d1=[10,11,12,13,14],d2=[15,16,17,18,19],f1=[20,21,22,23,24,25,26]: {
+    1 : np.array(s1+s2+p1, dtype=int), # H
+    2 : np.array(s1+s2+p1, dtype=int), # He
+    3 : np.array(s1+s2+s3+s4+p1, dtype=int), # Li
+    4 : np.array(s1+s2+s3+s4+p1, dtype=int), # Bi
+    5 : np.array(s1+s2+p1+p2+d1, dtype=int), # B
+    6 : np.array(s1+s2+p1+p2+d1, dtype=int), # C
+    7 : np.array(s1+s2+p1+p2+d1, dtype=int), # N
+    8 : np.array(s1+s2+p1+p2+d1, dtype=int), # O
+    9 : np.array(s1+s2+p1+p2+d1, dtype=int), # F
+    10: np.array(s1+s2+p1+p2+d1, dtype=int), # Ne
+    11: np.array(s1+s2+s3+s4+p1+p2+d1, dtype=int), # Na
+    12: np.array(s1+s2+s3+s4+p1+p2+d1, dtype=int), # Mg
+    # 13: Al
+    14: np.array(s1+s2+p1+p2+d1, dtype=int), # Si
+    15: np.array(s1+s2+p1+p2+d1, dtype=int), # P
+    16: np.array(s1+s2+p1+p2+d1, dtype=int), # S
+    17: np.array(s1+s2+p1+p2+d1, dtype=int), # Cl
+    18: np.array(s1+s2+p1+p2+d1, dtype=int), # Ar
+    19: np.array(s1+s2+s3+s4+p1+p2+d1, dtype=int), # K
+    20: np.array(s1+s2+s3+s4+p1+p2+d1, dtype=int), # Ca
+    21: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Sc
+    22: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Ti
+    23: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # V
+    24: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Cr
+    25: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Mn
+    26: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Fe
+    27: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Co
+    28: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Ni
+    29: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Cu
+    30: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Zn
+    31: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int), # Ga
+    32: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int), # Ge
+    33: np.array(s1+s2+p1+p2+d1, dtype=int), # As
+    34: np.array(s1+s2+p1+p2+d1, dtype=int), # Se
+    35: np.array(s1+s2+p1+p2+d1, dtype=int), # Br
+    36: np.array(s1+s2+p1+p2+d1, dtype=int), # Kr
+    37: np.array(s1+s2+s3+s4+p1+p2+d1, dtype=int), # Rb
+    38: np.array(s1+s2+s3+s4+p1+p2+d1, dtype=int), # Sr
+    39: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Y
+    40: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Zr
+    41: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Nb
+    42: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Mo
+    43: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Tc
+    44: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Ru
+    45: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Rh
+    46: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Pd
+    47: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Ag
+    48: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Cd
+    49: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int), # In
+    50: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int), # Sn
+    51: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int), # Sb
+    52: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int), # Te
+    53: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int), # I
+    54: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int), # Xe
+    55: np.array(s1+s2+s3+s4+p1+p2+d1, dtype=int), # Cs
+    56: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Ba
+    #
+    79: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Au
+    80: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int), # Hg
+    81: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int), # Tl
+    82: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int), # Pb
+    83: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int), # Bi
+})()
 
-num_val = np.zeros((99,), dtype=int)
-for k in num_valence.keys():
-    num_val[k] = num_valence[k]
+basis_def_40 = (lambda s1=[0],
+                       s2=[1],
+                       s3=[2],
+                       s4=[3],
+                       p1=[4,5,6],
+                       p2=[7,8,9],
+                       p3=[10,11,12],
+                       p4=[13,14,15],
+                       d1=[16,17,18,19,20],
+                       d2=[21,22,23,24,25],
+                       f1=[26,27,28,29,30,31,32],
+                       f2=[33,34,35,36,37,38,39]: {
+    Element('Ag').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Al').Z: np.array(s1+s2+s3+s4+p1+p2+p3+p4+d1, dtype=int),
+    Element('Ar').Z: np.array(s1+s2+p1+p2+d1, dtype=int),
+    Element('As').Z: np.array(s1+s2+p1+p2+d1, dtype=int),
+    Element('Au').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Ba').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Be').Z: np.array(s1+s2+s3+s4+p1, dtype=int),
+    Element('B').Z: np.array(s1+s2+p1+p2+d1, dtype=int),
+    Element('Bi').Z: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int),
+    Element('Br').Z: np.array(s1+s2+p1+p2+d1, dtype=int),
+    Element('Ca').Z: np.array(s1+s2+s3+s4+p1+p2+d1, dtype=int),
+    Element('Cd').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('C').Z: np.array(s1+s2+p1+p2+d1, dtype=int),
+    Element('Cl').Z: np.array(s1+s2+p1+p2+d1, dtype=int),
+    Element('Co').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Cr').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Cs').Z: np.array(s1+s2+s3+s4+p1+p2+d1, dtype=int),
+    Element('Cu').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Fe').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('F').Z: np.array(s1+s2+p1+p2+d1, dtype=int),
+    Element('Ga').Z: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int),
+    Element('Ge').Z: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int),
+    Element('He').Z: np.array(s1+s2+p1, dtype=int),
+    Element('Hf').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1+f2, dtype=int), # Hf_gga_10au_100Ry_4s2p2d2f.orb
+    Element('H').Z: np.array(s1+s2+p1, dtype=int),
+    Element('Hg').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('I').Z: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int),
+    Element('In').Z: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int),
+    Element('Ir').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('K').Z: np.array(s1+s2+s3+s4+p1+p2+d1, dtype=int),
+    Element('Kr').Z: np.array(s1+s2+p1+p2+d1, dtype=int),
+    Element('Li').Z: np.array(s1+s2+s3+s4+p1, dtype=int),
+    Element('Mg').Z: np.array(s1+s2+s3+s4+p1+p2+d1, dtype=int),
+    Element('Mn').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Mo').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Na').Z: np.array(s1+s2+s3+s4+p1+p2+d1, dtype=int),
+    Element('Nb').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Ne').Z: np.array(s1+s2+p1+p2+d1, dtype=int),
+    Element('N').Z: np.array(s1+s2+p1+p2+d1, dtype=int),
+    Element('Ni').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('O').Z: np.array(s1+s2+p1+p2+d1, dtype=int),
+    Element('Os').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Pb').Z: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int),
+    Element('Pd').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('P').Z: np.array(s1+s2+p1+p2+d1, dtype=int),
+    Element('Pt').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Rb').Z: np.array(s1+s2+s3+s4+p1+p2+d1, dtype=int),
+    Element('Re').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Rh').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Ru').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Sb').Z: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int),
+    Element('Sc').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Se').Z: np.array(s1+s2+p1+p2+d1, dtype=int),
+    Element('S').Z: np.array(s1+s2+p1+p2+d1, dtype=int),
+    Element('Si').Z: np.array(s1+s2+p1+p2+d1, dtype=int),
+    Element('Sn').Z: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int),
+    Element('Sr').Z: np.array(s1+s2+s3+s4+p1+p2+d1, dtype=int),
+    Element('Ta').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1+f2, dtype=int), # Ta_gga_10au_100Ry_4s2p2d2f.orb
+    Element('Tc').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Te').Z: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int),
+    Element('Ti').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Tl').Z: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int),
+    Element('V').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('W').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1+f2, dtype=int), # W_gga_10au_100Ry_4s2p2d2f.orb
+    Element('Xe').Z: np.array(s1+s2+p1+p2+d1+d2+f1, dtype=int),
+    Element('Y').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Zn').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int),
+    Element('Zr').Z: np.array(s1+s2+s3+s4+p1+p2+d1+d2+f1, dtype=int)
+    })()
+
+# Warning: this dict is not complete!!!
+num_valence_openmx = {Element['H'].Z: 1, Element['He'].Z: 2, Element['Li'].Z: 3, Element['Be'].Z: 2, Element['B'].Z: 3,
+               Element['C'].Z: 4, Element['N'].Z: 5,  Element['O'].Z: 6,  Element['F'].Z: 7,  Element['Ne'].Z: 8,
+               Element['Na'].Z: 9, Element['Mg'].Z: 8, Element['Al'].Z: 3, Element['Si'].Z: 4, Element['P'].Z: 5,
+               Element['S'].Z: 6,  Element['Cl'].Z: 7, Element['Ar'].Z: 8, Element['K'].Z: 9,  Element['Ca'].Z: 10,
+               Element['Sc'].Z: 11, Element['Ti'].Z: 12, Element['V'].Z: 13, Element['Cr'].Z: 14, Element['Mn'].Z: 15,
+               Element['Fe'].Z: 16, Element['Co'].Z: 17, Element['Ni'].Z: 18, Element['Cu'].Z: 19, Element['Zn'].Z: 20,
+               Element['Ga'].Z: 13, Element['Ge'].Z: 4,  Element['As'].Z: 15, Element['Se'].Z: 6,  Element['Br'].Z: 7,
+               Element['Kr'].Z: 8,  Element['Rb'].Z: 9,  Element['Sr'].Z: 10, Element['Y'].Z: 11, Element['Zr'].Z: 12,
+               Element['Nb'].Z: 13, Element['Mo'].Z: 14, Element['Tc'].Z: 15, Element['Ru'].Z: 14, Element['Rh'].Z: 15,
+               Element['Pd'].Z: 16, Element['Ag'].Z: 17, Element['Cd'].Z: 12, Element['In'].Z: 13, Element['Sn'].Z: 14,
+               Element['Sb'].Z: 15, Element['Te'].Z: 16, Element['I'].Z: 7, Element['Xe'].Z: 8, Element['Cs'].Z: 9,
+               Element['Ba'].Z: 10, Element['La'].Z: 11, Element['Ce'].Z: 12, Element['Pr'].Z: 13, Element['Nd'].Z: 14,
+               Element['Pm'].Z: 15, Element['Sm'].Z: 16, Element['Dy'].Z: 20, Element['Ho'].Z: 21, Element['Lu'].Z: 11,
+               Element['Hf'].Z: 12, Element['Ta'].Z: 13, Element['W'].Z: 12,  Element['Re'].Z: 15, Element['Os'].Z: 14,
+               Element['Ir'].Z: 15, Element['Pt'].Z: 16, Element['Au'].Z: 17, Element['Hg'].Z: 18, Element['Tl'].Z: 19,
+               Element['Pb'].Z: 14, Element['Bi'].Z: 15
+           }
+
+# this dict is for abacus calculation.
+num_valence_abacus = {
+    Element['Ag'].Z:19, Element['Al'].Z:11, Element['Ar'].Z: 8, Element['As'].Z: 5, Element['Au'].Z:19, Element['Ba'].Z:10, Element['Be'].Z: 4, Element['Bi'].Z:15, Element['B'].Z : 3, Element['Br'].Z: 7, 
+    Element['Ca'].Z:10, Element['Cd'].Z:20, Element['Cl'].Z: 7, Element['C'].Z : 4, Element['Co'].Z:17, Element['Cr'].Z:14, Element['Cs'].Z: 9, Element['Cu'].Z:19, Element['Fe'].Z:16, Element['F'].Z : 7, 
+    Element['Ga'].Z:13, Element['Ge'].Z:14, Element['He'].Z: 2, Element['Hf'].Z:26, Element['Hg'].Z:20, Element['H'].Z : 1, Element['In'].Z:13, Element['I'].Z :17, Element['Ir'].Z:17, Element['K'].Z : 9, 
+    Element['Kr'].Z: 8, Element['La'].Z:11, Element['Li'].Z: 3, Element['Mg'].Z:10, Element['Mn'].Z:15, Element['Mo'].Z:14, Element['Na'].Z: 9, Element['Nb'].Z:13, Element['Ne'].Z: 8, Element['Ni'].Z:18, 
+    Element['N'].Z : 5, Element['O'].Z : 6, Element['Os'].Z:16, Element['Pb'].Z:14, Element['Pd'].Z:18, Element['P'].Z : 5, Element['Pt'].Z:18, Element['Rb'].Z: 9, Element['Re'].Z:15, Element['Rh'].Z:17, 
+    Element['Ru'].Z:16, Element['Sb'].Z:15, Element['Sc'].Z:11, Element['Se'].Z: 6, Element['Si'].Z: 4, Element['Sn'].Z:14, Element['S'].Z : 6, Element['Sr'].Z:10, Element['Ta'].Z:27, Element['Tc'].Z:15, 
+    Element['Te'].Z:16, Element['Ti'].Z:12, Element['Tl'].Z:13, Element['V'].Z :13, Element['W'].Z :28, Element['Xe'].Z:18, Element['Y'].Z :11, Element['Zn'].Z:20, Element['Zr'].Z:12
+}
 
 au2ang = 0.5291772490000065
 au2ev = 27.211324570273
