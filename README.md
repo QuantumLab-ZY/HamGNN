@@ -20,7 +20,11 @@
   - [Training for Bands (Second Step)](#training-for-bands-second-step)
   - [Band Structure Calculation](#band-structure-calculation)
 - [Support for ABACUS Software](#support-for-abacus-software)
-- [Support for HONPAS/SIESTA Software](#support-for-honpas/siesta-software)
+- [Support for HONPAS and SIESTA Software](#support-for-honpas-and-siesta-software)
+  - [honpas_1.2_H0](#honpas_12_h0)
+  - [hsxdump](#hsxdump)
+  - [Workflow for Preparing Training Data](#workflow-for-preparing-training-data)
+  - [Workflow for Prediction](#workflow-for-prediction)
 - [Diagonalizing Hamiltonian Matrices for Large-Scale Systems](#diagonalizing-hamiltonian-matrices-for-large-scale-systems)
   - [Installation](#installation-1)
   - [Usage](#usage-1)
@@ -131,7 +135,7 @@ This generates the `graph_data.npz` file, which will be used as input to HamGNN.
     tensorboard --logdir train_dir
     ```
    where `train_dir` is the directory where HamGNN saves training logs, as specified in `config.yaml`.
-4. **Prediction**: After training, the model can be used for predictions:
+4. **Prediction**: After completing the training process (recommended after band training), the model can be used to make predictions. Follow these steps:
     - Convert the structures to be predicted into `graph_data.npz`.
     - Set `checkpoint_path` in `config.yaml` to the trained model's path and `stage` to `test`.
     - Run:
@@ -140,13 +144,29 @@ This generates the `graph_data.npz` file, which will be used as input to HamGNN.
     ```
 
 ### Training for Bands (Second Step)
-After the Hamiltonian matrix training, use the trained network to fine-tune the model for energy band predictions:
-1. Set `checkpoint_path` to the trained model's weight file.
-2. Enable `load_from_checkpoint = True`.
-3. Set a smaller learning rate (`lr = 0.0001`).
-4. Add `band_energy` loss to the `losses_metrics` and `metrics` sections. Set its `loss_weight` to 0.01 of the Hamiltonian's `loss_weight`.
-5. Enable `calculate_band_energy` and set the required parameters (`num_k`, `band_num`, `k_path`).
-6. Start training again.
+
+After completing the Hamiltonian matrix training, you can fine-tune the model for energy band predictions by following these steps:
+
+1. **Set the Checkpoint Path**:  
+   Assign the `checkpoint_path` variable to the path of the trained model's weight file. This allows the model to load the pre-trained weights.
+
+2. **Load from Checkpoint**:  
+   Enable the `load_from_checkpoint` flag by setting it to `True`. This ensures the model initializes with the previously trained weights.
+
+3. **Adjust the Learning Rate**:  
+   Set a smaller learning rate for fine-tuning. For example, use `lr = 0.0001` to avoid large updates to the pre-trained weights.
+
+4. **Add Band Energy Loss**:  
+   Include the `band_energy` loss in both the `losses_metrics` and `metrics` sections. To balance its contribution, set its `loss_weight` to 0.01 relative to the Hamiltonian's `loss_weight`.
+
+5. **Configure Band Energy Calculation**:  
+   Enable the `calculate_band_energy` option and configure the following parameters:
+   - `num_k`: An integer specifying the number of random k-points to generate in the Brillouin zone.
+   - `band_num`: An integer indicating the number of bands to consider above and below the Valence Band Maximum (VBM).
+   - `k_path`: Set this to `null` to allow the model to randomly sample k-points in the Brillouin zone during each training step.
+
+6. **Restart Training**:  
+   Begin training again with the updated configuration. The model will now fine-tune for energy band predictions while leveraging the pre-trained Hamiltonian matrix.
 
 ### Band Structure Calculation
 To calculate the band structure:
@@ -170,7 +190,7 @@ For detailed instructions on using these tools, please refer to the provided scr
 
 To better support fitting the HSE Hamiltonian matrix, we have fixed a bug in the previous script that truncated the HSE Hamiltonian matrix using the edge_index from PBE `H0`. The old packaging script has now been deprecated.
 
-## Support for HONPAS/SIESTA Software
+## Support for HONPAS and SIESTA Software
 
 ### **honpas_1.2_H0**
 
