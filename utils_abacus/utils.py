@@ -3,7 +3,7 @@ Descripttion:
 version: 
 Author: Yang Zhong & ChangWei Zhang
 Date: 2023-01-16 13:00:43
-Last Modified by:   Changwei Zhang 
+Last Modified by:   Yang Zhong
 Last Modified time: 2023-05-19 10:34:01 
 '''
 
@@ -382,3 +382,5 @@ pattern_md_abacus = re.compile(r'ELEC=\s*(\d+)')
 # default values
 max_SCF_skip = 200
 device = 'cpu'
+
+
