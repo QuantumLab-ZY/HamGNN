@@ -20,6 +20,7 @@
   - [Training for Bands (Second Step)](#training-for-bands-second-step)
   - [Band Structure Calculation](#band-structure-calculation)
 - [Support for ABACUS Software](#support-for-abacus-software)
+- [Support for HONPAS/SIESTA Software](#support-for-honpas/siesta-software)
 - [Diagonalizing Hamiltonian Matrices for Large-Scale Systems](#diagonalizing-hamiltonian-matrices-for-large-scale-systems)
   - [Installation](#installation-1)
   - [Usage](#usage-1)
@@ -160,12 +161,58 @@ To calculate the band structure:
     ```
 
 ## Support for ABACUS Software
-HamGNN includes utilities for supporting ABACUS software. These tools, located in the `utils_abacus` directory, include:
+HamGNN includes utilities specifically designed to support the ABACUS software. These tools, located in the `utils_abacus` directory, include the following:
 - `abacus_postprocess` to export the Hamiltonian matrix `H0`.
 - `poscar2abacus.py` for generating ABACUS structure files.
 - `graph_data_gen_abacus.py` for generating graph data in the `graph_data.npz` format.
 
-For detailed instructions on using these tools, refer to the provided scripts.
+For detailed instructions on using these tools, please refer to the provided scripts.
+
+To better support fitting the HSE Hamiltonian matrix, we have fixed a bug in the previous script that truncated the HSE Hamiltonian matrix using the edge_index from PBE `H0`. The old packaging script has now been deprecated.
+
+## Support for HONPAS/SIESTA Software
+
+### **honpas_1.2_H0**
+
+`honpas_1.2_H0` is a modified version of **HONPAS** used for computing overlap matrix and non-self-consistent Hamiltonian matrix `H0` analytically, similar to the `openmx_postprocess` tool. The output is a binary file (`overlap.HSX`) containing Hamiltonian data, using the same input files as the original `HONPAS`. To install `honpas_1.2_H0`:
+1. Follow the installation guide in `install.sh` within the tarball to build it.
+
+### **hsxdump**
+
+`hsxdump` is a binary executable that generates an intermediate file of the Hamiltonian. This file is indispensable for converting HONPAS outputs into a format readable by HamGNN. To install it, run:
+```bash
+cd utils_siesta/hsx4.1.5
+make
+```
+
+Similar to **OpenMX**, users need to modify the `graph_data_gen_siesta.py` parameters to package training data into a `graph_data.npz` file.
+
+### Workflow for Preparing Training Data
+
+1. **Generate Structure Files**: Create training structure files using molecular dynamics or random perturbation.
+2. **Convert to HONPAS Format**: Edit the `poscar_path` and `filepath` entries in the `poscar2siesta.py` script, and run:
+    ```bash
+    python poscar2siesta.py
+    ```
+   This will convert POSCAR or CIF files into the HONPAS `.fdf` format.
+3. **Run DFT Calculations**: Perform DFT calculations with **HONPAS** to obtain `.HSX` Hamiltonian matrices.
+4. **Process with honpas_1.2_H0**: Run the following to generate the non-self-consistent Hamiltonian matrix (`H0`) and the overlap matrix:
+    ```bash
+    mpirun -np Ncores honpas_1.2_H0 < input.fdf
+    ```
+   This generates the `overlap.HSX` file.
+5. **Generate Graph Data**: Run the `graph_data_gen_siesta.py` script to convert all `.HSX` files into a single `graph_data.npz` file, which can be used as input for HamGNN:
+    ```bash
+    python graph_data_gen_siesta.py
+    ```
+
+### Workflow for Prediction
+
+To predict with a trained model:
+1. Convert the structure to be predicted into `.fdf` format using `poscar2siesta.py`.
+2. Run **HONPAS** to generate the overlap data (`overlap.HSX`) for the structure.
+3. Use the `predict_data_gen_siesta.py` script to package the data into a `graph_data.npz` file for prediction.
+
 
 ## Diagonalizing Hamiltonian Matrices for Large-Scale Systems
 For large systems, diagonalizing the Hamiltonian matrix with the serial `band_cal` script may be challenging. To address this, we provide a parallelized version, `band_cal_parallel`. However, note that some MKL environments may trigger a bug (`Intel MKL FATAL ERROR: Cannot load symbol MKLMPI_Get_wrappers`). Users can try the solutions provided in Issues [#18](https://github.com/QuantumLab-ZY/HamGNN/issues/18) and [#12](https://github.com/QuantumLab-ZY/HamGNN/issues/12) to resolve this issue (thanks to the help from `flamingoXu` and `newplay`).

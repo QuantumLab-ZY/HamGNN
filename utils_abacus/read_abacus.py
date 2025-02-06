@@ -1,435 +1,633 @@
 '''
-Author: Changwei Zhang 
-Date: 2023-05-20 15:23:31 
-Last Modified by:   Changwei Zhang 
-Last Modified time: 2023-05-20 15:23:31 
+Descripttion: 
+version: 
+Author: ChangWei Zhang & Yang Zhong
+Date: 2023-01-16 13:00:43
+Last Modified by:   Yang Zhong
+Last Modified time: 2025-02-6 10:34:01 
 '''
-
 import numpy as np
-from numba import njit
 from copy import deepcopy
 import json
 import os
 import re
 import sys
+import numpy as np
+from typing import List, Dict
 from scipy.sparse import csr_matrix as csr
 from pymatgen.core.periodic_table import Element
+from build_graph_from_coordinates import find_inverse_edge_index
 
 au2ang = 0.5291772490000065
 ry2ha  = 13.60580 / 27.21138506
 
-def convInt(x):
-  if type(x) == list:
-    for idx in range(len(x)):
-      x[idx] = convInt(x[idx])
-  elif type(x) == np.ndarray:
-    return x.tolist()
-  elif type(x) == np.int32 or type(x) == np.int64:
-    return int(x)
-  return x
-def convFloat(x):
-  if type(x) == list:
-    for idx in range(len(x)):
-      x[idx] = convFloat(x[idx])
-  elif type(x) == np.ndarray:
-    return x.tolist()
-  elif type(x) == np.float32 or type(x) == np.float64:
-    return float(x)
-  return x
-def convComplex(x):
-  def convComplexRe(x):
-    if type(x) == list:
-      for idx in range(len(x)):
-        x[idx] = convComplexRe(x[idx])
-    elif type(x) == np.ndarray:
-      return x.real.tolist()
-    elif type(x) == np.complex64 or type(x) == np.complex128:
-      return float(x.real)
-    return x
-  def convComplexIm(x):
-    if type(x) == list:
-      for idx in range(len(x)):
-        x[idx] = convComplexIm(x[idx])
-    elif type(x) == np.ndarray:
-      return x.imag.tolist()
-    elif type(x) == np.complex64 or type(x) == np.complex128:
-      return float(x.imag)
-    return x
-  x_re = deepcopy(x)
-  x_im = deepcopy(x)
-  return convComplexRe(x_re), convComplexIm(x_im)
-  
+def convert_to_int(value):
+    """
+    Convert a value or a collection of values to integers.
+    
+    Parameters:
+    value: int, list, or np.ndarray
+        The value to convert. Can be a single integer, a list of values, or a NumPy array.
+        
+    Returns:
+    int, list, or np.ndarray
+        The converted integer value(s). If the input is a list or array, it returns the converted values in the same structure.
+    """
+    if isinstance(value, list):
+        return [convert_to_int(item) for item in value]
+    elif isinstance(value, np.ndarray):
+        return value.astype(int).tolist()
+    elif isinstance(value, (np.int32, np.int64)):
+        return int(value)
+    return value
+
+def convert_to_float(value):
+    """
+    Convert a value or a collection of values to floats.
+    
+    Parameters:
+    value: float, list, or np.ndarray
+        The value to convert. Can be a single float, a list of values, or a NumPy array.
+        
+    Returns:
+    float, list, or np.ndarray
+        The converted float value(s). If the input is a list or array, it returns the converted values in the same structure.
+    """
+    if isinstance(value, list):
+        return [convert_to_float(item) for item in value]
+    elif isinstance(value, np.ndarray):
+        return value.astype(float).tolist()
+    elif isinstance(value, (np.float32, np.float64)):
+        return float(value)
+    return value
+
+def convert_complex(value):
+    """
+    Convert a complex number or a collection of complex numbers to their real and imaginary parts.
+    
+    Parameters:
+    value: complex, list, or np.ndarray
+        The complex value to convert. Can be a single complex number, a list of complex values, or a NumPy array.
+        
+    Returns:
+    tuple
+        A tuple containing lists of real and imaginary parts of the complex value(s).
+    """
+    def extract_real(value):
+        if isinstance(value, list):
+            return [extract_real(item) for item in value]
+        elif isinstance(value, np.ndarray):
+            return value.real.tolist()
+        elif isinstance(value, (np.complex64, np.complex128)):
+            return float(value.real)
+        return value
+
+    def extract_imaginary(value):
+        if isinstance(value, list):
+            return [extract_imaginary(item) for item in value]
+        elif isinstance(value, np.ndarray):
+            return value.imag.tolist()
+        elif isinstance(value, (np.complex64, np.complex128)):
+            return float(value.imag)
+        return value
+
+    real_part = extract_real(deepcopy(value))
+    imaginary_part = extract_imaginary(deepcopy(value))
+    return real_part, imaginary_part
+
+def find_matching_column_index(matrix, target_column_values):
+    """
+    Find the index of a column in a 2D numpy array that exactly matches a given target column of values.
+    
+    This function compares each column of the matrix with the target column values and returns the index of
+    the first column that matches. If no match is found, it returns None.
+
+    Parameters:
+        matrix (np.ndarray): A 2D numpy array (N×5), where N is the number of rows and 5 is the number of columns.
+        target_column_values (list or np.ndarray): A 1D array or list containing the target column values to match.
+        
+    Returns:
+        int or None: The index of the matching column if found, otherwise None.
+    """
+    # Ensure the target column is a numpy array for consistency and correct shape
+    target_column_values = np.asarray(target_column_values)
+    
+    # Validate that the target column has the same number of rows as the matrix
+    if target_column_values.shape[0] != matrix.shape[0]:
+        raise ValueError("The number of elements in the target column must match the number of rows in the matrix.")
+    
+    # Compare each column of the matrix with the target column using broadcasting
+    column_matches = np.all(matrix == target_column_values[:, None], axis=0)
+    
+    # If a match is found, return the index of the first matching column; otherwise, return None
+    return np.argmax(column_matches) if column_matches.any() else None
 
 class STRU:
-  '''
-  @property: nspecies: int.
-  @property: na_u: int. natoms in unit cell
-  @property: species: List[str]
-  @property: no: List. norbital per species. shape: (nspecies)
-  @property: na_s: List. natoms per species. shape: (nspecies)
-  @property: cell: ndarray
-  @property: pos: ndarray
-  @property: z: ndarray. Z number of each atom. shape: (natoms)
-  '''
-
-  def __init__(self, file:str) -> None:      
-    self.fp = open(file)
-    self.species = []
-    self.no = [] # norbital per species. shape: (nspecies)
-    self.na_s = [] # natoms per species.
-    self.cell = []
-    self.pos = []
-    activeBlock = None
-    while True:
-      line = self.fp.readline().split('//')[0].split('#')[0]
-      if not line:
-        break
-      elif 'ATOMIC_SPECIES' in line:
-        activeBlock = 'ATOMIC_SPECIES'
-        continue
-      elif 'NUMERICAL_ORBITAL' in line:
-        activeBlock = 'NUMERICAL_ORBITAL'
-        continue
-      elif 'LATTICE_CONSTANT' in line:
-        activeBlock = 'LATTICE_CONSTANT'
-        continue
-      elif 'LATTICE_VECTORS' in line:
-        activeBlock = 'LATTICE_VECTORS'
-        continue
-      elif 'ATOMIC_POSITIONS' in line:
-        activeBlock = 'ATOMIC_POSITIONS'
-        continue
-      elif line.strip() == '': # blank lines
-        continue
-
-      if activeBlock == 'ATOMIC_SPECIES':
-        self.species.append(line.split()[0])
-      elif activeBlock == 'NUMERICAL_ORBITAL':
-        tmp = line.split('.orb')[0].split('_')[-1]
-        splitnorm = re.findall(r'\d', tmp)
-        s = int(splitnorm[0])*1 if 's' in tmp else 0
-        p = int(splitnorm[1])*3 if 'p' in tmp else 0
-        d = int(splitnorm[2])*5 if 'd' in tmp else 0
-        f = int(splitnorm[3])*7 if 'f' in tmp else 0
-        self.no.append(s+p+d+f)
-      elif activeBlock == 'LATTICE_CONSTANT':
-        latconst = float(line)
-      elif activeBlock == 'LATTICE_VECTORS':
-        tmp = [float(i) for i in line.split()]
-        self.cell.append(tmp)
-      elif activeBlock == 'ATOMIC_POSITIONS':
-        posType = line.strip().lower()
-        for is_ in range(len(self.no)):
-          # element
-          while True:
-            line = self.fp.readline().split('//')[0].split('#')[0]
-            if line.strip() == '':
-              continue
-            break
-          # mag
-          while True:
-            line = self.fp.readline().split('//')[0].split('#')[0]
-            if line.strip() == '':
-              continue
-            break
-          # num
-          while True:
-            line = self.fp.readline().split('//')[0].split('#')[0]
-            if line.strip() == '':
-              continue
-            na = int(line)
-            self.na_s.append(na)
-            break
-          # pos
-          ia = 0
-          while ia < na:
-            line = self.fp.readline().split('//')[0].split('#')[0]
-            if line.strip() == '':
-              continue
-            tmp = line.split()
-            self.pos.append([float(tmp[0]), float(tmp[1]), float(tmp[2])])
-            ia += 1
-
-    self.nspecies = len(self.species)
-    self.na_u = sum(self.na_s)
-    self.cell = np.array(self.cell) * latconst
-    if posType == 'cartesian':
-      self.pos = np.array(self.pos) * latconst
-    elif posType == 'direct':
-      cart = np.zeros_like(self.pos)
-      for i, pos in enumerate(self.pos):
-        cart[i] = pos @ self.cell
-      self.pos = cart
-    else:
-      raise NotImplementedError
-    z = []
-    for spec, na in zip(self.species, self.na_s):
-      z += [Element(spec).Z] * na
-    self.z = np.array(z, dtype=int)
+    """
+    Class to read and store atomic and lattice information from a file.
     
-    self.fp.close()
+    Attributes:
+        species (List[str]): List of species (element types).
+        num_orbitals (List[int]): List of number of orbitals for each species.
+        num_atoms_per_species (List[int]): List of number of atoms for each species.
+        cell (ndarray): Lattice vectors (3x3 matrix).
+        positions (ndarray): Atomic positions (Nx3 matrix).
+        atomic_numbers (ndarray): Atomic numbers for each atom (1D array).
+        num_species (int): Number of unique species.
+        num_atoms_unit_cell (int): Total number of atoms in the unit cell.
+    
+    Methods:
+        __init__(file: str) -> None: Initializes the structure by reading data from the given file.
+    """
+    
+    def __init__(self, file: str) -> None:
+        """
+        Initialize the structure by reading data from the specified file.
+        
+        Args:
+            file (str): Path to the input file containing atomic and lattice information.
+        """
+        # Open the file and initialize attributes
+        with open(file, 'r') as fp:
+            self.species = []
+            self.num_orbitals = []  # Number of orbitals per species.
+            self.num_atoms_per_species = []  # Number of atoms per species.
+            self.cell = []  # Lattice vectors.
+            self.positions = []  # Atomic positions.
+            
+            active_block = None
+            latconst = 1.0  # Default lattice constant
+            
+            # Process file line by line
+            for line in fp:
+                line = line.split('//')[0].split('#')[0].strip()  # Remove comments and whitespace
+                if not line:
+                    continue
+
+                if 'ATOMIC_SPECIES' in line:
+                    active_block = 'ATOMIC_SPECIES'
+                elif 'NUMERICAL_ORBITAL' in line:
+                    active_block = 'NUMERICAL_ORBITAL'
+                elif 'LATTICE_CONSTANT' in line:
+                    active_block = 'LATTICE_CONSTANT'
+                elif 'LATTICE_VECTORS' in line:
+                    active_block = 'LATTICE_VECTORS'
+                elif 'ATOMIC_POSITIONS' in line:
+                    active_block = 'ATOMIC_POSITIONS'
+
+                elif active_block == 'ATOMIC_SPECIES':
+                    self.species.append(line.split()[0])
+
+                elif active_block == 'NUMERICAL_ORBITAL':
+                    # Parse the number of orbitals for each species
+                    orbital_data = line.split('.orb')[0].split('_')[-1]
+                    num_orbitals = self.parse_orbitals(orbital_data)
+                    self.num_orbitals.append(num_orbitals)
+
+                elif active_block == 'LATTICE_CONSTANT':
+                    latconst = float(line)
+
+                elif active_block == 'LATTICE_VECTORS':
+                    lattice_vector = list(map(float, line.split()))
+                    self.cell.append(lattice_vector)
+
+                elif active_block == 'ATOMIC_POSITIONS':
+                    self._process_atomic_positions(fp, line)
+
+        # After reading all lines, finalize the data
+        self.num_species = len(self.species)
+        self.num_atoms_unit_cell = sum(self.num_atoms_per_species)
+        self.cell = np.array(self.cell) * latconst
+        self.positions = np.array(self.positions)
+        
+        # Convert positions to Cartesian if they are in 'direct' format
+        if self.pos_type == 'direct':
+            self.positions = self.convert_to_cartesian()
+        else:
+            self.positions = self.positions * latconst
+            
+        # Generate atomic numbers (Z values)
+        self.atomic_numbers = np.array([Element(spec).Z for spec, na in zip(self.species, self.num_atoms_per_species) for _ in range(na)], dtype=int)
+
+    def parse_orbitals(self, orbital_data: str) -> int:
+        """
+        Parse the orbital string and calculate the total number of orbitals for the species.
+        
+        Args:
+            orbital_data (str): The string containing orbital information.
+        
+        Returns:
+            int: The total number of orbitals for the species.
+        """
+        s, p, d, f = 0, 0, 0, 0
+        if 's' in orbital_data:
+            s = int(re.findall(r'\d', orbital_data)[0]) * 1
+        if 'p' in orbital_data:
+            p = int(re.findall(r'\d', orbital_data)[1]) * 3
+        if 'd' in orbital_data:
+            d = int(re.findall(r'\d', orbital_data)[2]) * 5
+        if 'f' in orbital_data:
+            f = int(re.findall(r'\d', orbital_data)[3]) * 7
+        return s + p + d + f
+
+    def _process_atomic_positions(self, fp, line):
+        """
+        Process atomic positions block and parse relevant data.
+        
+        Args:
+            fp (file): File pointer to read atomic data.
+            line (str): Line read from the file containing atomic position info.
+            latconst (float): Lattice constant used for scaling.
+        """
+        self.pos_type = line.strip().lower()
+        for is_ in range(len(self.num_orbitals)):
+            # element
+            while True:
+                line = fp.readline().split('//')[0].split('#')[0]
+                if line.strip() == '':
+                    continue
+                break
+            # mag
+            while True:
+                line = fp.readline().split('//')[0].split('#')[0]
+                if line.strip() == '':
+                    continue
+                break
+            # num
+            while True:
+                line = fp.readline().split('//')[0].split('#')[0]
+                if line.strip() == '':
+                    continue
+                na = int(line)
+                self.num_atoms_per_species.append(na)
+                break
+            # pos
+            ia = 0
+            while ia < na:
+                line = fp.readline().split('//')[0].split('#')[0]
+                if line.strip() == '':
+                    continue
+                tmp = line.split()
+                self.positions.append([float(tmp[0]), float(tmp[1]), float(tmp[2])])
+                ia += 1
+
+    def convert_to_cartesian(self) -> np.ndarray:
+        """
+        Convert atomic positions from direct to Cartesian coordinates.
+        
+        Returns:
+            np.ndarray: The atomic positions in Cartesian coordinates.
+        """
+        cartesian_positions = np.dot(self.positions, self.cell)
+        return cartesian_positions
 
 class ABACUSHS:
-
-  def __init__(s, file:str) -> None:
-    s.fp = open(file)
-    line = s.fp.readline() # STEP: 0
-    if 'STEP' in line:
-      s.no_u = int(s.fp.readline().split()[-1])
-    else:
-      s.no_u = int(line.split()[-1]) # number of orbitals in the unit cell.
-    s.ncell_shift = int(s.fp.readline().split()[-1])
-
-  def getGraph(s, stru:STRU, graph:dict={}, skip=False, isH=False, isSOC=False, calcRcut=False, tojson=False):
-    '''
-    -> edge_index: ndarray
-    -> inv_edge_idx: ndarray
-    -> cell_shift: ndarray
-    -> nbr_shift: ndarray
-    -> pos: ndarray
-    -> Hon: List[List[ndarray]] shape [nspin, natoms, nham]
-    -> Hoff: List[List[ndarray]] shape [nspin, nedge, nham]
-    '''
-    #######################################################
-    @njit
-    def constructInvEdges(noff, edge_idx_src, edge_idx_dst, cell_shift):
-      ierr = False
-      inv_edge_idx = -1 * np.ones(noff, dtype=np.int32)
-      for idx in range(0, noff):
-        if inv_edge_idx[idx] != -1:
-          continue
-        for jdx in range(0, noff):
-          if (edge_idx_dst[jdx] == edge_idx_src[idx] and
-              edge_idx_src[jdx] == edge_idx_dst[idx] and
-              np.all(cell_shift[jdx] == -cell_shift[idx])):
-            inv_edge_idx[idx] = jdx
-            inv_edge_idx[jdx] = idx
-            break
+    """
+    A class to handle the ABACUS Hamiltonian structure and related operations.
+    
+    Attributes:
+        no_u (int): Number of orbitals in the unit cell.
+        ncell_shift (int): Number of cell shifts.
+        max_rcut (ndarray): Maximum cutoff distance for each species.
+        noff (int): Number of off-site Hamiltonian terms.
+        fp (file object): File pointer for reading input data.
+    
+    Methods:
+        __init__(file: str): Initialize the ABACUSHS class by reading data from the specified file.
+        getGraph(stru: STRU, graph: dict, skip: bool, isH: bool, isSOC: bool, calcRcut: bool, tojson: bool): 
+            Constructs and returns the graph (edges, Hamiltonian matrices, etc.) from the ABACUSHS data.
+        getHK(stru: STRU, k: np.ndarray, isH: bool, isSOC: bool): Returns the Hamiltonian matrix for the specified k-point.
+        close(): Closes the file pointer.
+    """
+    
+    def __init__(self, file: str) -> None:
+        """
+        Initializes the ABACUSHS object by reading the data from the provided file.
+        
+        Args:
+            file (str): The file containing the ABACUSHS data.
+        """
+        self.fp = open(file)
+        line = self.fp.readline()  # Read first line to determine the format
+        if 'STEP' in line:
+            self.no_u = int(self.fp.readline().split()[-1])
         else:
-          ierr = True
-      return ierr, inv_edge_idx
-    #######################################################
-    @njit
-    def fillHoff(noff, cx, cy, cz, ia, ja,
-                 edge_idx_src, edge_idx_dst, cell_shift):
-      '''ierr, ioff'''
-      for ioff, src, dst, cs in zip(np.arange(noff), edge_idx_src, edge_idx_dst, cell_shift):
-        if (src == ia and dst == ja and cx == cs[0] and cy == cs[1] and cz == cs[2]):
-          return False, ioff
-      return True, 0
-    #######################################################
-    assert (not graph and not skip) or (graph and skip)
-    dtype = np.float32 if not isSOC else np.complex64
-    repeat = 1 if not isSOC else 2
-    nspin = 1 if not isSOC else 4
-    edge_idx_src = []
-    edge_idx_dst = []
-    cell_shift   = []
-    nbr_shift    = []
-    Hon = [[]] if not isSOC else [[],[],[],[]] # cannot written as [[]]*4
-    Hoff= [[]] if not isSOC else [[],[],[],[]]
+            self.no_u = int(line.split()[-1])  # Number of orbitals in the unit cell.
+        self.ncell_shift = int(self.fp.readline().split()[-1])
 
-    if skip:
-      graph_ = deepcopy(graph)
-      s.noff = len(graph_['inv_edge_idx'])
-      edge_idx_src = graph_['edge_index'][0]
-      edge_idx_dst = graph_['edge_index'][1]
-      cell_shift = graph_['cell_shift']
-      Hoff = graph_['Hoff']
-      for ispin in range(nspin):
-        for ioff in range(s.noff):
-          Hoff[ispin][ioff] = np.zeros_like(Hoff[ispin][ioff], dtype=dtype)
+    def _calculate_atom_orbitals(self, stru, repeat):
+        """
+        Calculate the number of orbitals for each atom and generate the corresponding indices.
 
-    no = []
-    for is_ in range(stru.nspecies):
-      no += [stru.no[is_]] * stru.na_s[is_]
-    no = np.array(no, dtype=int) * repeat # shape: (natoms)
-    indo = np.zeros_like(no, dtype=int) # shape: (natoms)
-    indo[1:] = np.cumsum(no[:-1])
-    if no.sum() != s.no_u:
-      print('STRU parse error!')
-      exit()
+        Parameters:
+        stru (object): A structure object that contains:
+            - species (list): A list of species.
+            - num_atoms_per_species (list): A list with the number of atoms for each species.
+            - num_orbitals (list): A list with the number of orbitals for each species.
+        repeat (int): A scalar to multiply the calculated orbital counts by, typically used for scaling the number of orbitals.
 
-    while True:
-      line = s.fp.readline()
-      if not line:
-        break
-      tmp = line.split()
-      cx, cy, cz = int(tmp[0]), int(tmp[1]), int(tmp[2])
-      nh = int(tmp[3])
-      if nh == 0:
-        continue
-      val = s.fp.readline()
-      col = s.fp.readline().split()
-      row = s.fp.readline().split()
-      if not isSOC:
-        val = list(map(float, val.split()))
-      else:
-        val_raw = re.findall('[\-\+\d\.eE]+', val)
-        val_raw = np.asarray(val_raw, dtype=np.float32)
-        val = np.zeros(len(val_raw)//2, dtype=np.complex64)
-        val += val_raw[0::2] + 1j * val_raw[1::2]
-      col = list(map(int, col))
-      row = list(map(int, row))
-      hamilt = csr((val, col, row), shape=[s.no_u, s.no_u], dtype=dtype) 
-      if isH:
-        hamilt *= ry2ha
+        Returns:
+        numpy.ndarray: Array of orbital counts for each atom, scaled by `repeat`.
+        numpy.ndarray: Cumulative indices for each atom, based on orbital counts.
+        """
+        # Initialize a list to store the number of orbitals for each atom
+        orbitals_per_atom = []
 
-      for ia in range(stru.na_u):
-        for ja in range(stru.na_u):
-          ham:csr = hamilt[indo[ia]:indo[ia]+no[ia], indo[ja]:indo[ja]+no[ja]]
-          if ia == ja and cx == 0 and cy == 0 and cz == 0:
-            # onsite
+        # Loop through each species to compute the total number of orbitals per atom
+        for species_idx in range(len(stru.species)):
+            num_atoms = stru.num_atoms_per_species[species_idx]
+            num_orbitals = stru.num_orbitals[species_idx]
+            orbitals_per_atom += [num_orbitals] * num_atoms  # Repeat the orbital count for each atom of this species
+
+        # Convert to numpy array and scale by repeat factor
+        orbitals_per_atom = np.array(orbitals_per_atom, dtype=int) * repeat
+
+        # Check if the total number of orbitals matches the expected value
+        if orbitals_per_atom.sum() != self.no_u:
+            print("STRU parse error! Mismatch in total number of orbitals.")
+            raise RuntimeError("Total number of orbitals mismatch")
+
+        # Create an array to store cumulative orbital indices for each atom
+        orbital_indices = np.zeros_like(orbitals_per_atom, dtype=int)
+
+        # Fill in the cumulative indices (skip the first atom, hence starting from index 1)
+        orbital_indices[1:] = np.cumsum(orbitals_per_atom[:-1])
+
+        return orbitals_per_atom, orbital_indices
+
+    def getGraph(self, stru, graph: dict = {}, skip: bool = False, isH: bool = False, 
+                    isSOC: bool = False, calcRcut: bool = False, tojson: bool = False) -> dict:
+        """
+        Constructs the graph (edges, Hamiltonian matrices, etc.) from ABACUSHS data.
+        
+        Args:
+            stru (STRU): The structure object containing atomic information.
+            graph (dict, optional): The graph object to update, defaults to an empty dictionary.
+            skip (bool, optional): If True, skip the Hamiltonian calculations, defaults to False.
+            isH (bool, optional): If True, scales the Hamiltonian by `ry2ha`, defaults to False.
+            isSOC (bool, optional): If True, includes spin-orbit coupling, defaults to False.
+            calcRcut (bool, optional): If True, calculates the maximum cutoff distances, defaults to False.
+            tojson (bool, optional): If True, converts the graph to JSON format, defaults to False.
+        
+        Returns:
+            dict: The constructed graph containing edge information and Hamiltonian matrices.
+        """
+        assert (not graph and not skip) or (graph and skip)
+
+        dtype = np.float32 if not isSOC else np.complex64
+        repeat = 1 if not isSOC else 2
+        nspin = 1 if not isSOC else 4
+        edge_idx_src, edge_idx_dst, cell_shift, nbr_shift = [], [], [], []
+        Hon = [[]] if not isSOC else [[], [], [], []]  # Cannot be written as [[]]*4
+        Hoff = [[]] if not isSOC else [[], [], [], []]
+
+        if skip:
+            # Load pre-existing graph data
+            graph_ = deepcopy(graph)
+            self.noff = len(graph_['inv_edge_idx'])
+            edge_idx_src = graph_['edge_index'][0]
+            edge_idx_dst = graph_['edge_index'][1]
+            cell_shift = graph_['cell_shift']
+            Hoff = graph_['Hoff']
+            for ispin in range(nspin):
+                for ioff in range(self.noff):
+                    Hoff[ispin][ioff] = np.zeros_like(Hoff[ispin][ioff], dtype=dtype)
+
+        # Initialize the atomic orbital indices
+        no, indo = self._calculate_atom_orbitals(stru, repeat)
+
+        while True:
+            line = self.fp.readline()
+            if not line:
+                break
+            tmp = line.split()
+            cx, cy, cz = int(tmp[0]), int(tmp[1]), int(tmp[2])
+            nh = int(tmp[3])
+            if nh == 0:
+                continue
+            val = self.fp.readline()
+            col = self.fp.readline().split()
+            row = self.fp.readline().split()
+
+            # Handle Hamiltonian values
             if not isSOC:
-              Hon[0].append(ham.toarray().flatten())
+                val = list(map(float, val.split()))
             else:
-              Hon[0].append(ham[0::2,0::2].toarray().flatten()) # uu
-              if isH:
-                Hon[1].append(ham[0::2,1::2].toarray().flatten()) # ud
-                Hon[2].append(ham[1::2,0::2].toarray().flatten()) # du
-                Hon[3].append(ham[1::2,1::2].toarray().flatten()) # dd
-          elif ham.getnnz() > 0:
-            # offsite
-            if not skip:
-              if not isSOC:
-                Hoff[0].append(ham.toarray().flatten())
-              else:
-                Hoff[0].append(ham[0::2,0::2].toarray().flatten()) # uu
-                if isH:
-                  Hoff[1].append(ham[0::2,1::2].toarray().flatten()) # ud
-                  Hoff[2].append(ham[1::2,0::2].toarray().flatten()) # du
-                  Hoff[3].append(ham[1::2,1::2].toarray().flatten()) # dd
-              edge_idx_src.append(ia)
-              edge_idx_dst.append(ja)
-              cell_shift.append(np.array([cx,cy,cz], dtype=int))
-              nbr_shift.append(np.array([cx,cy,cz]) @ stru.cell)
+                val_raw = re.findall(r'[\-\+\d\.eE]+', val)
+                val_raw = np.asarray(val_raw, dtype=np.float32)
+                val = np.zeros(len(val_raw) // 2, dtype=np.complex64)
+                val += val_raw[0::2] + 1j * val_raw[1::2]
+            
+            col = list(map(int, col))
+            row = list(map(int, row))
+            hamilt = csr((val, col, row), shape=[self.no_u, self.no_u], dtype=dtype)
+
+            if isH:
+                hamilt *= ry2ha
+            
+            if skip:
+                edge_info_array = np.concatenate([np.array(graph_['edge_index']), np.array(cell_shift).T], axis=0) 
             else:
-              ierr, ioff = fillHoff(s.noff, cx, cy, cz, ia, ja,
-                                    edge_idx_src, 
-                                    edge_idx_dst, 
-                                    cell_shift)
-              if ierr:
-                continue 
-                # if range(H0) < range(H), extra edges should be ignored.
-                # if range(H0) >=range(H), ierr=True should never happen.
-                print('Something went wrong!')
-                exit()
-              if not isSOC:
-                Hoff[0][ioff] = ham.toarray().flatten()
-              else:
-                Hoff[0][ioff] = ham[0::2,0::2].toarray().flatten() # uu
-                if isH:
-                  Hoff[1][ioff] = ham[0::2,1::2].toarray().flatten() # ud
-                  Hoff[2][ioff] = ham[1::2,0::2].toarray().flatten() # du
-                  Hoff[3][ioff] = ham[1::2,1::2].toarray().flatten() # dd
-    #######################################################
-    if calcRcut:
-      s.max_rcut = np.zeros((stru.nspecies, stru.nspecies))
-      isa = np.zeros(stru.na_u, dtype=int) # shape (natoms,)
-      num = 0
-      for is_ in range(stru.nspecies):
-        for ia in range(stru.na_s[is_]):
-          isa[num] = is_
-          num += 1
-      for ia, ja, cs in zip(edge_idx_src, edge_idx_dst, cell_shift):
-        # to speed the calculation, ignore all the non-diagnal terms.
-        if isa[ia] != isa[ja]:
-          continue
-        distance = np.linalg.norm(stru.pos[ja] - stru.pos[ia] + (cs @ stru.cell.T))
-        s.max_rcut[isa[ia], isa[ja]] = max(distance, s.max_rcut[isa[ia], isa[ja]])
-        s.max_rcut[isa[ja], isa[ia]] = max(distance, s.max_rcut[isa[ja], isa[ia]])
-      # np.savetxt('RCUT', s.max_rcut)
-    #######################################################
-    if not skip:
-      # construct the edges
-      edge_index = [edge_idx_src, edge_idx_dst]
-      s.noff = len(edge_idx_src)
-      # inv_edge_idx
-      ierr, inv_edge_idx = constructInvEdges(s.noff, 
-                                             np.array(edge_idx_src),
-                                             np.array(edge_idx_dst),
-                                             np.array(cell_shift))
-      if ierr:
-        print('inv_edge_idx error')
-        exit()
-      # construct the graph
-      graph_ = {}
-      graph_['edge_index'] = edge_index if tojson else np.array(edge_index)
-      graph_['inv_edge_idx'] = convInt(inv_edge_idx) if tojson else inv_edge_idx
-      graph_['cell_shift'] = convInt(cell_shift) if tojson else np.array(cell_shift)
-      graph_['nbr_shift'] = convFloat(nbr_shift) if tojson else np.array(nbr_shift)
-      graph_['pos'] = convFloat(stru.pos) if tojson else stru.pos
-    if not tojson:
-      graph_['Hon'] = Hon
-      graph_['Hoff'] = Hoff
-    else:
-      if not isSOC:
-        graph_['Hon'] = convFloat(Hon)
-        graph_['Hoff'] = convFloat(Hoff)
-      else:
-        graph_['Hon'], graph_['iHon'] = convComplex(Hon)
-        graph_['Hoff'], graph_['iHoff'] = convComplex(Hoff)
-    return graph_
+                edge_info_array = None
+            
+            # Process Hamiltonian and populate graph data
+            for ia in range(stru.num_atoms_unit_cell):
+                for ja in range(stru.num_atoms_unit_cell):
+                    ham = hamilt[indo[ia]:indo[ia] + no[ia], indo[ja]:indo[ja] + no[ja]]
+                    if ia == ja and cx == 0 and cy == 0 and cz == 0:
+                        # Onsite Hamiltonian
+                        if not isSOC:
+                            Hon[0].append(ham.toarray().flatten())
+                        else:
+                            Hon[0].append(ham[0::2, 0::2].toarray().flatten())  # uu
+                            Hon[1].append(ham[0::2, 1::2].toarray().flatten())  # ud
+                            Hon[2].append(ham[1::2, 0::2].toarray().flatten())  # du
+                            Hon[3].append(ham[1::2, 1::2].toarray().flatten())  # dd
+                    elif ham.getnnz() > 0:
+                        # Offsite Hamiltonian
+                        if not skip:
+                            if not isSOC:
+                                Hoff[0].append(ham.toarray().flatten())
+                            else:
+                                Hoff[0].append(ham[0::2, 0::2].toarray().flatten())  # uu
+                                Hoff[1].append(ham[0::2, 1::2].toarray().flatten())  # ud
+                                Hoff[2].append(ham[1::2, 0::2].toarray().flatten())  # du
+                                Hoff[3].append(ham[1::2, 1::2].toarray().flatten())  # dd
+                            edge_idx_src.append(ia)
+                            edge_idx_dst.append(ja)
+                            cell_shift.append(np.array([cx, cy, cz], dtype=int))
+                            nbr_shift.append(np.array([cx, cy, cz]) @ stru.cell)
+                        else:
+                            ierr, ioff = self._fill_offsite_hamiltonian(
+                                cx, cy, cz, ia, ja, edge_info_array
+                            )
+                            if ierr:
+                                continue
+                            if not isSOC:
+                                Hoff[0][ioff] = ham.toarray().flatten()
+                            else:
+                                Hoff[0][ioff] = ham[0::2, 0::2].toarray().flatten()  # uu
+                                Hoff[1][ioff] = ham[0::2, 1::2].toarray().flatten()  # ud
+                                Hoff[2][ioff] = ham[1::2, 0::2].toarray().flatten()  # du
+                                Hoff[3][ioff] = ham[1::2, 1::2].toarray().flatten()  # dd
 
-  def getHK(s, stru:STRU, k=np.array([0,0,0]), isH=False, isSOC=False):
-    '''
-    return HK shape: [no_u,no_u]
-    '''
-    assert(np.all(k == 0)) # only support gamma now!
-    dtype = np.float32 if not isSOC else np.complex64
-    HK = np.zeros([s.no_u, s.no_u], dtype=dtype)
+        if calcRcut:
+            self._calculate_rcut(stru, edge_idx_src, edge_idx_dst, cell_shift)
 
-    while True:
-      line = s.fp.readline()
-      if not line:
-        break
-      tmp = line.split()
-      cx, cy, cz = int(tmp[0]), int(tmp[1]), int(tmp[2])
-      nh = int(tmp[3])
-      if nh == 0:
-        continue
-      val = s.fp.readline()
-      col = s.fp.readline().split()
-      row = s.fp.readline().split()
-      if not isSOC:
-        val = list(map(float, val.split()))
-      else:
-        val_raw = re.findall('[\-\+\d\.eE]+', val)
-        val_raw = np.asarray(val_raw, dtype=np.float32)
-        val = np.zeros(len(val_raw)//2, dtype=np.complex64)
-        val += val_raw[0::2] + 1j * val_raw[1::2]
-      col = list(map(int, col))
-      row = list(map(int, row))
-      hamilt = csr((val, col, row), shape=[s.no_u, s.no_u], dtype=dtype) 
-      if isH:
-        hamilt *= ry2ha
+        if not skip:
+            # Construct the edges and graph
+            edge_index = [edge_idx_src, edge_idx_dst]
+            self.noff = len(edge_idx_src)
+            
+            inv_edge_idx = find_inverse_edge_index(np.array(edge_index), np.array(cell_shift))
 
-      HK += hamilt
-    return HK
+            graph_ = {}
+            graph_['edge_index'] = edge_index if tojson else np.array(edge_index)
+            graph_['inv_edge_idx'] = convert_to_int(inv_edge_idx) if tojson else inv_edge_idx
+            graph_['cell_shift'] = convert_to_int(cell_shift) if tojson else np.array(cell_shift)
+            graph_['nbr_shift'] = convert_to_float(nbr_shift) if tojson else np.array(nbr_shift)
+            graph_['pos'] = convert_to_float(stru.positions) if tojson else stru.positions
+            
+        if not tojson:
+            graph_['Hon'] = Hon
+            graph_['Hoff'] = Hoff
+        else:
+            if not isSOC:
+                graph_['Hon'] = convert_to_float(Hon)
+                graph_['Hoff'] = convert_to_float(Hoff)
+            else:
+                graph_['Hon'], graph_['iHon'] = convert_complex(Hon)
+                graph_['Hoff'], graph_['iHoff'] = convert_complex(Hoff)
 
-  def close(self):
-    self.fp.close()
+        return graph_
 
+    def _fill_offsite_hamiltonian(self, cx, cy, cz, ia, ja, edge_info_array):
+        """
+        Checks if an offsite Hamiltonian term already exists and returns the appropriate index.
+        """        
+        ioff = find_matching_column_index(edge_info_array, [ia, ja, cx, cy, cz])
+        
+        if ioff is not None:
+            return False, ioff
+        else:
+            return True, ioff
+
+    def _calculate_rcut(self, stru, edge_idx_src, edge_idx_dst, cell_shift):
+        """
+        Calculates the maximum cutoff distance for each species.
+        """
+        self.max_rcut = np.zeros((len(stru.species), len(stru.species)))
+        isa = np.zeros(stru.num_atoms_unit_cell, dtype=int)
+        num = 0
+        for is_ in range(len(stru.species)):
+            for ia in range(stru.num_atoms_per_species[is_]):
+                isa[num] = is_
+                num += 1
+
+        for ia, ja, cs in zip(edge_idx_src, edge_idx_dst, cell_shift):
+            # Only calculate for atoms of the same species
+            if isa[ia] != isa[ja]:
+                continue
+            distance = np.linalg.norm(stru.positions[ja] - stru.positions[ia] + (cs @ stru.cell.T))
+            self.max_rcut[isa[ia], isa[ja]] = max(distance, self.max_rcut[isa[ia], isa[ja]])
+            self.max_rcut[isa[ja], isa[ia]] = max(distance, self.max_rcut[isa[ja], isa[ia]])
+
+    def getHK(self, stru, k: np.ndarray = np.array([0, 0, 0]), isH: bool = False, isSOC: bool = False):
+        """
+        Returns the Hamiltonian matrix for the specified k-point.
+
+        Args:
+            stru (STRU): The structure object containing atomic information.
+            k (np.ndarray, optional): The k-point for which to calculate the Hamiltonian, defaults to [0,0,0].
+            isH (bool, optional): If True, scales the Hamiltonian by `ry2ha`, defaults to False.
+            isSOC (bool, optional): If True, includes spin-orbit coupling, defaults to False.
+
+        Returns:
+            np.ndarray: The Hamiltonian matrix for the specified k-point.
+        """
+        assert np.all(k == 0)  # Only support gamma point
+
+        dtype = np.float32 if not isSOC else np.complex64
+        HK = np.zeros([self.no_u, self.no_u], dtype=dtype)
+
+        while True:
+            line = self.fp.readline()
+            if not line:
+                break
+            tmp = line.split()
+            cx, cy, cz = int(tmp[0]), int(tmp[1]), int(tmp[2])
+            nh = int(tmp[3])
+            if nh == 0:
+                continue
+            val = self.fp.readline()
+            col = self.fp.readline().split()
+            row = self.fp.readline().split()
+
+            # Handle Hamiltonian values
+            if not isSOC:
+                val = list(map(float, val.split()))
+            else:
+                val_raw = re.findall(r'[\-\+\d\.eE]+', val)
+                val_raw = np.asarray(val_raw, dtype=np.float32)
+                val = np.zeros(len(val_raw) // 2, dtype=np.complex64)
+                val += val_raw[0::2] + 1j * val_raw[1::2]
+            
+            col = list(map(int, col))
+            row = list(map(int, row))
+            hamilt = csr((val, col, row), shape=[self.no_u, self.no_u], dtype=dtype)
+            if isH:
+                hamilt *= ry2ha
+
+            HK += hamilt
+
+        return HK
+
+    def close(self):
+        """
+        Closes the file pointer.
+        """
+        self.fp.close()
+
+def process_graph_data():
+    """
+    Processes the Hamiltonian and overlap data, creates a merged graph, 
+    and saves the graph data to a formatted JSON file.
+    """
+    # Load structure and Hamiltonian
+    poscar = STRU(os.path.join('/public/home/zhongyang/yzhong/CsVSb/50/Training/perturbation_cal/STRU_1', 'STRU'))
+    H = ABACUSHS(os.path.join('/public/home/zhongyang/yzhong/CsVSb/50/Training/perturbation_cal/STRU_1/OUT.ABACUS', 'data-H0R-sparse_SPIN0.csr'))
+    graphH = H.getGraph(stru=poscar, graph={}, isH=True, tojson=True)
+
+    # Load overlap matrix and skip Hamiltonian generation
+    S = ABACUSHS(os.path.join('/public/home/zhongyang/yzhong/CsVSb/50/Training/perturbation_cal/STRU_1/OUT.ABACUS', 'data-S0R-sparse_SPIN0.csr'))
+    graphS = S.getGraph(stru=poscar, graph=graphH, skip=True, tojson=True)
+
+    # Close files
+    H.close()
+    S.close()
+
+    # Merge Hamiltonian and overlap data
+    graph = deepcopy(graphH)
+    graph['Hon'] = [graphH['Hon']]
+    graph['Hoff'] = [graphH['Hoff']]
+    graph['Son'] = graphS['Hon']
+    graph['Soff'] = graphS['Hoff']
+
+    # Output file name
+    fname = 'HS.json'
+
+    # Write the graph data to the JSON file
+    with open(fname, 'w') as f:
+        json.dump(graph, f, separators=[',', ':'])
+
+    # Reopen the file for formatting (newlines after commas for readability)
+    with open(fname, 'r') as f:
+        file_content = f.read()
+        formatted_content = re.sub(r', *"', ',\n"', file_content)
+
+    # Write the formatted content back to the file
+    with open(fname, 'w') as f:
+        f.write(formatted_content)
 
 if __name__ == '__main__':
-  poscar = STRU(os.path.join('../', r'STRU'))
-  H = ABACUSHS(os.path.join('./', r'data-H0R-sparse_SPIN0.csr'))
-  graphH = H.getGraph(stru=poscar, graph={}, isH=True, tojson=True)
-  S = ABACUSHS(os.path.join('./', r'data-S0R-sparse_SPIN0.csr'))
-  graphS = S.getGraph(stru=poscar, graph=graphH, skip=True, tojson=True)
-  H.close()
-  S.close()
-  graph, fname = graphH, 'HS.json'
-  g = deepcopy(graphH)
-  g['Hon'] = [graph['Hon']]
-  g['Hoff']= [graph['Hoff']]
-  g['Son'] = graphS['Hon']
-  g['Soff']= graphS['Hoff']
-
-  with open(fname, 'w') as f:
-    json.dump(g, f, separators=[',',':'])
-  with open(fname, 'r') as f:
-    file = f.read()
-    file = re.sub(r', *"', ',\n"', file)
-  with open(fname, 'w') as f:
-    f.write(file)
+    process_graph_data()
