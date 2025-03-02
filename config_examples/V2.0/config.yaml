@@ -111,6 +111,7 @@ representation_nets:
     rbf_func: bessel
     set_features: true
     radial_MLP: [64, 64]
+    use_corr_prod: False
     correlation: 2
     num_hidden_features: 16
     use_kan: False
