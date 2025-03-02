@@ -4,7 +4,7 @@ version:
 Author: Yang Zhong
 Date: 2024-08-24 16:14:48
 LastEditors: Yang Zhong
-LastEditTime: 2024-11-28 23:23:04
+LastEditTime: 2025-03-02 17:16:04
 '''
 import torch
 from torch import nn
@@ -63,6 +63,10 @@ class HamGNNConvE3(BaseModel):
         self.edge_sh_normalization = config.HamGNN_pre.edge_sh_normalization
         self.edge_sh_normalize = config.HamGNN_pre.edge_sh_normalize
         self.build_internal_graph = config.HamGNN_pre.build_internal_graph
+        if 'use_corr_prod' not in config.HamGNN_pre:
+            self.use_corr_prod = False
+        else:
+            self.use_corr_prod = config.HamGNN_pre.use_corr_prod
         
         # Radial basis function
         self.cutoff = config.HamGNN_pre.cutoff
@@ -117,7 +121,8 @@ class HamGNNConvE3(BaseModel):
         num_hidden_features = config.HamGNN_pre.num_hidden_features
         
         self.convolutions = torch.nn.ModuleList()
-        self.corr_products = torch.nn.ModuleList()
+        if self.use_corr_prod:
+            self.corr_products = torch.nn.ModuleList()
         self.pair_interactions = torch.nn.ModuleList()
         
         for i in range(self.num_layers):
@@ -130,15 +135,16 @@ class HamGNNConvE3(BaseModel):
                                                use_skip_connections=True,
                                                use_kan=use_kan)
             self.convolutions.append(conv)
-
-            corr_product = CorrProductBlock(
-                irreps_node_feats=self.irreps_node_features,
-                num_hidden_features=num_hidden_features,
-                correlation=correlation,
-                num_elements=self.num_types,
-                use_skip_connections=True
-            )
-            self.corr_products.append(corr_product)
+            
+            if self.use_corr_prod:
+                corr_product = CorrProductBlock(
+                    irreps_node_feats=self.irreps_node_features,
+                    num_hidden_features=num_hidden_features,
+                    correlation=correlation,
+                    num_elements=self.num_types,
+                    use_skip_connections=True
+                )
+                self.corr_products.append(corr_product)
 
             pair_interaction = PairInteractionBlock(irreps_node_feats=self.irreps_node_features,
                                                     irreps_node_attrs=self.atomic_embedding.irreps_out['node_attrs'],
@@ -163,7 +169,8 @@ class HamGNNConvE3(BaseModel):
         # Orbital convolution
         for i in range(self.num_layers):
             self.convolutions[i](graph)
-            self.corr_products[i](graph)
+            if self.use_corr_prod:
+                self.corr_products[i](graph)
             self.pair_interactions[i](graph)
         graph_representation = EasyDict()
         graph_representation['node_attr'] = graph[AtomicDataDict.NODE_FEATURES_KEY]
@@ -1896,7 +1903,7 @@ class HamGNNPlusPlusOut(nn.Module):
 
         # shape:(natoms/nedges, nao_max, nao_max)
         mask_on = torch.einsum('ni, nj -> nij', basis_definition[z], basis_definition[z]).reshape(-1, self.nao_max**2)
-        mask_off = torch.einsum('ni, nj -> nij', basis_definition[j], basis_definition[i]).reshape(-1, self.nao_max**2)
+        mask_off = torch.einsum('ni, nj -> nij', basis_definition[z[j]], basis_definition[z[i]]).reshape(-1, self.nao_max**2)
         mask_all = torch.cat((mask_on, mask_off), dim=0)
 
         return mask_all
@@ -1913,7 +1920,7 @@ class HamGNNPlusPlusOut(nn.Module):
            
         # shape:(natoms/nedges, nao_max, nao_max)
         mask_on = torch.einsum('ni, nj -> nij', basis_definition[z], basis_definition[z])
-        mask_off = torch.einsum('ni, nj -> nij', basis_definition[j], basis_definition[i])
+        mask_off = torch.einsum('ni, nj -> nij', basis_definition[z[j]], basis_definition[z[i]])
         
         I2 = torch.ones((2,2)).type_as(data.z)
         mask_on = oe.contract('nij, kl -> nkilj', mask_on, I2).reshape(-1, (2*self.nao_max)**2)
