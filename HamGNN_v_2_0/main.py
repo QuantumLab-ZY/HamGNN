@@ -59,7 +59,7 @@ def prepare_data(config):
 def build_model(config):
     print("Building model")
     config.representation_nets.HamGNN_pre.radius_type = config.output_nets.HamGNN_out.ham_type.lower()
-    if config.setup.GNN_Net.lower() in ['hamgnnconv', 'hamgnnpre']:
+    if config.setup.GNN_Net.lower() in ['hamgnnconv', 'hamgnnpre', 'hamgnn_pre']:
         Gnn_net = HamGNNConvE3(config.representation_nets)
     elif config.setup.GNN_Net.lower() == 'hamgnntransformer':
         Gnn_net = HamGNNTransformer(config.representation_nets)
