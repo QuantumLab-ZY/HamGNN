@@ -357,3 +357,89 @@ class Expansion(nn.Module):
     def __repr__(self):
         return f'{self.irrep_in} -> {self.irrep_out_1}x{self.irrep_out_1} and bias {self.num_bias}' \
                f'with parameters {self.num_path_weight}'
+
+
+def blockwise_2x2_concat(
+    top_left: torch.Tensor,
+    top_right: torch.Tensor,
+    bottom_left: torch.Tensor,
+    bottom_right: torch.Tensor
+) -> torch.Tensor:
+    """
+    Concatenates four tensors in a 2x2 block pattern to form a doubled-size tensor.
+
+    The concatenation pattern follows:
+    [top_left | top_right]
+    ----------------------
+    [bottom_left | bottom_right]
+
+    Parameters:
+        top_left (torch.Tensor):     Tensor of shape [N, H, W]
+        top_right (torch.Tensor):    Tensor of same shape as top_left
+        bottom_left (torch.Tensor):  Tensor of same shape as top_left
+        bottom_right (torch.Tensor): Tensor of same shape as top_left
+
+    Returns:
+        torch.Tensor: Concatenated tensor of shape [N, 2H, 2W]
+
+    Raises:
+        ValueError: If input tensors have mismatching shapes
+
+    Example:
+        >>> a = torch.ones(2, 3, 3)
+        >>> b = torch.zeros(2, 3, 3)
+        >>> result = blockwise_2x2_concat(a, b, b, a)
+        >>> result.shape
+        torch.Size([2, 6, 6])
+    """
+    # Validate input tensor dimensions
+    expected_shape = top_left.shape
+    for i, tensor in enumerate([top_right, bottom_left, bottom_right], start=2):
+        if tensor.shape != expected_shape:
+            raise ValueError(
+                f"Tensor {i} shape {tensor.shape} doesn't match "
+                f"first tensor's shape {expected_shape}"
+            )
+
+    # Horizontal concatenation first (dimension W)
+    top_row = torch.cat([top_left, top_right], dim=-1)
+    bottom_row = torch.cat([bottom_left, bottom_right], dim=-1)
+
+    # Vertical concatenation (dimension H)
+    return torch.cat([top_row, bottom_row], dim=-2)
+
+
+def extract_elements_above_threshold(
+    condition_tensor: torch.Tensor,
+    source_tensor: torch.Tensor,
+    threshold: float = 0.0
+) -> torch.Tensor:
+    """Extracts elements from source tensor where condition tensor exceeds threshold.
+    
+    Args:
+        condition_tensor: Tensor[Nbatch, N, N] used for threshold comparison
+        source_tensor: Tensor[Nbatch, N, N] from which values are extracted
+        threshold: Minimum value for elements in condition_tensor to trigger extraction
+        
+    Returns:
+        torch.Tensor: 1D tensor of extracted values from source_tensor
+        
+    Raises:
+        ValueError: If input tensors have mismatching shapes
+        
+    Example:
+        >>> S = torch.randn(2, 3, 3)
+        >>> H = torch.randn(2, 3, 3)
+        >>> result = extract_elements_above_threshold(S, H, 0.5)
+    """
+    # Validate input shapes
+    if condition_tensor.shape != source_tensor.shape:
+        raise ValueError(f"Shape mismatch: {condition_tensor.shape} vs {source_tensor.shape}")
+
+    # Create boolean mask for threshold condition
+    threshold_mask = condition_tensor > threshold
+    
+    # Extract corresponding elements from source tensor
+    extracted_values = source_tensor[threshold_mask]
+    
+    return extracted_values
