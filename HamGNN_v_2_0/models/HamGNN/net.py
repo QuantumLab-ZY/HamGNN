@@ -4,7 +4,7 @@ version:
 Author: Yang Zhong
 Date: 2024-08-24 16:14:48
 LastEditors: Yang Zhong
-LastEditTime: 2025-03-02 17:16:04
+LastEditTime: 2025-04-20 18:00:19
 '''
 import torch
 from torch import nn
@@ -45,6 +45,7 @@ from .kpoint_gen import kpoints_generator
 from pymatgen.core.structure import Structure
 from pymatgen.symmetry.kpath import KPathSeek
 from e3nn.math import soft_unit_step
+from ..utils import blockwise_2x2_concat, extract_elements_above_threshold
 
 au2ang = 0.5291772083
 
@@ -334,7 +335,10 @@ class HamGNNPlusPlusOut(nn.Module):
                  spin_constrained: bool = False, 
                  use_learned_weight: bool = True, 
                  minMagneticMoment: float = 0.5, 
-                 collinear_spin: bool = False):
+                 collinear_spin: bool = False,
+                 zero_point_shift: bool = False,
+                 add_H_nonsoc: bool = False,
+                 get_nonzero_mask_tensor: bool = False):
         
         super().__init__()
 
@@ -400,543 +404,58 @@ class HamGNNPlusPlusOut(nn.Module):
         
         # Other parameters
         self.add_quartic = False
+        
+        # Other parameters
+        self.zero_point_shift = zero_point_shift
+        self.add_H_nonsoc = add_H_nonsoc
+        self.get_nonzero_mask_tensor = get_nonzero_mask_tensor
 
         # Band number control
-        if band_num_control is not None and not self.export_reciprocal_values:
-            if isinstance(band_num_control, dict):
-                # Convert atomic numbers to integers for consistency
-                self.band_num_control = {int(k): v for k, v in band_num_control.items()}
-            elif isinstance(band_num_control, int):
-                self.band_num_control = band_num_control
-            else:
-                self.band_num_control = None
-        else:
-            self.band_num_control = None
+        self._set_band_num_control(band_num_control)
         
-        # openmx
-        if self.ham_type == 'openmx':
-            self.num_valence = {Element['H'].Z: 1, Element['He'].Z: 2, Element['Li'].Z: 3, Element['Be'].Z: 2, Element['B'].Z: 3,
-                                Element['C'].Z: 4, Element['N'].Z: 5,  Element['O'].Z: 6,  Element['F'].Z: 7,  Element['Ne'].Z: 8,
-                                Element['Na'].Z: 9, Element['Mg'].Z: 8, Element['Al'].Z: 3, Element['Si'].Z: 4, Element['P'].Z: 5,
-                                Element['S'].Z: 6,  Element['Cl'].Z: 7, Element['Ar'].Z: 8, Element['K'].Z: 9,  Element['Ca'].Z: 10,
-                                Element['Sc'].Z: 11, Element['Ti'].Z: 12, Element['V'].Z: 13, Element['Cr'].Z: 14, Element['Mn'].Z: 15,
-                                Element['Fe'].Z: 16, Element['Co'].Z: 17, Element['Ni'].Z: 18, Element['Cu'].Z: 19, Element['Zn'].Z: 20,
-                                Element['Ga'].Z: 13, Element['Ge'].Z: 4,  Element['As'].Z: 15, Element['Se'].Z: 6,  Element['Br'].Z: 7,
-                                Element['Kr'].Z: 8,  Element['Rb'].Z: 9,  Element['Sr'].Z: 10, Element['Y'].Z: 11, Element['Zr'].Z: 12,
-                                Element['Nb'].Z: 13, Element['Mo'].Z: 14, Element['Tc'].Z: 15, Element['Ru'].Z: 14, Element['Rh'].Z: 15,
-                                Element['Pd'].Z: 16, Element['Ag'].Z: 17, Element['Cd'].Z: 12, Element['In'].Z: 13, Element['Sn'].Z: 14,
-                                Element['Sb'].Z: 15, Element['Te'].Z: 16, Element['I'].Z: 7, Element['Xe'].Z: 8, Element['Cs'].Z: 9,
-                                Element['Ba'].Z: 10, Element['La'].Z: 11, Element['Ce'].Z: 12, Element['Pr'].Z: 13, Element['Nd'].Z: 14,
-                                Element['Pm'].Z: 15, Element['Sm'].Z: 16, Element['Dy'].Z: 20, Element['Ho'].Z: 21, Element['Lu'].Z: 11,
-                                Element['Hf'].Z: 12, Element['Ta'].Z: 13, Element['W'].Z: 12,  Element['Re'].Z: 15, Element['Os'].Z: 14,
-                                Element['Ir'].Z: 15, Element['Pt'].Z: 16, Element['Au'].Z: 17, Element['Hg'].Z: 18, Element['Tl'].Z: 19,
-                                Element['Pb'].Z: 14, Element['Bi'].Z: 15
-                            }
-            
-            if self.nao_max == 14:
-                self.index_change = torch.LongTensor([0,1,2,5,3,4,8,6,7,11,13,9,12,10])       
-                self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e")
-                self.basis_def = {  1:[0,1,3,4,5], # H
-                                    2:[0,1,3,4,5], # He
-                                    3:[0,1,2,3,4,5,6,7,8], # Li
-                                    4:[0,1,3,4,5,6,7,8], # Be
-                                    5:[0,1,3,4,5,6,7,8,9,10,11,12,13], # B
-                                    6:[0,1,3,4,5,6,7,8,9,10,11,12,13], # C
-                                    7:[0,1,3,4,5,6,7,8,9,10,11,12,13], # N
-                                    8:[0,1,3,4,5,6,7,8,9,10,11,12,13], # O
-                                    9:[0,1,3,4,5,6,7,8,9,10,11,12,13], # F
-                                    10:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Ne
-                                    11:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Na
-                                    12:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Mg
-                                    13:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Al
-                                    14:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Si
-                                    15:[0,1,3,4,5,6,7,8,9,10,11,12,13], # p
-                                    16:[0,1,3,4,5,6,7,8,9,10,11,12,13], # S
-                                    17:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Cl
-                                    18:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Ar
-                                    19:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # K
-                                    20:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Ca
-                                    35:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Br  
-                                    Element['V'].Z: [0,1,2,3,4,5,6,7,8,9,10,11,12,13], # V
-                                    Element['Mn'].Z: [0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Mn
-                                }
-            
-            elif self.nao_max == 13:
-                self.basis_def = {  1:[0,1,2,3,4], # H
-                                    5:[0,1,2,3,4,5,6,7,8,9,10,11,12], # B
-                                    6:[0,1,2,3,4,5,6,7,8,9,10,11,12], # C
-                                    7:[0,1,2,3,4,5,6,7,8,9,10,11,12], # N
-                                    8:[0,1,2,3,4,5,6,7,8,9,10,11,12] # O
-                                }
-                self.index_change = torch.LongTensor([0,1,4,2,3,7,5,6,10,12,8,11,9])       
-                self.row = self.col = o3.Irreps("1x0e+1x0e+1x1o+1x1o+1x2e")
-            
-            elif self.nao_max == 19:
-                self.index_change = torch.LongTensor([0,1,2,5,3,4,8,6,7,11,13,9,12,10,16,18,14,17,15])       
-                self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e+1x2e")
-                self.basis_def = {  1:[0,1,3,4,5], # H
-                    2:[0,1,3,4,5], # He
-                    3:[0,1,2,3,4,5,6,7,8], # Li
-                    4:[0,1,3,4,5,6,7,8], # Be
-                    5:[0,1,3,4,5,6,7,8,9,10,11,12,13], # B
-                    6:[0,1,3,4,5,6,7,8,9,10,11,12,13], # C
-                    7:[0,1,3,4,5,6,7,8,9,10,11,12,13], # N
-                    8:[0,1,3,4,5,6,7,8,9,10,11,12,13], # O
-                    9:[0,1,3,4,5,6,7,8,9,10,11,12,13], # F
-                    10:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Ne
-                    11:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Na
-                    12:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Mg
-                    13:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Al
-                    14:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Si
-                    15:[0,1,3,4,5,6,7,8,9,10,11,12,13], # p
-                    16:[0,1,3,4,5,6,7,8,9,10,11,12,13], # S
-                    17:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Cl
-                    18:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Ar
-                    19:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # K
-                    20:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Ca
-                    25:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Mn
-                    42:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # Mo  
-                    83:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # Bi  
-                    34:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # Se 
-                    24:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Cr 
-                    53:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # I
-                    28:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Ni
-                    35:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # Br 
-                    26:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Fe
-                    77:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # Ir
-                    52:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # Te
-                    Element['V'].Z: [0,1,2,3,4,5,6,7,8,9,10,11,12,13], # V
-                    Element['Sb'].Z: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # Sb
-                }
-            
-            elif self.nao_max == 26:
-                self.index_change = torch.LongTensor([0,1,2,5,3,4,8,6,7,11,13,9,12,10,16,18,14,17,15,22,23,21,24,20,25,19])       
-                self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e+1x2e+1x3o")
-                self.basis_def = (lambda s1=[0],s2=[1],s3=[2],p1=[3,4,5],p2=[6,7,8],d1=[9,10,11,12,13],d2=[14,15,16,17,18],f1=[19,20,21,22,23,24,25]: {
-                    Element['H'].Z : s1+s2+p1,  # H6.0-s2p1
-                    Element['He'].Z : s1+s2+p1,  # He8.0-s2p1
-                    Element['Li'].Z : s1+s2+s3+p1+p2,  # Li8.0-s3p2
-                    Element['Be'].Z : s1+s2+p1+p2,  # Be7.0-s2p2
-                    Element['B'].Z : s1+s2+p1+p2+d1,  # B7.0-s2p2d1
-                    Element['C'].Z : s1+s2+p1+p2+d1,  # C6.0-s2p2d1
-                    Element['N'].Z : s1+s2+p1+p2+d1,  # N6.0-s2p2d1
-                    Element['O'].Z : s1+s2+p1+p2+d1,  # O6.0-s2p2d1
-                    Element['F'].Z : s1+s2+p1+p2+d1,  # F6.0-s2p2d1
-                    Element['Ne'].Z: s1+s2+p1+p2+d1,  # Ne9.0-s2p2d1
-                    Element['Na'].Z: s1+s2+s3+p1+p2+d1,  # Na9.0-s3p2d1
-                    Element['Mg'].Z: s1+s2+s3+p1+p2+d1,  # Mg9.0-s3p2d1
-                    Element['Al'].Z: s1+s2+p1+p2+d1,  # Al7.0-s2p2d1
-                    Element['Si'].Z: s1+s2+p1+p2+d1,  # Si7.0-s2p2d1
-                    Element['P'].Z: s1+s2+p1+p2+d1,  # P7.0-s2p2d1
-                    Element['S'].Z: s1+s2+p1+p2+d1,  # S7.0-s2p2d1
-                    Element['Cl'].Z: s1+s2+p1+p2+d1,  # Cl7.0-s2p2d1
-                    Element['Ar'].Z: s1+s2+p1+p2+d1,  # Ar9.0-s2p2d1
-                    Element['K'].Z: s1+s2+s3+p1+p2+d1,  # K10.0-s3p2d1
-                    Element['Ca'].Z: s1+s2+s3+p1+p2+d1,  # Ca9.0-s3p2d1
-                    Element['Sc'].Z: s1+s2+s3+p1+p2+d1,  # Sc9.0-s3p2d1
-                    Element['Ti'].Z: s1+s2+s3+p1+p2+d1,  # Ti7.0-s3p2d1
-                    Element['V'].Z: s1+s2+s3+p1+p2+d1,  # V6.0-s3p2d1
-                    Element['Cr'].Z: s1+s2+s3+p1+p2+d1,  # Cr6.0-s3p2d1
-                    Element['Mn'].Z: s1+s2+s3+p1+p2+d1,  # Mn6.0-s3p2d1
-                    Element['Fe'].Z: s1+s2+s3+p1+p2+d1,  # Fe5.5H-s3p2d1
-                    Element['Co'].Z: s1+s2+s3+p1+p2+d1,  # Co6.0H-s3p2d1
-                    Element['Ni'].Z: s1+s2+s3+p1+p2+d1,  # Ni6.0H-s3p2d1
-                    Element['Cu'].Z: s1+s2+s3+p1+p2+d1,  # Cu6.0H-s3p2d1
-                    Element['Zn'].Z: s1+s2+s3+p1+p2+d1,  # Zn6.0H-s3p2d1
-                    Element['Ga'].Z: s1+s2+s3+p1+p2+d1+d2,  # Ga7.0-s3p2d2
-                    Element['Ge'].Z: s1+s2+s3+p1+p2+d1+d2,  # Ge7.0-s3p2d2
-                    Element['As'].Z: s1+s2+s3+p1+p2+d1+d2,  # As7.0-s3p2d2
-                    Element['Se'].Z: s1+s2+s3+p1+p2+d1+d2,  # Se7.0-s3p2d2
-                    Element['Br'].Z: s1+s2+s3+p1+p2+d1+d2,  # Br7.0-s3p2d2
-                    Element['Kr'].Z: s1+s2+s3+p1+p2+d1+d2,  # Kr10.0-s3p2d2
-                    Element['Rb'].Z: s1+s2+s3+p1+p2+d1+d2,  # Rb11.0-s3p2d2
-                    Element['Sr'].Z: s1+s2+s3+p1+p2+d1+d2,  # Sr10.0-s3p2d2
-                    Element['Y'].Z: s1+s2+s3+p1+p2+d1+d2,  # Y10.0-s3p2d2
-                    Element['Zr'].Z: s1+s2+s3+p1+p2+d1+d2,  # Zr7.0-s3p2d2
-                    Element['Nb'].Z: s1+s2+s3+p1+p2+d1+d2,  # Nb7.0-s3p2d2
-                    Element['Mo'].Z: s1+s2+s3+p1+p2+d1+d2,  # Mo7.0-s3p2d2
-                    Element['Tc'].Z: s1+s2+s3+p1+p2+d1+d2,  # Tc7.0-s3p2d2
-                    Element['Ru'].Z: s1+s2+s3+p1+p2+d1+d2,  # Ru7.0-s3p2d2
-                    Element['Rh'].Z: s1+s2+s3+p1+p2+d1+d2,  # Rh7.0-s3p2d2
-                    Element['Pd'].Z: s1+s2+s3+p1+p2+d1+d2,  # Pd7.0-s3p2d2
-                    Element['Ag'].Z: s1+s2+s3+p1+p2+d1+d2,  # Ag7.0-s3p2d2
-                    Element['Cd'].Z: s1+s2+s3+p1+p2+d1+d2,  # Cd7.0-s3p2d2
-                    Element['In'].Z: s1+s2+s3+p1+p2+d1+d2,  # In7.0-s3p2d2
-                    Element['Sn'].Z: s1+s2+s3+p1+p2+d1+d2,  # Sn7.0-s3p2d2
-                    Element['Sb'].Z: s1+s2+s3+p1+p2+d1+d2,  # Sb7.0-s3p2d2
-                    Element['Te'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Te7.0-s3p2d2f1
-                    Element['I'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # I7.0-s3p2d2f1
-                    Element['Xe'].Z: s1+s2+s3+p1+p2+d1+d2,  # Xe11.0-s3p2d2
-                    Element['Cs'].Z: s1+s2+s3+p1+p2+d1+d2,  # Cs12.0-s3p2d2
-                    Element['Ba'].Z: s1+s2+s3+p1+p2+d1+d2,  # Ba10.0-s3p2d2
-                    Element['La'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # La8.0-s3p2d2f1
-                    Element['Ce'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Ce8.0-s3p2d2f1
-                    Element['Pr'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Pr8.0-s3p2d2f1
-                    Element['Nd'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Nd8.0-s3p2d2f1
-                    Element['Pm'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Pm8.0-s3p2d2f1
-                    Element['Sm'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Sm8.0-s3p2d2f1
-                    Element['Dy'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Dy8.0-s3p2d2f1
-                    Element['Ho'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Ho8.0-s3p2d2f1
-                    Element['Lu'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Lu8.0-s3p2d2f1
-                    Element['Hf'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Hf9.0-s3p2d2f1
-                    Element['Ta'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Ta7.0-s3p2d2f1
-                    Element['W'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # W7.0-s3p2d2f1
-                    Element['Re'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Re7.0-s3p2d2f1
-                    Element['Os'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Os7.0-s3p2d2f1
-                    Element['Ir'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Ir7.0-s3p2d2f1
-                    Element['Pt'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Pt7.0-s3p2d2f1
-                    Element['Au'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Au7.0-s3p2d2f1
-                    Element['Hg'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Hg8.0-s3p2d2f1
-                    Element['Tl'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Tl8.0-s3p2d2f1
-                    Element['Pb'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Pb8.0-s3p2d2f1
-                    Element['Bi'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Bi8.0-s3p2d2f1 
-                })()
-            else:
-                raise NotImplementedError
-        elif self.ham_type == 'siesta':
-            self.num_valence = {
-                1:1,2:2,
-                3:1,4:2,5:3,6:4,7:5,8:6,9:7,10:8,
-                11:1,12:2,13:3,14:4,15:5,16:6,17:7,18:8,
-                19:1,20:2,22:12
-            }
-            if self.nao_max == 13:
-                self.index_change = None       
-                self.row = self.col = o3.Irreps("1x0e+1x0e+1x1o+1x1o+1x2e")
-                self.minus_index = torch.LongTensor([2,4,5,7,9,11]) # this list should follow the order in siesta. See spher_harm.f
-                self.basis_def = (lambda s1=[0],s2=[1],p1=[2,3,4],p2=[5,6,7],d1=[8,9,10,11,12]: {
-                    1 : s1+s2+p1, # H
-                    2 : s1+s2+p1, # He
-                    3 : s1+s2+p1, # Li
-                    4 : s1+s2+p1, # Be
-                    5 : s1+s2+p1+p2+d1, # B
-                    6 : s1+s2+p1+p2+d1, # C
-                    7 : s1+s2+p1+p2+d1, # N
-                    8 : s1+s2+p1+p2+d1, # O
-                    9 : s1+s2+p1+p2+d1, # F
-                    10: s1+s2+p1+p2+d1, # Ne
-                    11: s1+s2+p1, # Na
-                    12: s1+s2+p1, # Mg
-                    13: s1+s2+p1+p2+d1, # Al
-                    14: s1+s2+p1+p2+d1, # Si
-                    15: s1+s2+p1+p2+d1, # P
-                    16: s1+s2+p1+p2+d1, # S
-                    17: s1+s2+p1+p2+d1, # Cl
-                    18: s1+s2+p1+p2+d1, # Ar
-                    19: s1+s2+p1, # K
-                    20: s1+s2+p1, # Cl
-                })()
-            elif self.nao_max == 19:
-                self.index_change = None
-                self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e+1x2e")
-                self.minus_index = torch.LongTensor([3,5,6,8,10,12,15,17]) # this list should follow the order in siesta. See spher_harm.f
-                self.basis_def = (lambda s1=[0],s2=[1],s3=[2],p1=[3,4,5],p2=[6,7,8],d1=[9,10,11,12,13],d2=[14,15,16,17,18]: {
-                    1 : s1+s2+p1, # H
-                    2 : s1+s2+p1, # He
-                    3 : s1+s2+p1, # Li
-                    4 : s1+s2+p1, # Be
-                    5 : s1+s2+p1+p2+d1, # B
-                    6 : s1+s2+p1+p2+d1, # C
-                    7 : s1+s2+p1+p2+d1, # N
-                    8 : s1+s2+p1+p2+d1, # O
-                    9 : s1+s2+p1+p2+d1, # F
-                    10: s1+s2+p1+p2+d1, # Ne
-                    11: s1+s2+p1, # Na
-                    12: s1+s2+p1, # Mg
-                    13: s1+s2+p1+p2+d1, # Al
-                    14: s1+s2+p1+p2+d1, # Si
-                    15: s1+s2+p1+p2+d1, # P
-                    16: s1+s2+p1+p2+d1, # S
-                    17: s1+s2+p1+p2+d1, # Cl
-                    18: s1+s2+p1+p2+d1, # Ar
-                    19: s1+s2+p1, # K
-                    20: s1+s2+p1, # Cl
-                    22: s1+s2+s3+p1+p2+d1+d2, # Ti, created by Qin.
-                })()
-            else:
-                raise NotImplementedError
-        elif self.ham_type == 'abacus':
-            # this dict is for abacus calculation.
-            self.num_valence = {1: 1,  2: 2,
-                            3: 3,  4: 4,
-                            5: 3,  6: 4,
-                            7: 5,  8: 6,
-                            9: 7,  10: 8,
-                            11: 9, 12: 10,
-                            13: 11, 14: 4,
-                            15: 5,  16: 6,
-                            17: 7,  18: 8,
-                            19: 9,  20: 10,
-                            21: 11, 22: 12,
-                            23: 13, 24: 14,
-                            25: 15, 26: 16,
-                            27: 17, 28: 18,
-                            29: 19, 30: 20,
-                            31: 13, 32: 14,
-                            33: 5,  34: 6,
-                            35: 7,  36: 8,
-                            37: 9,  38: 10,
-                            39: 11, 40: 12,
-                            41: 13, 42: 14,
-                            43: 15, 44: 16,
-                            45: 17, 46: 18,
-                            47: 19, 48: 20,
-                            49: 13, 50: 14,
-                            51: 15, 52: 16,
-                            53: 17, 54: 18,
-                            55: 9, 56: 10,
-                            57: 11, 72: 26,
-                            73: 27, 74: 28,
-                            75: 15, 76: 16,
-                            77: 17, 78: 18,
-                            79: 19, 80: 20,
-                            81: 13, 82: 14,
-                            83: 15}
-            
-            if self.nao_max == 13:
-                self.index_change = torch.LongTensor([0,1,3,4,2,6,7,5,10,11,9,12,8])
-                self.row = self.col = o3.Irreps("1x0e+1x0e+1x1o+1x1o+1x2e")
-                self.minus_index = torch.LongTensor([3,4,6,7,9,10])
-                self.basis_def = (lambda s1=[0],s2=[1],p1=[2,3,4],p2=[5,6,7],d1=[8,9,10,11,12]: {
-                    1 : np.array(s1+s2+p1, dtype=int), # H
-                    2 : np.array(s1+s2+p1, dtype=int), # He
-                    5 : np.array(s1+s2+p1+p2+d1, dtype=int), # B
-                    6 : np.array(s1+s2+p1+p2+d1, dtype=int), # C
-                    7 : np.array(s1+s2+p1+p2+d1, dtype=int), # N
-                    8 : np.array(s1+s2+p1+p2+d1, dtype=int), # O
-                    9 : np.array(s1+s2+p1+p2+d1, dtype=int), # F
-                    10: np.array(s1+s2+p1+p2+d1, dtype=int), # Ne
-                    14: np.array(s1+s2+p1+p2+d1, dtype=int), # Si
-                    15: np.array(s1+s2+p1+p2+d1, dtype=int), # P
-                    16: np.array(s1+s2+p1+p2+d1, dtype=int), # S
-                    17: np.array(s1+s2+p1+p2+d1, dtype=int), # Cl
-                    18: np.array(s1+s2+p1+p2+d1, dtype=int), # Ar
-                })()           
-            
-            elif self.nao_max == 27:
-                self.index_change = torch.LongTensor([0,1,2,3,5,6,4,8,9,7,12,13,11,14,10,17,18,16,19,15,23,24,22,25,21,26,20])       
-                self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x0e+1x1o+1x1o+1x2e+1x2e+1x3o")
-                self.minus_index = torch.LongTensor([5,6,8,9,11,12,16,17,21,22,25,26]) # this list should follow the order in abacus.
-                self.basis_def = (lambda s1=[0],s2=[1],s3=[2],s4=[3],p1=[4,5,6],p2=[7,8,9],d1=[10,11,12,13,14],d2=[15,16,17,18,19],f1=[20,21,22,23,24,25,26]: {
-                1 : s1+s2+p1, # H
-                2 : s1+s2+p1, # He
-                3 : s1+s2+s3+s4+p1, # Li
-                4 : s1+s2+s3+s4+p1, # Bi
-                5 : s1+s2+p1+p2+d1, # B
-                6 : s1+s2+p1+p2+d1, # C
-                7 : s1+s2+p1+p2+d1, # N
-                8 : s1+s2+p1+p2+d1, # O
-                9 : s1+s2+p1+p2+d1, # F
-                10: s1+s2+p1+p2+d1, # Ne
-                11: s1+s2+s3+s4+p1+p2+d1, # Na
-                12: s1+s2+s3+s4+p1+p2+d1, # Mg
-                # 13: Al
-                14: s1+s2+p1+p2+d1, # Si
-                15: s1+s2+p1+p2+d1, # P
-                16: s1+s2+p1+p2+d1, # S
-                17: s1+s2+p1+p2+d1, # Cl
-                18: s1+s2+p1+p2+d1, # Ar
-                19: s1+s2+s3+s4+p1+p2+d1, # K
-                20: s1+s2+s3+s4+p1+p2+d1, # Ca
-                21: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Sc
-                22: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Ti
-                23: s1+s2+s3+s4+p1+p2+d1+d2+f1, # V
-                24: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Cr
-                25: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Mn
-                26: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Fe
-                27: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Co
-                28: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Ni
-                29: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Cu
-                30: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Zn
-                31: s1+s2+p1+p2+d1+d2+f1, # Ga
-                32: s1+s2+p1+p2+d1+d2+f1, # Ge
-                33: s1+s2+p1+p2+d1, # As
-                34: s1+s2+p1+p2+d1, # Se
-                35: s1+s2+p1+p2+d1, # Br
-                36: s1+s2+p1+p2+d1, # Kr
-                37: s1+s2+s3+s4+p1+p2+d1, # Rb
-                38: s1+s2+s3+s4+p1+p2+d1, # Sr
-                39: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Y
-                40: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Zr
-                41: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Nb
-                42: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Mo
-                43: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Tc
-                44: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Ru
-                45: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Rh
-                46: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Pd
-                47: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Ag
-                48: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Cd
-                49: s1+s2+p1+p2+d1+d2+f1, # In
-                50: s1+s2+p1+p2+d1+d2+f1, # Sn
-                51: s1+s2+p1+p2+d1+d2+f1, # Sb
-                52: s1+s2+p1+p2+d1+d2+f1, # Te
-                53: s1+s2+p1+p2+d1+d2+f1, # I
-                54: s1+s2+p1+p2+d1+d2+f1, # Xe
-                55: s1+s2+s3+s4+p1+p2+d1, # Cs
-                56: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Ba
-                #
-                79: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Au
-                80: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Hg
-                81: s1+s2+p1+p2+d1+d2+f1, # Tl
-                82: s1+s2+p1+p2+d1+d2+f1, # Pb
-                83: s1+s2+p1+p2+d1+d2+f1, # Bi
-            })()
-
-            elif self.nao_max == 40:
-                self.index_change = torch.LongTensor([0,1,2,3,5,6,4,8,9,7,11,12,10,14,15,13,18,19,17,20,16,23,24,22,25,21,29,30,28,31,27,32,26,36,37,35,38,34,39,33])       
-                self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x0e+1x1o+1x1o+1x1o+1x1o+1x2e+1x2e+1x3o+1x3o")
-                self.minus_index = torch.LongTensor([5,6,8,9,11,12,14,15,17,18,22,23,27,28,31,32,34,35,38,39]) # this list should follow the order in abacus.
-                self.basis_def = (lambda s1=[0],
-                       s2=[1],
-                       s3=[2],
-                       s4=[3],
-                       p1=[4,5,6],
-                       p2=[7,8,9],
-                       p3=[10,11,12],
-                       p4=[13,14,15],
-                       d1=[16,17,18,19,20],
-                       d2=[21,22,23,24,25],
-                       f1=[26,27,28,29,30,31,32],
-                       f2=[33,34,35,36,37,38,39]: {
-                    Element('Ag').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Al').Z: s1+s2+s3+s4+p1+p2+p3+p4+d1, 
-                    Element('Ar').Z: s1+s2+p1+p2+d1, 
-                    Element('As').Z: s1+s2+p1+p2+d1, 
-                    Element('Au').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Ba').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Be').Z: s1+s2+s3+s4+p1, 
-                    Element('B').Z: s1+s2+p1+p2+d1, 
-                    Element('Bi').Z: s1+s2+p1+p2+d1+d2+f1, 
-                    Element('Br').Z: s1+s2+p1+p2+d1, 
-                    Element('Ca').Z: s1+s2+s3+s4+p1+p2+d1, 
-                    Element('Cd').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('C').Z: s1+s2+p1+p2+d1, 
-                    Element('Cl').Z: s1+s2+p1+p2+d1, 
-                    Element('Co').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Cr').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Cs').Z: s1+s2+s3+s4+p1+p2+d1, 
-                    Element('Cu').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Fe').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('F').Z: s1+s2+p1+p2+d1, 
-                    Element('Ga').Z: s1+s2+p1+p2+d1+d2+f1, 
-                    Element('Ge').Z: s1+s2+p1+p2+d1+d2+f1, 
-                    Element('He').Z: s1+s2+p1, 
-                    Element('Hf').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1+f2,  # Hf_gga_10au_100Ry_4s2p2d2f.orb
-                    Element('H').Z: s1+s2+p1, 
-                    Element('Hg').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('I').Z: s1+s2+p1+p2+d1+d2+f1, 
-                    Element('In').Z: s1+s2+p1+p2+d1+d2+f1, 
-                    Element('Ir').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('K').Z: s1+s2+s3+s4+p1+p2+d1, 
-                    Element('Kr').Z: s1+s2+p1+p2+d1, 
-                    Element('Li').Z: s1+s2+s3+s4+p1, 
-                    Element('Mg').Z: s1+s2+s3+s4+p1+p2+d1, 
-                    Element('Mn').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Mo').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Na').Z: s1+s2+s3+s4+p1+p2+d1, 
-                    Element('Nb').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Ne').Z: s1+s2+p1+p2+d1, 
-                    Element('N').Z: s1+s2+p1+p2+d1, 
-                    Element('Ni').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('O').Z: s1+s2+p1+p2+d1, 
-                    Element('Os').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Pb').Z: s1+s2+p1+p2+d1+d2+f1, 
-                    Element('Pd').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('P').Z: s1+s2+p1+p2+d1, 
-                    Element('Pt').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Rb').Z: s1+s2+s3+s4+p1+p2+d1, 
-                    Element('Re').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Rh').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Ru').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Sb').Z: s1+s2+p1+p2+d1+d2+f1, 
-                    Element('Sc').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Se').Z: s1+s2+p1+p2+d1, 
-                    Element('S').Z: s1+s2+p1+p2+d1, 
-                    Element('Si').Z: s1+s2+p1+p2+d1, 
-                    Element('Sn').Z: s1+s2+p1+p2+d1+d2+f1, 
-                    Element('Sr').Z: s1+s2+s3+s4+p1+p2+d1, 
-                    Element('Ta').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1+f2,  # Ta_gga_10au_100Ry_4s2p2d2f.orb
-                    Element('Tc').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Te').Z: s1+s2+p1+p2+d1+d2+f1, 
-                    Element('Ti').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Tl').Z: s1+s2+p1+p2+d1+d2+f1, 
-                    Element('V').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('W').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1+f2,  # W_gga_10au_100Ry_4s2p2d2f.orb
-                    Element('Xe').Z: s1+s2+p1+p2+d1+d2+f1, 
-                    Element('Y').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Zn').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
-                    Element('Zr').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1,
-                    })()
-            else:
-                raise NotImplementedError
-        # pasp
-        elif self.ham_type == 'pasp':   
-            self.row = self.col = o3.Irreps("1x1o")
-        else:
-            raise NotImplementedError
-        
+        self._set_basis_info()
         self._init_irreps()
+        
         # self.cg_cal = ClebschGordan()
         self.cg_cal = ClebschGordanCoefficients(max_l=self.ham_irreps.lmax)
 
         # hamiltonian                        
-        self.onsitenet_h = HamLayer(irreps_in=irreps_in_node, feature_irreps_hidden=irreps_in_node,irreps_out=self.ham_irreps, 
-                                                 nonlinearity_type = self.nonlinearity_type, resnet=True)
-           
-        self.offsitenet_h = HamLayer(irreps_in=irreps_in_edge, feature_irreps_hidden=irreps_in_edge,irreps_out=self.ham_irreps, 
-                                                 nonlinearity_type = self.nonlinearity_type, resnet=True)
+        self.onsitenet_h = self._create_ham_layer(irreps_in=irreps_in_node, irreps_out=self.ham_irreps)
+        self.offsitenet_h = self._create_ham_layer(irreps_in=irreps_in_edge, irreps_out=self.ham_irreps)
         
         if soc_switch:
             if self.ham_type != 'openmx':
                 self.soc_basis == 'su2'
             
             if self.soc_basis == 'su2':
-                self.onsitenet_h = HamLayer(irreps_in=irreps_in_node, feature_irreps_hidden=irreps_in_node,irreps_out=2*self.ham_irreps_su2, 
-                                                                 nonlinearity_type = self.nonlinearity_type, resnet=True)
-
-                self.offsitenet_h = HamLayer(irreps_in=irreps_in_edge, feature_irreps_hidden=irreps_in_edge,irreps_out=2*self.ham_irreps_su2, 
-                                                                 nonlinearity_type = self.nonlinearity_type, resnet=True)
+                self.onsitenet_h = self._create_ham_layer(irreps_in=irreps_in_node, irreps_out=2*self.ham_irreps_su2)
+                self.offsitenet_h = self._create_ham_layer(irreps_in=irreps_in_edge, irreps_out=2*self.ham_irreps_su2)
             
             elif self.soc_basis == 'so3':                
-                self.onsitenet_ksi = HamLayer(irreps_in=irreps_in_node, feature_irreps_hidden=irreps_in_node,irreps_out=(self.nao_max**2*o3.Irreps("0e")).simplify(), 
-                                                                                 nonlinearity_type = self.nonlinearity_type, resnet=True)
-    
-                self.offsitenet_ksi = HamLayer(irreps_in=irreps_in_edge, feature_irreps_hidden=irreps_in_edge,irreps_out=(self.nao_max**2*o3.Irreps("0e")).simplify(), 
-                                                                                 nonlinearity_type = self.nonlinearity_type, resnet=True) 
+                self.onsitenet_ksi = self._create_ham_layer(irreps_in=irreps_in_node, irreps_out=(self.nao_max**2*o3.Irreps("0e")).simplify())
+                self.offsitenet_ksi = self._create_ham_layer(irreps_in=irreps_in_edge, irreps_out=(self.nao_max**2*o3.Irreps("0e")).simplify())
             
             else:
                 raise NotImplementedError(f"{soc_basis} not supportted!")
-            
+
         if self.spin_constrained:
             # J            
-            self.onsitenet_J = HamLayer(irreps_in=irreps_in_node, feature_irreps_hidden=irreps_in_node,irreps_out=self.J_irreps, 
-                                                                 nonlinearity_type = self.nonlinearity_type, resnet=True)
-            
-            self.offsitenet_J = HamLayer(irreps_in=irreps_in_edge, feature_irreps_hidden=irreps_in_edge,irreps_out=self.J_irreps, 
-                                                                 nonlinearity_type = self.nonlinearity_type, resnet=True)
+            self.onsitenet_J = self._create_ham_layer(irreps_in=irreps_in_node, irreps_out=self.J_irreps)
+            self.offsitenet_J = self._create_ham_layer(irreps_in=irreps_in_edge, irreps_out=self.J_irreps)
             
             # K
             if self.add_quartic:
-                self.onsitenet_K = HamLayer(irreps_in=irreps_in_node, feature_irreps_hidden=irreps_in_node,irreps_out=self.K_irreps, 
-                                                                     nonlinearity_type = self.nonlinearity_type, resnet=True)
-
-                self.offsitenet_K = HamLayer(irreps_in=irreps_in_edge, feature_irreps_hidden=irreps_in_edge,irreps_out=self.K_irreps, 
-                                                                     nonlinearity_type = self.nonlinearity_type, resnet=True)
+                self.onsitenet_K = self._create_ham_layer(irreps_in=irreps_in_node, irreps_out=self.K_irreps)
+                self.offsitenet_K = self._create_ham_layer(irreps_in=irreps_in_edge, irreps_out=self.K_irreps)
             
             # weight matrix
             if self.use_learned_weight:
-                self.onsitenet_weight = HamLayer(irreps_in=irreps_in_node, feature_irreps_hidden=irreps_in_node,irreps_out=self.ham_irreps, 
-                                                                     nonlinearity_type = self.nonlinearity_type, resnet=True)
-
-                self.offsitenet_weight = HamLayer(irreps_in=irreps_in_edge, feature_irreps_hidden=irreps_in_edge,irreps_out=self.ham_irreps, 
-                                                                     nonlinearity_type = self.nonlinearity_type, resnet=True)
+                self.onsitenet_weight = self._create_ham_layer(irreps_in=irreps_in_node, irreps_out=self.ham_irreps)
+                self.offsitenet_weight = self._create_ham_layer(irreps_in=irreps_in_edge, irreps_out=self.ham_irreps)
         
         if not self.ham_only:            
-            self.onsitenet_s = HamLayer(irreps_in=irreps_in_node, feature_irreps_hidden=irreps_in_node,irreps_out=self.ham_irreps, 
-                                                 nonlinearity_type = self.nonlinearity_type, resnet=True)
-            
-            self.offsitenet_s = HamLayer(irreps_in=irreps_in_edge, feature_irreps_hidden=irreps_in_edge, irreps_out=self.ham_irreps, 
-                                                 nonlinearity_type = self.nonlinearity_type, resnet=True)
+            self.onsitenet_s = self._create_ham_layer(irreps_in=irreps_in_node, irreps_out=self.ham_irreps)
+            self.offsitenet_s = self._create_ham_layer(irreps_in=irreps_in_edge, irreps_out=self.ham_irreps) 
                  
     def _init_irreps(self):
         """
@@ -994,6 +513,515 @@ class HamGNNPlusPlusOut(nn.Module):
             
             self.J_irreps_dim = torch.LongTensor(self.J_irreps_dim)
             self.K_irreps_dim = torch.LongTensor(self.K_irreps_dim)
+
+    def _set_basis_info(self):
+        """
+        Sets the basis information based on the Hamiltonian type and number of atomic orbitals.
+        """
+        if self.ham_type == 'openmx':
+            self._set_openmx_basis()
+        elif self.ham_type == 'siesta':
+            self._set_siesta_basis()
+        elif self.ham_type == 'abacus':
+            self._set_abacus_basis()
+        elif self.ham_type == 'pasp':
+            self.row = self.col = o3.Irreps("1x1o")
+        else:
+            raise NotImplementedError(f"Hamiltonian type '{self.ham_type}' is not supported.")
+
+    def _set_openmx_basis(self):
+        """
+        Sets basis information for 'openmx' Hamiltonian.
+        """
+        self.num_valence = {Element['H'].Z: 1, Element['He'].Z: 2, Element['Li'].Z: 3, Element['Be'].Z: 2, Element['B'].Z: 3,
+                            Element['C'].Z: 4, Element['N'].Z: 5,  Element['O'].Z: 6,  Element['F'].Z: 7,  Element['Ne'].Z: 8,
+                            Element['Na'].Z: 9, Element['Mg'].Z: 8, Element['Al'].Z: 3, Element['Si'].Z: 4, Element['P'].Z: 5,
+                            Element['S'].Z: 6,  Element['Cl'].Z: 7, Element['Ar'].Z: 8, Element['K'].Z: 9,  Element['Ca'].Z: 10,
+                            Element['Sc'].Z: 11, Element['Ti'].Z: 12, Element['V'].Z: 13, Element['Cr'].Z: 14, Element['Mn'].Z: 15,
+                            Element['Fe'].Z: 16, Element['Co'].Z: 17, Element['Ni'].Z: 18, Element['Cu'].Z: 19, Element['Zn'].Z: 20,
+                            Element['Ga'].Z: 13, Element['Ge'].Z: 4,  Element['As'].Z: 15, Element['Se'].Z: 6,  Element['Br'].Z: 7,
+                            Element['Kr'].Z: 8,  Element['Rb'].Z: 9,  Element['Sr'].Z: 10, Element['Y'].Z: 11, Element['Zr'].Z: 12,
+                            Element['Nb'].Z: 13, Element['Mo'].Z: 14, Element['Tc'].Z: 15, Element['Ru'].Z: 14, Element['Rh'].Z: 15,
+                            Element['Pd'].Z: 16, Element['Ag'].Z: 17, Element['Cd'].Z: 12, Element['In'].Z: 13, Element['Sn'].Z: 14,
+                            Element['Sb'].Z: 15, Element['Te'].Z: 16, Element['I'].Z: 7, Element['Xe'].Z: 8, Element['Cs'].Z: 9,
+                            Element['Ba'].Z: 10, Element['La'].Z: 11, Element['Ce'].Z: 12, Element['Pr'].Z: 13, Element['Nd'].Z: 14,
+                            Element['Pm'].Z: 15, Element['Sm'].Z: 16, Element['Dy'].Z: 20, Element['Ho'].Z: 21, Element['Lu'].Z: 11,
+                            Element['Hf'].Z: 12, Element['Ta'].Z: 13, Element['W'].Z: 12,  Element['Re'].Z: 15, Element['Os'].Z: 14,
+                            Element['Ir'].Z: 15, Element['Pt'].Z: 16, Element['Au'].Z: 17, Element['Hg'].Z: 18, Element['Tl'].Z: 19,
+                            Element['Pb'].Z: 14, Element['Bi'].Z: 15
+                        }
+        
+        if self.nao_max == 14:
+            self.index_change = torch.LongTensor([0,1,2,5,3,4,8,6,7,11,13,9,12,10])       
+            self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e")
+            self.basis_def = {  1:[0,1,3,4,5], # H
+                                2:[0,1,3,4,5], # He
+                                3:[0,1,2,3,4,5,6,7,8], # Li
+                                4:[0,1,3,4,5,6,7,8], # Be
+                                5:[0,1,3,4,5,6,7,8,9,10,11,12,13], # B
+                                6:[0,1,3,4,5,6,7,8,9,10,11,12,13], # C
+                                7:[0,1,3,4,5,6,7,8,9,10,11,12,13], # N
+                                8:[0,1,3,4,5,6,7,8,9,10,11,12,13], # O
+                                9:[0,1,3,4,5,6,7,8,9,10,11,12,13], # F
+                                10:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Ne
+                                11:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Na
+                                12:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Mg
+                                13:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Al
+                                14:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Si
+                                15:[0,1,3,4,5,6,7,8,9,10,11,12,13], # p
+                                16:[0,1,3,4,5,6,7,8,9,10,11,12,13], # S
+                                17:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Cl
+                                18:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Ar
+                                19:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # K
+                                20:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Ca
+                                35:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Br  
+                                Element['V'].Z: [0,1,2,3,4,5,6,7,8,9,10,11,12,13], # V
+                                Element['Mn'].Z: [0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Mn
+                            }
+        
+        elif self.nao_max == 13:
+            self.basis_def = {  1:[0,1,2,3,4], # H
+                                5:[0,1,2,3,4,5,6,7,8,9,10,11,12], # B
+                                6:[0,1,2,3,4,5,6,7,8,9,10,11,12], # C
+                                7:[0,1,2,3,4,5,6,7,8,9,10,11,12], # N
+                                8:[0,1,2,3,4,5,6,7,8,9,10,11,12] # O
+                            }
+            self.index_change = torch.LongTensor([0,1,4,2,3,7,5,6,10,12,8,11,9])       
+            self.row = self.col = o3.Irreps("1x0e+1x0e+1x1o+1x1o+1x2e")
+        
+        elif self.nao_max == 19:
+            self.index_change = torch.LongTensor([0,1,2,5,3,4,8,6,7,11,13,9,12,10,16,18,14,17,15])       
+            self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e+1x2e")
+            self.basis_def = {  1:[0,1,3,4,5], # H
+                2:[0,1,3,4,5], # He
+                3:[0,1,2,3,4,5,6,7,8], # Li
+                4:[0,1,3,4,5,6,7,8], # Be
+                5:[0,1,3,4,5,6,7,8,9,10,11,12,13], # B
+                6:[0,1,3,4,5,6,7,8,9,10,11,12,13], # C
+                7:[0,1,3,4,5,6,7,8,9,10,11,12,13], # N
+                8:[0,1,3,4,5,6,7,8,9,10,11,12,13], # O
+                9:[0,1,3,4,5,6,7,8,9,10,11,12,13], # F
+                10:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Ne
+                11:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Na
+                12:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Mg
+                13:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Al
+                14:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Si
+                15:[0,1,3,4,5,6,7,8,9,10,11,12,13], # p
+                16:[0,1,3,4,5,6,7,8,9,10,11,12,13], # S
+                17:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Cl
+                18:[0,1,3,4,5,6,7,8,9,10,11,12,13], # Ar
+                19:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # K
+                20:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Ca
+                25:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Mn
+                42:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # Mo  
+                83:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # Bi  
+                34:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # Se 
+                24:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Cr 
+                53:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # I
+                28:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Ni
+                35:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # Br 
+                26:[0,1,2,3,4,5,6,7,8,9,10,11,12,13], # Fe
+                77:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # Ir
+                52:[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # Te
+                Element['V'].Z: [0,1,2,3,4,5,6,7,8,9,10,11,12,13], # V
+                Element['Sb'].Z: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18], # Sb
+            }
+        
+        elif self.nao_max == 26:
+            self.index_change = torch.LongTensor([0,1,2,5,3,4,8,6,7,11,13,9,12,10,16,18,14,17,15,22,23,21,24,20,25,19])       
+            self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e+1x2e+1x3o")
+            self.basis_def = (lambda s1=[0],s2=[1],s3=[2],p1=[3,4,5],p2=[6,7,8],d1=[9,10,11,12,13],d2=[14,15,16,17,18],f1=[19,20,21,22,23,24,25]: {
+                Element['H'].Z : s1+s2+p1,  # H6.0-s2p1
+                Element['He'].Z : s1+s2+p1,  # He8.0-s2p1
+                Element['Li'].Z : s1+s2+s3+p1+p2,  # Li8.0-s3p2
+                Element['Be'].Z : s1+s2+p1+p2,  # Be7.0-s2p2
+                Element['B'].Z : s1+s2+p1+p2+d1,  # B7.0-s2p2d1
+                Element['C'].Z : s1+s2+p1+p2+d1,  # C6.0-s2p2d1
+                Element['N'].Z : s1+s2+p1+p2+d1,  # N6.0-s2p2d1
+                Element['O'].Z : s1+s2+p1+p2+d1,  # O6.0-s2p2d1
+                Element['F'].Z : s1+s2+p1+p2+d1,  # F6.0-s2p2d1
+                Element['Ne'].Z: s1+s2+p1+p2+d1,  # Ne9.0-s2p2d1
+                Element['Na'].Z: s1+s2+s3+p1+p2+d1,  # Na9.0-s3p2d1
+                Element['Mg'].Z: s1+s2+s3+p1+p2+d1,  # Mg9.0-s3p2d1
+                Element['Al'].Z: s1+s2+p1+p2+d1,  # Al7.0-s2p2d1
+                Element['Si'].Z: s1+s2+p1+p2+d1,  # Si7.0-s2p2d1
+                Element['P'].Z: s1+s2+p1+p2+d1,  # P7.0-s2p2d1
+                Element['S'].Z: s1+s2+p1+p2+d1,  # S7.0-s2p2d1
+                Element['Cl'].Z: s1+s2+p1+p2+d1,  # Cl7.0-s2p2d1
+                Element['Ar'].Z: s1+s2+p1+p2+d1,  # Ar9.0-s2p2d1
+                Element['K'].Z: s1+s2+s3+p1+p2+d1,  # K10.0-s3p2d1
+                Element['Ca'].Z: s1+s2+s3+p1+p2+d1,  # Ca9.0-s3p2d1
+                Element['Sc'].Z: s1+s2+s3+p1+p2+d1,  # Sc9.0-s3p2d1
+                Element['Ti'].Z: s1+s2+s3+p1+p2+d1,  # Ti7.0-s3p2d1
+                Element['V'].Z: s1+s2+s3+p1+p2+d1,  # V6.0-s3p2d1
+                Element['Cr'].Z: s1+s2+s3+p1+p2+d1,  # Cr6.0-s3p2d1
+                Element['Mn'].Z: s1+s2+s3+p1+p2+d1,  # Mn6.0-s3p2d1
+                Element['Fe'].Z: s1+s2+s3+p1+p2+d1,  # Fe5.5H-s3p2d1
+                Element['Co'].Z: s1+s2+s3+p1+p2+d1,  # Co6.0H-s3p2d1
+                Element['Ni'].Z: s1+s2+s3+p1+p2+d1,  # Ni6.0H-s3p2d1
+                Element['Cu'].Z: s1+s2+s3+p1+p2+d1,  # Cu6.0H-s3p2d1
+                Element['Zn'].Z: s1+s2+s3+p1+p2+d1,  # Zn6.0H-s3p2d1
+                Element['Ga'].Z: s1+s2+s3+p1+p2+d1+d2,  # Ga7.0-s3p2d2
+                Element['Ge'].Z: s1+s2+s3+p1+p2+d1+d2,  # Ge7.0-s3p2d2
+                Element['As'].Z: s1+s2+s3+p1+p2+d1+d2,  # As7.0-s3p2d2
+                Element['Se'].Z: s1+s2+s3+p1+p2+d1+d2,  # Se7.0-s3p2d2
+                Element['Br'].Z: s1+s2+s3+p1+p2+d1+d2,  # Br7.0-s3p2d2
+                Element['Kr'].Z: s1+s2+s3+p1+p2+d1+d2,  # Kr10.0-s3p2d2
+                Element['Rb'].Z: s1+s2+s3+p1+p2+d1+d2,  # Rb11.0-s3p2d2
+                Element['Sr'].Z: s1+s2+s3+p1+p2+d1+d2,  # Sr10.0-s3p2d2
+                Element['Y'].Z: s1+s2+s3+p1+p2+d1+d2,  # Y10.0-s3p2d2
+                Element['Zr'].Z: s1+s2+s3+p1+p2+d1+d2,  # Zr7.0-s3p2d2
+                Element['Nb'].Z: s1+s2+s3+p1+p2+d1+d2,  # Nb7.0-s3p2d2
+                Element['Mo'].Z: s1+s2+s3+p1+p2+d1+d2,  # Mo7.0-s3p2d2
+                Element['Tc'].Z: s1+s2+s3+p1+p2+d1+d2,  # Tc7.0-s3p2d2
+                Element['Ru'].Z: s1+s2+s3+p1+p2+d1+d2,  # Ru7.0-s3p2d2
+                Element['Rh'].Z: s1+s2+s3+p1+p2+d1+d2,  # Rh7.0-s3p2d2
+                Element['Pd'].Z: s1+s2+s3+p1+p2+d1+d2,  # Pd7.0-s3p2d2
+                Element['Ag'].Z: s1+s2+s3+p1+p2+d1+d2,  # Ag7.0-s3p2d2
+                Element['Cd'].Z: s1+s2+s3+p1+p2+d1+d2,  # Cd7.0-s3p2d2
+                Element['In'].Z: s1+s2+s3+p1+p2+d1+d2,  # In7.0-s3p2d2
+                Element['Sn'].Z: s1+s2+s3+p1+p2+d1+d2,  # Sn7.0-s3p2d2
+                Element['Sb'].Z: s1+s2+s3+p1+p2+d1+d2,  # Sb7.0-s3p2d2
+                Element['Te'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Te7.0-s3p2d2f1
+                Element['I'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # I7.0-s3p2d2f1
+                Element['Xe'].Z: s1+s2+s3+p1+p2+d1+d2,  # Xe11.0-s3p2d2
+                Element['Cs'].Z: s1+s2+s3+p1+p2+d1+d2,  # Cs12.0-s3p2d2
+                Element['Ba'].Z: s1+s2+s3+p1+p2+d1+d2,  # Ba10.0-s3p2d2
+                Element['La'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # La8.0-s3p2d2f1
+                Element['Ce'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Ce8.0-s3p2d2f1
+                Element['Pr'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Pr8.0-s3p2d2f1
+                Element['Nd'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Nd8.0-s3p2d2f1
+                Element['Pm'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Pm8.0-s3p2d2f1
+                Element['Sm'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Sm8.0-s3p2d2f1
+                Element['Dy'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Dy8.0-s3p2d2f1
+                Element['Ho'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Ho8.0-s3p2d2f1
+                Element['Lu'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Lu8.0-s3p2d2f1
+                Element['Hf'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Hf9.0-s3p2d2f1
+                Element['Ta'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Ta7.0-s3p2d2f1
+                Element['W'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # W7.0-s3p2d2f1
+                Element['Re'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Re7.0-s3p2d2f1
+                Element['Os'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Os7.0-s3p2d2f1
+                Element['Ir'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Ir7.0-s3p2d2f1
+                Element['Pt'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Pt7.0-s3p2d2f1
+                Element['Au'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Au7.0-s3p2d2f1
+                Element['Hg'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Hg8.0-s3p2d2f1
+                Element['Tl'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Tl8.0-s3p2d2f1
+                Element['Pb'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Pb8.0-s3p2d2f1
+                Element['Bi'].Z: s1+s2+s3+p1+p2+d1+d2+f1,  # Bi8.0-s3p2d2f1 
+            })()
+        else:
+            raise NotImplementedError(f"NAO max '{self.nao_max}' not supported for 'openmx'.")
+
+    def _set_siesta_basis(self):
+        """
+        Sets basis information for 'siesta' Hamiltonian.
+        """
+        self.num_valence = {
+            1:1,2:2,
+            3:1,4:2,5:3,6:4,7:5,8:6,9:7,10:8,
+            11:1,12:2,13:3,14:4,15:5,16:6,17:7,18:8,
+            19:1,20:2,22:12
+        }
+        if self.nao_max == 13:
+            self.index_change = None       
+            self.row = self.col = o3.Irreps("1x0e+1x0e+1x1o+1x1o+1x2e")
+            self.minus_index = torch.LongTensor([2,4,5,7,9,11]) # this list should follow the order in siesta. See spher_harm.f
+            self.basis_def = (lambda s1=[0],s2=[1],p1=[2,3,4],p2=[5,6,7],d1=[8,9,10,11,12]: {
+                1 : s1+s2+p1, # H
+                2 : s1+s2+p1, # He
+                3 : s1+s2+p1, # Li
+                4 : s1+s2+p1, # Be
+                5 : s1+s2+p1+p2+d1, # B
+                6 : s1+s2+p1+p2+d1, # C
+                7 : s1+s2+p1+p2+d1, # N
+                8 : s1+s2+p1+p2+d1, # O
+                9 : s1+s2+p1+p2+d1, # F
+                10: s1+s2+p1+p2+d1, # Ne
+                11: s1+s2+p1, # Na
+                12: s1+s2+p1, # Mg
+                13: s1+s2+p1+p2+d1, # Al
+                14: s1+s2+p1+p2+d1, # Si
+                15: s1+s2+p1+p2+d1, # P
+                16: s1+s2+p1+p2+d1, # S
+                17: s1+s2+p1+p2+d1, # Cl
+                18: s1+s2+p1+p2+d1, # Ar
+                19: s1+s2+p1, # K
+                20: s1+s2+p1, # Cl
+            })()
+        elif self.nao_max == 19:
+            self.index_change = None
+            self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e+1x2e")
+            self.minus_index = torch.LongTensor([3,5,6,8,10,12,15,17]) # this list should follow the order in siesta. See spher_harm.f
+            self.basis_def = (lambda s1=[0],s2=[1],s3=[2],p1=[3,4,5],p2=[6,7,8],d1=[9,10,11,12,13],d2=[14,15,16,17,18]: {
+                1 : s1+s2+p1, # H
+                2 : s1+s2+p1, # He
+                3 : s1+s2+p1, # Li
+                4 : s1+s2+p1, # Be
+                5 : s1+s2+p1+p2+d1, # B
+                6 : s1+s2+p1+p2+d1, # C
+                7 : s1+s2+p1+p2+d1, # N
+                8 : s1+s2+p1+p2+d1, # O
+                9 : s1+s2+p1+p2+d1, # F
+                10: s1+s2+p1+p2+d1, # Ne
+                11: s1+s2+p1, # Na
+                12: s1+s2+p1, # Mg
+                13: s1+s2+p1+p2+d1, # Al
+                14: s1+s2+p1+p2+d1, # Si
+                15: s1+s2+p1+p2+d1, # P
+                16: s1+s2+p1+p2+d1, # S
+                17: s1+s2+p1+p2+d1, # Cl
+                18: s1+s2+p1+p2+d1, # Ar
+                19: s1+s2+p1, # K
+                20: s1+s2+p1, # Cl
+                22: s1+s2+s3+p1+p2+d1+d2, # Ti, created by Qin.
+            })()
+        else:
+            raise NotImplementedError(f"NAO max '{self.nao_max}' not supported for 'siesta'.")
+
+    def _set_abacus_basis(self):
+        """
+        Sets basis information for 'abacus' Hamiltonian.
+        """
+        self.num_valence = {1: 1,  2: 2,
+                        3: 3,  4: 4,
+                        5: 3,  6: 4,
+                        7: 5,  8: 6,
+                        9: 7,  10: 8,
+                        11: 9, 12: 10,
+                        13: 11, 14: 4,
+                        15: 5,  16: 6,
+                        17: 7,  18: 8,
+                        19: 9,  20: 10,
+                        21: 11, 22: 12,
+                        23: 13, 24: 14,
+                        25: 15, 26: 16,
+                        27: 17, 28: 18,
+                        29: 19, 30: 20,
+                        31: 13, 32: 14,
+                        33: 5,  34: 6,
+                        35: 7,  36: 8,
+                        37: 9,  38: 10,
+                        39: 11, 40: 12,
+                        41: 13, 42: 14,
+                        43: 15, 44: 16,
+                        45: 17, 46: 18,
+                        47: 19, 48: 20,
+                        49: 13, 50: 14,
+                        51: 15, 52: 16,
+                        53: 17, 54: 18,
+                        55: 9, 56: 10,
+                        57: 11, 72: 26,
+                        73: 27, 74: 28,
+                        75: 15, 76: 16,
+                        77: 17, 78: 18,
+                        79: 19, 80: 20,
+                        81: 13, 82: 14,
+                        83: 15}
+        
+        if self.nao_max == 13:
+            self.index_change = torch.LongTensor([0,1,3,4,2,6,7,5,10,11,9,12,8])
+            self.row = self.col = o3.Irreps("1x0e+1x0e+1x1o+1x1o+1x2e")
+            self.minus_index = torch.LongTensor([3,4,6,7,9,10])
+            self.basis_def = (lambda s1=[0],s2=[1],p1=[2,3,4],p2=[5,6,7],d1=[8,9,10,11,12]: {
+                1 : np.array(s1+s2+p1, dtype=int), # H
+                2 : np.array(s1+s2+p1, dtype=int), # He
+                5 : np.array(s1+s2+p1+p2+d1, dtype=int), # B
+                6 : np.array(s1+s2+p1+p2+d1, dtype=int), # C
+                7 : np.array(s1+s2+p1+p2+d1, dtype=int), # N
+                8 : np.array(s1+s2+p1+p2+d1, dtype=int), # O
+                9 : np.array(s1+s2+p1+p2+d1, dtype=int), # F
+                10: np.array(s1+s2+p1+p2+d1, dtype=int), # Ne
+                14: np.array(s1+s2+p1+p2+d1, dtype=int), # Si
+                15: np.array(s1+s2+p1+p2+d1, dtype=int), # P
+                16: np.array(s1+s2+p1+p2+d1, dtype=int), # S
+                17: np.array(s1+s2+p1+p2+d1, dtype=int), # Cl
+                18: np.array(s1+s2+p1+p2+d1, dtype=int), # Ar
+            })()           
+        
+        elif self.nao_max == 27:
+            self.index_change = torch.LongTensor([0,1,2,3,5,6,4,8,9,7,12,13,11,14,10,17,18,16,19,15,23,24,22,25,21,26,20])       
+            self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x0e+1x1o+1x1o+1x2e+1x2e+1x3o")
+            self.minus_index = torch.LongTensor([5,6,8,9,11,12,16,17,21,22,25,26]) # this list should follow the order in abacus.
+            self.basis_def = (lambda s1=[0],s2=[1],s3=[2],s4=[3],p1=[4,5,6],p2=[7,8,9],d1=[10,11,12,13,14],d2=[15,16,17,18,19],f1=[20,21,22,23,24,25,26]: {
+            1 : s1+s2+p1, # H
+            2 : s1+s2+p1, # He
+            3 : s1+s2+s3+s4+p1, # Li
+            4 : s1+s2+s3+s4+p1, # Bi
+            5 : s1+s2+p1+p2+d1, # B
+            6 : s1+s2+p1+p2+d1, # C
+            7 : s1+s2+p1+p2+d1, # N
+            8 : s1+s2+p1+p2+d1, # O
+            9 : s1+s2+p1+p2+d1, # F
+            10: s1+s2+p1+p2+d1, # Ne
+            11: s1+s2+s3+s4+p1+p2+d1, # Na
+            12: s1+s2+s3+s4+p1+p2+d1, # Mg
+            # 13: Al
+            14: s1+s2+p1+p2+d1, # Si
+            15: s1+s2+p1+p2+d1, # P
+            16: s1+s2+p1+p2+d1, # S
+            17: s1+s2+p1+p2+d1, # Cl
+            18: s1+s2+p1+p2+d1, # Ar
+            19: s1+s2+s3+s4+p1+p2+d1, # K
+            20: s1+s2+s3+s4+p1+p2+d1, # Ca
+            21: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Sc
+            22: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Ti
+            23: s1+s2+s3+s4+p1+p2+d1+d2+f1, # V
+            24: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Cr
+            25: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Mn
+            26: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Fe
+            27: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Co
+            28: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Ni
+            29: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Cu
+            30: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Zn
+            31: s1+s2+p1+p2+d1+d2+f1, # Ga
+            32: s1+s2+p1+p2+d1+d2+f1, # Ge
+            33: s1+s2+p1+p2+d1, # As
+            34: s1+s2+p1+p2+d1, # Se
+            35: s1+s2+p1+p2+d1, # Br
+            36: s1+s2+p1+p2+d1, # Kr
+            37: s1+s2+s3+s4+p1+p2+d1, # Rb
+            38: s1+s2+s3+s4+p1+p2+d1, # Sr
+            39: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Y
+            40: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Zr
+            41: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Nb
+            42: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Mo
+            43: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Tc
+            44: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Ru
+            45: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Rh
+            46: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Pd
+            47: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Ag
+            48: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Cd
+            49: s1+s2+p1+p2+d1+d2+f1, # In
+            50: s1+s2+p1+p2+d1+d2+f1, # Sn
+            51: s1+s2+p1+p2+d1+d2+f1, # Sb
+            52: s1+s2+p1+p2+d1+d2+f1, # Te
+            53: s1+s2+p1+p2+d1+d2+f1, # I
+            54: s1+s2+p1+p2+d1+d2+f1, # Xe
+            55: s1+s2+s3+s4+p1+p2+d1, # Cs
+            56: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Ba
+            #
+            79: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Au
+            80: s1+s2+s3+s4+p1+p2+d1+d2+f1, # Hg
+            81: s1+s2+p1+p2+d1+d2+f1, # Tl
+            82: s1+s2+p1+p2+d1+d2+f1, # Pb
+            83: s1+s2+p1+p2+d1+d2+f1, # Bi
+        })()
+        elif self.nao_max == 40:
+            self.index_change = torch.LongTensor([0,1,2,3,5,6,4,8,9,7,11,12,10,14,15,13,18,19,17,20,16,23,24,22,25,21,29,30,28,31,27,32,26,36,37,35,38,34,39,33])       
+            self.row = self.col = o3.Irreps("1x0e+1x0e+1x0e+1x0e+1x1o+1x1o+1x1o+1x1o+1x2e+1x2e+1x3o+1x3o")
+            self.minus_index = torch.LongTensor([5,6,8,9,11,12,14,15,17,18,22,23,27,28,31,32,34,35,38,39]) # this list should follow the order in abacus.
+            self.basis_def = (lambda s1=[0],
+                   s2=[1],
+                   s3=[2],
+                   s4=[3],
+                   p1=[4,5,6],
+                   p2=[7,8,9],
+                   p3=[10,11,12],
+                   p4=[13,14,15],
+                   d1=[16,17,18,19,20],
+                   d2=[21,22,23,24,25],
+                   f1=[26,27,28,29,30,31,32],
+                   f2=[33,34,35,36,37,38,39]: {
+                Element('Ag').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Al').Z: s1+s2+s3+s4+p1+p2+p3+p4+d1, 
+                Element('Ar').Z: s1+s2+p1+p2+d1, 
+                Element('As').Z: s1+s2+p1+p2+d1, 
+                Element('Au').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Ba').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Be').Z: s1+s2+s3+s4+p1, 
+                Element('B').Z: s1+s2+p1+p2+d1, 
+                Element('Bi').Z: s1+s2+p1+p2+d1+d2+f1, 
+                Element('Br').Z: s1+s2+p1+p2+d1, 
+                Element('Ca').Z: s1+s2+s3+s4+p1+p2+d1, 
+                Element('Cd').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('C').Z: s1+s2+p1+p2+d1, 
+                Element('Cl').Z: s1+s2+p1+p2+d1, 
+                Element('Co').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Cr').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Cs').Z: s1+s2+s3+s4+p1+p2+d1, 
+                Element('Cu').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Fe').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('F').Z: s1+s2+p1+p2+d1, 
+                Element('Ga').Z: s1+s2+p1+p2+d1+d2+f1, 
+                Element('Ge').Z: s1+s2+p1+p2+d1+d2+f1, 
+                Element('He').Z: s1+s2+p1, 
+                Element('Hf').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1+f2,  # Hf_gga_10au_100Ry_4s2p2d2f.orb
+                Element('H').Z: s1+s2+p1, 
+                Element('Hg').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('I').Z: s1+s2+p1+p2+d1+d2+f1, 
+                Element('In').Z: s1+s2+p1+p2+d1+d2+f1, 
+                Element('Ir').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('K').Z: s1+s2+s3+s4+p1+p2+d1, 
+                Element('Kr').Z: s1+s2+p1+p2+d1, 
+                Element('Li').Z: s1+s2+s3+s4+p1, 
+                Element('Mg').Z: s1+s2+s3+s4+p1+p2+d1, 
+                Element('Mn').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Mo').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Na').Z: s1+s2+s3+s4+p1+p2+d1, 
+                Element('Nb').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Ne').Z: s1+s2+p1+p2+d1, 
+                Element('N').Z: s1+s2+p1+p2+d1, 
+                Element('Ni').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('O').Z: s1+s2+p1+p2+d1, 
+                Element('Os').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Pb').Z: s1+s2+p1+p2+d1+d2+f1, 
+                Element('Pd').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('P').Z: s1+s2+p1+p2+d1, 
+                Element('Pt').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Rb').Z: s1+s2+s3+s4+p1+p2+d1, 
+                Element('Re').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Rh').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Ru').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Sb').Z: s1+s2+p1+p2+d1+d2+f1, 
+                Element('Sc').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Se').Z: s1+s2+p1+p2+d1, 
+                Element('S').Z: s1+s2+p1+p2+d1, 
+                Element('Si').Z: s1+s2+p1+p2+d1, 
+                Element('Sn').Z: s1+s2+p1+p2+d1+d2+f1, 
+                Element('Sr').Z: s1+s2+s3+s4+p1+p2+d1, 
+                Element('Ta').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1+f2,  # Ta_gga_10au_100Ry_4s2p2d2f.orb
+                Element('Tc').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Te').Z: s1+s2+p1+p2+d1+d2+f1, 
+                Element('Ti').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Tl').Z: s1+s2+p1+p2+d1+d2+f1, 
+                Element('V').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('W').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1+f2,  # W_gga_10au_100Ry_4s2p2d2f.orb
+                Element('Xe').Z: s1+s2+p1+p2+d1+d2+f1, 
+                Element('Y').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Zn').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1, 
+                Element('Zr').Z: s1+s2+s3+s4+p1+p2+d1+d2+f1,
+                })()
+        else:
+            raise NotImplementedError(f"NAO max '{self.nao_max}' not supported for 'abacus'.")
+
+    def _set_band_num_control(self, band_num_control):
+        # Band number control
+        if band_num_control is not None and not self.export_reciprocal_values:
+            if isinstance(band_num_control, dict):
+                # Convert atomic numbers to integers for consistency
+                self.band_num_control = {int(k): v for k, v in band_num_control.items()}
+            elif isinstance(band_num_control, int):
+                self.band_num_control = band_num_control
+            else:
+                self.band_num_control = None
+        else:
+            self.band_num_control = None
+
+    def _create_ham_layer(self, irreps_in, irreps_out):
+        """
+        Create and return a HamLayer with the specified parameters.
+        
+        :param irreps_in: Input irreducible representations.
+        :param irreps_out: Output irreducible representations.
+        :return: An instance of HamLayer.
+        """
+        return HamLayer(
+            irreps_in=irreps_in,
+            feature_irreps_hidden=irreps_in,
+            irreps_out=irreps_out,
+            nonlinearity_type=self.nonlinearity_type,
+            resnet=True
+        )
 
     def matrix_merge(self, sph_split):   
         """
@@ -1891,45 +1919,68 @@ class HamGNNPlusPlusOut(nn.Module):
 
         return edge_matcher_src, edge_matcher_tar
 
+    def get_basis_definition(self, z):
+        """Create and return the basis definition tensor for mask calculations."""
+        basis_definition = torch.zeros((99, self.nao_max)).type_as(z)
+        for k in self.basis_def:
+            basis_definition[k][self.basis_def[k]] = 1
+        return basis_definition
+
     def mask_tensor_builder(self, data):
+        """Build the tensor mask and return the concatenated mask tensor."""
         j, i = data.edge_index
         z = data.z
-
-        # parse the Atomic Orbital Basis Sets
-        basis_definition = torch.zeros((99, self.nao_max)).type_as(data.z)
-        # key is the atomic number, value is the index of the occupied orbits.
-        for k in self.basis_def.keys():
-            basis_definition[k][self.basis_def[k]] = 1
-
-        # shape:(natoms/nedges, nao_max, nao_max)
-        mask_on = torch.einsum('ni, nj -> nij', basis_definition[z], basis_definition[z]).reshape(-1, self.nao_max**2)
-        mask_off = torch.einsum('ni, nj -> nij', basis_definition[z[j]], basis_definition[z[i]]).reshape(-1, self.nao_max**2)
-        mask_all = torch.cat((mask_on, mask_off), dim=0)
-
+        basis_definition = self.get_basis_definition(z)
+        # Calculate mask_on and mask_off using einsum
+        mask_on = torch.einsum('ni, nj -> nij', basis_definition[z], basis_definition[z]).bool()
+        mask_off = torch.einsum('ni, nj -> nij', basis_definition[z[j]], basis_definition[z[i]]).bool()
+        # Concatenate and reshape the masks
+        mask_all = torch.cat(
+            (mask_on.reshape(-1, self.nao_max**2), 
+             mask_off.reshape(-1, self.nao_max**2)), 
+            dim=0
+        )
         return mask_all
-    
-    def mask_tensor_builder_soc(self, data):
+
+    def mask_tensor_builder_col(self, data):
+        """Build the tensor mask and return the concatenated mask tensor."""
         j, i = data.edge_index
         z = data.z
-        
-        # parse the Atomic Orbital Basis Sets
-        basis_definition = torch.zeros((99, self.nao_max)).type_as(data.z)
-        # key is the atomic number, value is the index of the occupied orbits.
-        for k in self.basis_def.keys():
-            basis_definition[k][self.basis_def[k]] = 1
-           
-        # shape:(natoms/nedges, nao_max, nao_max)
+        basis_definition = self.get_basis_definition(z)
+        # Calculate mask_on and mask_off using einsum
+        mask_on = torch.einsum('ni, nj -> nij', basis_definition[z], basis_definition[z]).bool()
+        mask_on = torch.stack([mask_on, mask_on], dim=1) # (Nbatchs, 2, nao_max, nao_max)
+        mask_off = torch.einsum('ni, nj -> nij', basis_definition[z[j]], basis_definition[z[i]]).bool()
+        mask_off = torch.stack([mask_off, mask_off], dim=1) # (Nbatchs, 2, nao_max, nao_max)
+        # Concatenate and reshape the masks
+        mask_all = torch.cat(
+            (mask_on.reshape(-1, 2, self.nao_max**2), 
+             mask_off.reshape(-1, 2, self.nao_max**2)), 
+            dim=0
+        )
+        return mask_all
+
+    def mask_tensor_builder_soc(self, data):
+        """Build the tensor mask including spin-orbit coupling."""
+        j, i = data.edge_index
+        z = data.z
+        basis_definition = self.get_basis_definition(z)
+
+        # Calculate the base masks
         mask_on = torch.einsum('ni, nj -> nij', basis_definition[z], basis_definition[z])
         mask_off = torch.einsum('ni, nj -> nij', basis_definition[z[j]], basis_definition[z[i]])
-        
-        I2 = torch.ones((2,2)).type_as(data.z)
-        mask_on = oe.contract('nij, kl -> nkilj', mask_on, I2).reshape(-1, (2*self.nao_max)**2)
-        mask_off = oe.contract('nij, kl -> nkilj', mask_off, I2).reshape(-1, (2*self.nao_max)**2)
-        
-        mask_real = self.cat_onsite_and_offsite(data, mask_on, mask_off)
-        mask_imag = self.cat_onsite_and_offsite(data, mask_on, mask_off)
-        mask_all = torch.cat((mask_real, mask_imag), dim=0)
-        return mask_real, mask_imag, mask_all
+
+        # Expand tensors to include spin components
+        mask_on_expanded = blockwise_2x2_concat(mask_on, mask_on, mask_on, mask_on).reshape(-1, (2*self.nao_max)**2).bool()
+        mask_off_expanded = blockwise_2x2_concat(mask_off, mask_off, mask_off, mask_off).reshape(-1, (2*self.nao_max)**2).bool()
+
+        # Process real and imaginary masks
+        mask_real_imag = self.cat_onsite_and_offsite(data, mask_on_expanded, mask_off_expanded)
+
+        # Concatenate all masks
+        mask_all = torch.cat((mask_real_imag, mask_real_imag), dim=0)
+
+        return mask_real_imag, mask_all
 
     def forward(self, data, graph_representation: dict = None):
     
@@ -1991,26 +2042,53 @@ class HamGNNPlusPlusOut(nn.Module):
             if self.soc_switch:
                 # build Hsoc
                 if self.soc_basis == 'so3':
-                    node_sph = self.onsitenet_h(node_attr)     
-                    node_sph = torch.split(node_sph, self.ham_irreps_dim.tolist(), dim=-1)
-                    Hon = self.matrix_merge(node_sph) # shape (Nnodes, nao_max**2)
-
-                    Hon = self.change_index(Hon)
-
-                    # Impose Hermitian symmetry for Hon
-                    Hon = self.symmetrize_Hon(Hon)            
-
-                    # Calculate the off-site Hamiltonian
-                    # Calculate the contribution of the edges       
-                    edge_sph = self.offsitenet_h(edge_attr)
-                    edge_sph = torch.split(edge_sph, self.ham_irreps_dim.tolist(), dim=-1)        
-                    Hoff = self.matrix_merge(edge_sph)
-
-                    Hoff = self.change_index(Hoff)        
-                    # Impose Hermitian symmetry for Hoff
-                    Hoff = self.symmetrize_Hoff(Hoff, inv_edge_idx)
-
-                    Hon, Hoff = self.mask_Ham(Hon, Hoff, data)
+                    if self.add_H_nonsoc:
+                        Hon, Hoff = data.Hon_nonsoc, data.Hoff_nonsoc
+                        
+                        # Load the on-site and off-site Hamiltonian matrices
+                        Hon0, Hoff0 = data['Hon0'], data['Hoff0']
+                    
+                        # Reshape `Hon0` and `Hoff0` into 3D tensors for block-wise manipulation
+                        Hon0_resized = Hon0.reshape(-1, 2 * self.nao_max, 2 * self.nao_max)
+                        Hoff0_resized = Hoff0.reshape(-1, 2 * self.nao_max, 2 * self.nao_max)
+                    
+                        # Create zero blocks for the submatrices
+                        zero_on = torch.zeros_like(data['Son']).reshape(-1, self.nao_max, self.nao_max)
+                        zero_off = torch.zeros_like(data['Soff']).reshape(-1, self.nao_max, self.nao_max)
+                    
+                        # Zero out the upper-left and bottom-right blocks of `Hon0`
+                        Hon0_resized[:, :self.nao_max, :self.nao_max] = zero_on
+                        Hon0_resized[:, self.nao_max:, self.nao_max:] = zero_on
+                    
+                        # Zero out the upper-left and bottom-right blocks of `Hoff0`
+                        Hoff0_resized[:, :self.nao_max, :self.nao_max] = zero_off
+                        Hoff0_resized[:, self.nao_max:, self.nao_max:] = zero_off
+                    
+                        # Flatten the processed matrices back to their original shape
+                        data['Hon0'] = Hon0_resized.reshape(-1, (2 * self.nao_max) ** 2)
+                        data['Hoff0'] = Hoff0_resized.reshape(-1, (2 * self.nao_max) ** 2)
+                        
+                    else:
+                        node_sph = self.onsitenet_h(node_attr)     
+                        node_sph = torch.split(node_sph, self.ham_irreps_dim.tolist(), dim=-1)
+                        Hon = self.matrix_merge(node_sph) # shape (Nnodes, nao_max**2)
+    
+                        Hon = self.change_index(Hon)
+    
+                        # Impose Hermitian symmetry for Hon
+                        Hon = self.symmetrize_Hon(Hon)            
+    
+                        # Calculate the off-site Hamiltonian
+                        # Calculate the contribution of the edges       
+                        edge_sph = self.offsitenet_h(edge_attr)
+                        edge_sph = torch.split(edge_sph, self.ham_irreps_dim.tolist(), dim=-1)        
+                        Hoff = self.matrix_merge(edge_sph)
+    
+                        Hoff = self.change_index(Hoff)        
+                        # Impose Hermitian symmetry for Hoff
+                        Hoff = self.symmetrize_Hoff(Hoff, inv_edge_idx)
+    
+                        Hon, Hoff = self.mask_Ham(Hon, Hoff, data)
 
                     # build Hsoc
                     ksi_on = self.onsitenet_ksi(node_attr)
@@ -2336,8 +2414,6 @@ class HamGNNPlusPlusOut(nn.Module):
                 Hsoc = torch.cat((Hsoc_real, Hsoc_imag), dim=0)
                 data.hamiltonian = torch.cat((data.hamiltonian_real, data.hamiltonian_imag), dim=0)
 
-                # mask_real, mask_imag, mask_all = self.mask_tensor_builder_soc(data)
-
                 if self.calculate_band_energy:
                     k_vecs = []
                     for idx in range(data.batch[-1]+1):
@@ -2516,15 +2592,60 @@ class HamGNNPlusPlusOut(nn.Module):
         if self.ham_type in ['openmx','pasp', 'siesta', 'abacus']:                
             if self.soc_switch or self.spin_constrained:
                 if not self.collinear_spin:
+                    if self.zero_point_shift:
+                        # calculate miu
+                        S = data.overlap.reshape(-1, self.nao_max, self.nao_max)                        
+                        S_soc = blockwise_2x2_concat(S, torch.zeros_like(S), torch.zeros_like(S), S).reshape(-1, (2*self.nao_max)**2)
+                        sum_S_soc = 2*torch.sum(S[S > 1e-6])                        
+                        miu_real = torch.sum(extract_elements_above_threshold(S_soc, Hsoc_real-data.hamiltonian_real, 1e-6))/sum_S_soc
+                        miu_imag = torch.sum(extract_elements_above_threshold(S_soc, Hsoc_imag-data.hamiltonian_imag, 1e-6))/sum_S_soc
+                        # shift Hamiltonian and band_energy
+                        Hsoc_real = Hsoc_real-miu_real*S_soc
+                        Hsoc_imag = Hsoc_imag-miu_imag*S_soc
+                        Hsoc = torch.cat((Hsoc_real, Hsoc_imag), dim=0)
+                        band_energy = band_energy-torch.mean(band_energy-data.band_energy) if band_energy is not None else band_energy
+                    
                     result = {'hamiltonian': Hsoc, 'hamiltonian_real':Hsoc_real, 'hamiltonian_imag':Hsoc_imag, 
                               'band_energy': band_energy, 'wavefunction': wavefunction}
-                else:
-                    result = {'hamiltonian': Hcol, 'band_energy': band_energy, 'wavefunction': wavefunction}                
+                    
+                    if self.get_nonzero_mask_tensor:
+                        mask_real_imag, mask_all = self.mask_tensor_builder_soc(data)
+                        result['mask_real_imag'] = mask_real_imag
+                    
+                else: # collinear_spin
+                    if self.zero_point_shift:
+                        # calculate miu
+                        S = data.overlap
+                        S_col = torch.stack([S, S], dim=1) # (Nbatchs, 2, nao_max**2)
+                        sum_S_col = 2*torch.sum(S[S > 1e-6]) 
+                        miu = torch.sum(extract_elements_above_threshold(S_col, Hcol-data.hamiltonian, 1e-6))/sum_S_col
+                        # shift Hamiltonian and band_energy
+                        Hcol = Hcol - miu*S_col
+                        band_energy = band_energy-torch.mean(band_energy-data.band_energy) if band_energy is not None else band_energy
+                    result = {'hamiltonian': Hcol, 'band_energy': band_energy, 'wavefunction': wavefunction}
+                    
+                    if self.get_nonzero_mask_tensor:
+                        mask_all = self.mask_tensor_builder_col(data)
+                        result['mask'] = mask_all             
             else:
                 H = self.cat_onsite_and_offsite(data, Hon, Hoff)
+                if self.zero_point_shift:
+                    # calculate miu
+                    S = data.overlap  
+                    sum_S = torch.sum(S[S > 1e-6]) 
+                    miu = torch.sum(extract_elements_above_threshold(S, H-data.hamiltonian, 1e-6))/sum_S
+                    # shift Hamiltonian and band_energy
+                    H = H-miu*data.overlap
+                    band_energy = band_energy-torch.mean(band_energy-data.band_energy) if band_energy is not None else band_energy                
+                
                 result = {'hamiltonian': H, 'band_energy': band_energy, 'wavefunction': wavefunction, 'band_gap':gap, 'H_sym': H_sym}
                 if self.export_reciprocal_values:
                     result.update({'HK':HK, 'SK':SK, 'dSK': dSK})
+                
+                if self.get_nonzero_mask_tensor:
+                    mask_all = self.mask_tensor_builder(data)
+                    result['mask'] = mask_all
+                
         else:
             raise NotImplementedError
         

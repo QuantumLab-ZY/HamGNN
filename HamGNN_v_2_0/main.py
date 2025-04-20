@@ -60,6 +60,9 @@ def build_model(config):
     print("Building model")
     config.representation_nets.HamGNN_pre.radius_type = config.output_nets.HamGNN_out.ham_type.lower()
     if config.setup.GNN_Net.lower() in ['hamgnnconv', 'hamgnnpre', 'hamgnn_pre']:
+        # check parameters
+        if 'use_corr_prod' not in config.representation_nets.HamGNN_pre:
+            config.representation_nets.HamGNN_pre.use_corr_prod = True
         Gnn_net = HamGNNConvE3(config.representation_nets)
     elif config.setup.GNN_Net.lower() == 'hamgnntransformer':
         Gnn_net = HamGNNTransformer(config.representation_nets)
@@ -178,10 +181,19 @@ def build_model(config):
     # Hamiltonian
     elif config.setup.property.lower() == 'hamiltonian':
         output_params = config.output_nets.HamGNN_out
+        # check parameters
+        if 'add_H_nonsoc' not in output_params:
+            output_params.add_H_nonsoc = False
+        if 'get_nonzero_mask_tensor' not in output_params:
+            output_params.get_nonzero_mask_tensor = False
+        if 'zero_point_shift' not in output_params:
+            output_params.zero_point_shift = False
+        
         output_module = HamGNNPlusPlusOut(irreps_in_node = Gnn_net.irreps_node_features, irreps_in_edge = Gnn_net.irreps_node_features, nao_max= output_params.nao_max, ham_type= output_params.ham_type,
                                          ham_only= output_params.ham_only, symmetrize=output_params.symmetrize,calculate_band_energy=output_params.calculate_band_energy,num_k=output_params.num_k,k_path=output_params.k_path,
                                          band_num_control=output_params.band_num_control, soc_switch=output_params.soc_switch, nonlinearity_type = output_params.nonlinearity_type, add_H0=output_params.add_H0, 
-                                         spin_constrained=output_params.spin_constrained, collinear_spin=output_params.collinear_spin, minMagneticMoment=output_params.minMagneticMoment)
+                                         spin_constrained=output_params.spin_constrained, collinear_spin=output_params.collinear_spin, minMagneticMoment=output_params.minMagneticMoment, add_H_nonsoc=output_params.add_H_nonsoc,
+                                         get_nonzero_mask_tensor=output_params.get_nonzero_mask_tensor, zero_point_shift=output_params.zero_point_shift)
 
     else:
         print('Evaluation of this property is not supported!')
