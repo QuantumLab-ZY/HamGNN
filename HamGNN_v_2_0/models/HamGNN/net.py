@@ -4,7 +4,7 @@ version:
 Author: Yang Zhong
 Date: 2024-08-24 16:14:48
 LastEditors: Yang Zhong
-LastEditTime: 2025-04-20 18:00:19
+LastEditTime: 2025-04-20 22:12:40
 '''
 import torch
 from torch import nn
@@ -427,6 +427,7 @@ class HamGNNPlusPlusOut(nn.Module):
             if self.ham_type != 'openmx':
                 self.soc_basis == 'su2'
             
+            # Only for test purpose, be careful!
             if self.soc_basis == 'su2':
                 self.onsitenet_h = self._create_ham_layer(irreps_in=irreps_in_node, irreps_out=2*self.ham_irreps_su2)
                 self.offsitenet_h = self._create_ham_layer(irreps_in=irreps_in_edge, irreps_out=2*self.ham_irreps_su2)

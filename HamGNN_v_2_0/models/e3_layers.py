@@ -1,5 +1,5 @@
 
-# The following modified codes are borrowed from https://github.com/Xiaoxun-Gong/DeepH-E3 
+# The following modified codes are borrowed from https://github.com/Xiaoxun-Gong/DeepH-E3 for Test purpose
 """
 MIT License
 
