@@ -52,17 +52,16 @@ ORB_dict = {
     'Cs':'Cs_gga_10au_100Ry_4s2p1d.orb',    'Mn':'Mn_gga_8au_100Ry_4s2p2d1f.orb',    'Sb':'Sb_gga_7au_100Ry_2s2p2d1f.orb',  'Zr':'Zr_gga_8au_100Ry_4s2p2d1f.orb'
 }
 
-@njit
-def check_bound(poses:np.ndarray, cell:np.ndarray):
+def check_bound(poses:np.ndarray, cell:np.ndarray, bound:np.ndarray=np.zeros(3)):
     invcell = np.linalg.inv(cell)
     direct = np.zeros_like(poses)
     for i, pos in enumerate(poses):
-        dir = pos @ invcell.T
+        dir = pos @ invcell
         direct[i] = dir
-    showmessage = not(np.all(direct < 1) and np.all(direct >= 0))
-    direct = direct % 1
+    showmessage = np.all(direct < 1) and np.all(direct >= 0)
+    direct = direct + bound
     for i, dir in enumerate(direct):
-        pos = dir @ cell.T
+        pos = dir @ cell
         poses[i] = pos
     return poses, showmessage
 
