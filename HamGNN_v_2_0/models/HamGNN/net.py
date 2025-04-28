@@ -4,7 +4,7 @@ version:
 Author: Yang Zhong
 Date: 2024-08-24 16:14:48
 LastEditors: Yang Zhong
-LastEditTime: 2025-04-20 22:12:40
+LastEditTime: 2025-04-28 19:55:31
 '''
 import torch
 from torch import nn
@@ -2599,10 +2599,8 @@ class HamGNNPlusPlusOut(nn.Module):
                         S_soc = blockwise_2x2_concat(S, torch.zeros_like(S), torch.zeros_like(S), S).reshape(-1, (2*self.nao_max)**2)
                         sum_S_soc = 2*torch.sum(S[S > 1e-6])                        
                         miu_real = torch.sum(extract_elements_above_threshold(S_soc, Hsoc_real-data.hamiltonian_real, 1e-6))/sum_S_soc
-                        miu_imag = torch.sum(extract_elements_above_threshold(S_soc, Hsoc_imag-data.hamiltonian_imag, 1e-6))/sum_S_soc
                         # shift Hamiltonian and band_energy
                         Hsoc_real = Hsoc_real-miu_real*S_soc
-                        Hsoc_imag = Hsoc_imag-miu_imag*S_soc
                         Hsoc = torch.cat((Hsoc_real, Hsoc_imag), dim=0)
                         band_energy = band_energy-torch.mean(band_energy-data.band_energy) if band_energy is not None else band_energy
                     
