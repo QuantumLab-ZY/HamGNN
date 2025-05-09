@@ -372,9 +372,12 @@ def main():
                                 Son = torch.FloatTensor(S[:pos.shape[0],:]),
                                 Soff = torch.FloatTensor(S[pos.shape[0]:,:]),
                                 doping_charge = torch.FloatTensor([doping_charge]))
-    
-    graph_data_path = os.path.join(graph_data_path, 'graph_data.npz')
-    np.savez(graph_data_path, graph=graphs)
+    if len(graphs) == 0:
+        print('No valid data found! Please check the input paths or if the DFT calculations are converged.')
+    else:
+        print('The graph data is saved in %s' % graph_data_path)
+        graph_data_path = os.path.join(graph_data_path, 'graph_data.npz')
+        np.savez(graph_data_path, graph=graphs)
 
 if __name__ == '__main__':
     main()
