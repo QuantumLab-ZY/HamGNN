@@ -335,13 +335,15 @@ The papers related to HamGNN:
 
 [[2] Universal Machine Learning Kohn-Sham Hamiltonian for Materials](https://cpl.iphy.ac.cn/article/10.1088/0256-307X/41/7/077103)
 
-[[3] Accelerating the electronic-structure calculation of magnetic systems by equivariant neural networks](https://arxiv.org/abs/2306.01558)
+[[3] A Universal Spin-Orbit-Coupled Hamiltonian Model for Accelerated Quantum Material Discovery](https://arxiv.org/abs/2504.19586)
 
-[[4] Topological interfacial states in ferroelectric domain walls of two-dimensional bismuth](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.111.075407)
+[[4] Accelerating the electronic-structure calculation of magnetic systems by equivariant neural networks](https://arxiv.org/abs/2306.01558)
 
-[[5] Transferable Machine Learning Approach for Predicting Electronic Structures of Charged Defects](https://pubs.aip.org/aip/apl/article-abstract/126/4/044103/3332348/Transferable-machine-learning-approach-for?redirectedFrom=fulltext)
+[[5] Topological interfacial states in ferroelectric domain walls of two-dimensional bismuth](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.111.075407)
 
-[[6] Advancing nonadiabatic molecular dynamics simulations in solids with E(3) equivariant deep neural hamiltonians](https://www.nature.com/articles/s41467-025-57328-1)
+[[6] Transferable Machine Learning Approach for Predicting Electronic Structures of Charged Defects](https://pubs.aip.org/aip/apl/article-abstract/126/4/044103/3332348/Transferable-machine-learning-approach-for?redirectedFrom=fulltext)
+
+[[7] Advancing nonadiabatic molecular dynamics simulations in solids with E(3) equivariant deep neural hamiltonians](https://www.nature.com/articles/s41467-025-57328-1)
 
 ## Code contributors:
 + Yang Zhong (Fudan University)
