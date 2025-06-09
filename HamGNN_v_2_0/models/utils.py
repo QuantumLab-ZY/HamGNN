@@ -443,3 +443,38 @@ def extract_elements_above_threshold(
     extracted_values = source_tensor[threshold_mask]
     
     return extracted_values
+
+def upgrade_tensor_precision(tensor_dict):
+    """
+    Upgrades the precision of specific tensor types in the provided dictionary.
+    
+    This function iterates through the given dictionary and converts:
+    - torch.float32 (float) tensors to torch.float64 (double)
+    - torch.complex64 tensors to torch.complex128
+    All other tensor types remain unchanged. The original device of each tensor
+    is preserved during conversion.
+    
+    Args:
+        tensor_dict (dict): Dictionary containing torch tensors with string keys
+                           and torch tensor values.
+    
+    Returns:
+        None: The function modifies the dictionary in-place.
+    
+    Notes:
+        For float32 tensors, either `.to(dtype=torch.float64)` or `.double()`
+        can be used for conversion. This function uses the `.to()` method for
+        consistency with complex tensor conversion.
+    
+    Example:
+        >>> data = {'float_tensor': torch.tensor([1.0, 2.0], dtype=torch.float32)}
+        >>> upgrade_tensor_precision(data)
+        >>> print(data['float_tensor'].dtype)
+        torch.float64
+    """
+    for key, value in tensor_dict.items():
+        if isinstance(value, torch.Tensor):
+            if value.dtype == torch.float32:
+                tensor_dict[key] = value.to(dtype=torch.float64)
+            elif value.dtype == torch.complex64:
+                tensor_dict[key] = value.to(dtype=torch.complex128)
