@@ -208,8 +208,15 @@ def train_and_eval(config):
     data = prepare_data(config)
 
     graph_representation, output_module, post_utility = build_model(config)
-    graph_representation.to(torch.float32)
-    output_module.to(torch.float32)
+
+    if config.setup.precision == 32:
+        dtype = torch.float32
+    else:
+        dtype = torch.float64
+    torch.set_default_dtype(dtype)
+    
+    graph_representation.to(dtype)
+    output_module.to(dtype)
 
     # define metrics
     losses = config.losses_metrics.losses

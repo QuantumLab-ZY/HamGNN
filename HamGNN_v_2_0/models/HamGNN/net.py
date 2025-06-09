@@ -4,7 +4,7 @@ version:
 Author: Yang Zhong
 Date: 2024-08-24 16:14:48
 LastEditors: Yang Zhong
-LastEditTime: 2025-04-28 19:55:31
+LastEditTime: 2025-06-09 14:13:10
 '''
 import torch
 from torch import nn
@@ -45,7 +45,7 @@ from .kpoint_gen import kpoints_generator
 from pymatgen.core.structure import Structure
 from pymatgen.symmetry.kpath import KPathSeek
 from e3nn.math import soft_unit_step
-from ..utils import blockwise_2x2_concat, extract_elements_above_threshold
+from ..utils import blockwise_2x2_concat, extract_elements_above_threshold, upgrade_tensor_precision
 
 au2ang = 0.5291772083
 
@@ -158,6 +158,9 @@ class HamGNNConvE3(BaseModel):
             self.pair_interactions.append(pair_interaction)
     
     def forward(self, data):
+        if torch.get_default_dtype() == torch.float64:
+            upgrade_tensor_precision(data)
+
         if self.build_internal_graph:
             graph = self.generate_graph(data) 
         else:
