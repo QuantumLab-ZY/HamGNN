@@ -94,7 +94,7 @@ profiler_params:
 representation_nets:
   # Network parameters usually do not need to be changed.
   HamGNN_pre:
-    cutoff: 20.0
+    cutoff: 26.0
     resnet: True
     cutoff_func: cos
     edge_sh_normalization: component
