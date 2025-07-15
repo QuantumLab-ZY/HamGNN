@@ -358,9 +358,30 @@ class kpoints_generator:
         # Find indices of nodes in interpolated list
         node_index=[0]
         for n in range(1,n_nodes-1):
-            frac=k_node[n]/k_node[-1]
-            node_index.append(int(round(frac*(nk-1))))
-        node_index.append(nk-1)
+            frac = k_node[n] / k_node[-1]
+            new_index = int(round(frac * (nk - 1)))
+            # Ensure the new index is at least 1 greater than the previous one to prevent assigning the same index
+            if new_index <= node_index[-1]:
+                new_index = node_index[-1] + 1
+            node_index.append(new_index) 
+        # Ensure the last index is nk-1 and greater than the previous one
+        if n_nodes > 1:
+            if (nk - 1) <= node_index[-1]:
+                node_index.append(node_index[-1] + 1)
+            else:
+                node_index.append(nk-1)
+        # If too many path points cause indices to exceed the range, perform clipping
+        if node_index[-1] >= nk:
+            print("Warning: Too many k-path nodes for the given nk. Some segments might be very short.")
+            # Correct indices exceeding the range to nk-1
+            node_index = [min(i, nk - 1) for i in node_index]
+            # Ensure strictly increasing again by removing duplicates
+            final_indices = []
+            for i in node_index:
+                if not final_indices or i > final_indices[-1]:
+                    final_indices.append(i)
+            node_index = final_indices
+
     
         # initialize two arrays temporarily with zeros
         #   array giving accumulated k-distance to each k-point
