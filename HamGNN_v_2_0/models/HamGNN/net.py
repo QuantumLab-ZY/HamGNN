@@ -1445,7 +1445,7 @@ class HamGNNPlusPlusOut(nn.Module):
             wavefunction = torch.cat(wavefunction, dim=0) # shape:[Nbatch*num_k*norbs*norbs]
             H_sym = torch.cat(H_sym, dim=0) # shape:(Nbatch*num_k*norbs*norbs)
             return band_energy, wavefunction, gap, H_sym   
-    
+
     def cal_band_energy(self, Hon, Hoff, data, export_reciprocal_values:bool=False):
         """
         Currently this function can only be used to calculate the energy band of the openmx Hamiltonian.
@@ -1521,19 +1521,35 @@ class HamGNNPlusPlusOut(nn.Module):
             if export_reciprocal_values:
                 dSK[:,na,na,:,:,:] +=  dSon_split[idx].reshape(-1, self.nao_max, self.nao_max, 3)[None,na,:,:,:].type_as(dSK)
 
+            # Calculate the index of all edges
+            edge_indices = torch.arange(edge_num[idx], device=j.device)
+            j_indices = j[edge_num_shift[idx] + edge_indices] - node_counts_shift[idx]
+            i_indices = i[edge_num_shift[idx] + edge_indices] - node_counts_shift[idx]
+
+            # Reshape the coefficients and matrices to facilitate vectorization operations
+            Hoff_reshaped = Hoff_split[idx].reshape(edge_num[idx], self.nao_max, self.nao_max)
+            Soff_reshaped = Soff_split[idx].reshape(edge_num[idx], self.nao_max, self.nao_max)
             
-            for iedge in range(edge_num[idx]):
-                # shape (num_k, nao_max, nao_max) += (num_k, 1, 1)*(1, nao_max, nao_max)
-                j_idx = j[edge_num_shift[idx]+iedge] - node_counts_shift[idx]
-                i_idx = i[edge_num_shift[idx]+iedge] - node_counts_shift[idx]
-                HK[:,j_idx,i_idx,:,:] += coe[iedge,:,None,None] * Hoff_split[idx].reshape(-1, self.nao_max, self.nao_max)[None,iedge,:,:]
-                SK[:,j_idx,i_idx,:,:] += coe[iedge,:,None,None] * Soff_split[idx].reshape(-1, self.nao_max, self.nao_max)[None,iedge,:,:]
-            
+            for k_idx in range(self.num_k):
+                # Pre-calculate all the values of the current point k
+                coe_k = coe[:edge_num[idx], k_idx].unsqueeze(-1).unsqueeze(-1)  # shape: (edge_num, 1, 1)
+                HK_values = coe_k * Hoff_reshaped  # shape: (edge_num, nao_max, nao_max)
+                SK_values = coe_k * Soff_reshaped  # shape: (edge_num, nao_max, nao_max)
+
+                # Use index_put for accumulation
+                HK[k_idx] = torch.index_put(HK[k_idx], (j_indices, i_indices), HK_values, accumulate=True)
+                SK[k_idx] = torch.index_put(SK[k_idx], (j_indices, i_indices), SK_values, accumulate=True)
+
             if export_reciprocal_values:
-                for iedge in range(edge_num[idx]):
-                    j_idx = j[edge_num_shift[idx]+iedge] - node_counts_shift[idx]
-                    i_idx = i[edge_num_shift[idx]+iedge] - node_counts_shift[idx]
-                    dSK[:,j_idx,i_idx,:,:,:] += coe[iedge,:,None,None,None] * dSoff_split[idx].reshape(-1, self.nao_max, self.nao_max, 3)[None,iedge,:,:,:]
+                dSoff_reshaped = dSoff_split[idx].reshape(edge_num[idx], self.nao_max, self.nao_max, 3)
+
+                for k_idx in range(self.num_k):
+                    # Estimate all the values of the current point k
+                    coe_k = coe[:edge_num[idx], k_idx].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)  # shape: (edge_num, 1, 1, 1)
+                    dSK_values = coe_k * dSoff_reshaped  # shape: (edge_num, nao_max, nao_max, 3)
+
+                    # Use index_put for accumulation
+                    dSK[k_idx] = torch.index_put(dSK[k_idx], (j_indices, i_indices), dSK_values, accumulate=True)
 
             HK = torch.swapaxes(HK,-2,-3) #(nk, natoms, nao_max, natoms, nao_max)
             HK = HK.reshape(-1, natoms*self.nao_max, natoms*self.nao_max)
@@ -1627,7 +1643,7 @@ class HamGNNPlusPlusOut(nn.Module):
             wavefunction = [wavefunction[idx].reshape(-1) for idx in range(Nbatch)]
             wavefunction = torch.cat(wavefunction, dim=0) # shape:[Nbatch*num_k*norbs*norbs]
             H_sym = torch.cat(H_sym, dim=0) # shape:(Nbatch*num_k*norbs*norbs)
-            return band_energy, wavefunction, gap, H_sym  
+            return band_energy, wavefunction, gap, H_sym
     
     def cal_band_energy_soc(self, Hsoc_on_real, Hsoc_on_imag, Hsoc_off_real, Hsoc_off_imag, data):
         """
