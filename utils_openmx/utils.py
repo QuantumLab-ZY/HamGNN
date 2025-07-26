@@ -355,32 +355,26 @@ class kpoints_generator:
             dklen = np.sqrt(np.dot(dk,np.dot(k_metric,dk)))
             k_node[n]=k_node[n-1]+dklen
     
-        # Find indices of nodes in interpolated list
-        node_index=[0]
-        for n in range(1,n_nodes-1):
-            frac = k_node[n] / k_node[-1]
-            new_index = int(round(frac * (nk - 1)))
-            # Ensure the new index is at least 1 greater than the previous one to prevent assigning the same index
-            if new_index <= node_index[-1]:
-                new_index = node_index[-1] + 1
-            node_index.append(new_index) 
-        # Ensure the last index is nk-1 and greater than the previous one
-        if n_nodes > 1:
-            if (nk - 1) <= node_index[-1]:
-                node_index.append(node_index[-1] + 1)
+        node_index = [0]
+        # Assign indices to the k-path nodes, ensuring they do not exceed the (nk-1) boundary.
+        for n in range(1, n_nodes - 1):
+            # Avoid a division-by-zero error if the total path length is zero.
+            if k_node[-1] == 0:
+                frac = 0
             else:
-                node_index.append(nk-1)
-        # If too many path points cause indices to exceed the range, perform clipping
-        if node_index[-1] >= nk:
-            print("Warning: Too many k-path nodes for the given nk. Some segments might be very short.")
-            # Correct indices exceeding the range to nk-1
-            node_index = [min(i, nk - 1) for i in node_index]
-            # Ensure strictly increasing again by removing duplicates
-            final_indices = []
-            for i in node_index:
-                if not final_indices or i > final_indices[-1]:
-                    final_indices.append(i)
-            node_index = final_indices
+                frac = k_node[n] / k_node[-1]
+            
+            new_index = int(round(frac * (nk - 1)))
+
+            # Ensure the index advances, but cap it at the maximum value (nk-1).
+            if new_index <= node_index[-1]:
+                new_index = min(node_index[-1] + 1, nk - 1)
+            
+            node_index.append(new_index)
+
+        # Always ensure the final node maps to the last index, nk-1.
+        if n_nodes > 1:
+            node_index.append(nk - 1)
 
     
         # initialize two arrays temporarily with zeros
@@ -398,6 +392,11 @@ class kpoints_generator:
             kd_f=k_node[n]
             k_i=k_list[n-1]
             k_f=k_list[n]
+
+            #skip if the ni==nf
+            if n_i==n_f:
+                continue
+            
             for j in range(n_i,n_f+1):
                 frac=float(j-n_i)/float(n_f-n_i)
                 k_dist[j]=kd_i+frac*(kd_f-kd_i)
