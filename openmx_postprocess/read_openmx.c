@@ -107,7 +107,7 @@ void Input(FILE *fp)
 
 	/* Added by N. Yamaguchi ***/
 	int conversionSwitch;
-	if (i_vec[1] == 0 && i_vec[1] < 0 || i_vec[1] > (LATEST_VERSION)*4 + 3)
+	if (i_vec[1] == 0 && i_vec[1] < 0 || i_vec[1] > (LATEST_VERSION) * 4 + 3)
 	{
 		conversionSwitch = 1;
 		int i;
@@ -122,7 +122,7 @@ void Input(FILE *fp)
 				out[j] = in[sizeof(int) - j - 1];
 			}
 		}
-		if (i_vec[1] == 0 && i_vec[1] < 0 || i_vec[1] > (LATEST_VERSION)*4 + 3)
+		if (i_vec[1] == 0 && i_vec[1] < 0 || i_vec[1] > (LATEST_VERSION) * 4 + 3)
 		{
 			puts("Error: Mismatch of the endianness");
 			fflush(stdout);
@@ -790,22 +790,22 @@ void Input(FILE *fp)
 	  input file
 	 ****************************************************/
 
-	FREAD(i_vec, sizeof(int), 1, fp);
-	num_lines = i_vec[0];
+	// FREAD(i_vec, sizeof(int), 1, fp);
+	// num_lines = i_vec[0];
 
-	sprintf(makeinp, "temporal_12345.input");
+	// sprintf(makeinp, "temporal_12345.input");
 
-	if ((fp_makeinp = fopen(makeinp, "w")) != NULL)
-	{
+	// if ((fp_makeinp = fopen(makeinp, "w")) != NULL)
+	// {
 
-		setvbuf(fp_makeinp, buf, _IOFBF, fp_bsize); /* setvbuf */
-		for (i = 1; i <= num_lines; i++)
-		{
-			FREAD(strg, sizeof(char), MAX_LINE_SIZE, fp);
-			fprintf(fp_makeinp, "%s", strg);
-		}
-		fclose(fp_makeinp);
-	}
+	// 	setvbuf(fp_makeinp, buf, _IOFBF, fp_bsize); /* setvbuf */
+	// 	for (i = 1; i <= num_lines; i++)
+	// 	{
+	// 		FREAD(strg, sizeof(char), MAX_LINE_SIZE, fp);
+	// 		fprintf(fp_makeinp, "%s", strg);
+	// 	}
+	// 	fclose(fp_makeinp);
+	// }
 }
 
 void free_scfout();
@@ -819,10 +819,19 @@ int main(int argc, char *argv[])
 	static double *a;
 	static FILE *fp;
 	static FILE *fp_json;
-
 	double Ebond[30], Es, Ep;
-
 	read_scfout(argv);
+
+	// 检查是否有任何原子具有邻居
+	int has_neighbors = 0;
+	for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
+	{
+		if (FNAN[ct_AN] > 0)
+		{
+			has_neighbors = 1;
+			break;
+		}
+	}
 
 	/*打开json文件*/
 	fp_json = fopen("HS.json", "w");
@@ -835,34 +844,49 @@ int main(int argc, char *argv[])
 
 	/*打印edge_index*/
 	fprintf(fp_json, "\"edge_index\": [[");
-	//打印源节点
-	for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
+	// 打印源节点
+	if (has_neighbors)
 	{
-		for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
+		int first_src = 1;
+		for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
 		{
-			if (ct_AN == atomnum && h_AN == FNAN[ct_AN])
+			if (FNAN[ct_AN] == 0)
+				continue; // 跳过没有邻居的原子
+			for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
 			{
-				fprintf(fp_json, "%i", ct_AN - 1);
-			}
-			else
-			{
-				fprintf(fp_json, "%i,", ct_AN - 1);
+				if (first_src)
+				{
+					fprintf(fp_json, "%i", ct_AN - 1);
+					first_src = 0;
+				}
+				else
+				{
+					fprintf(fp_json, ",%i", ct_AN - 1);
+				}
 			}
 		}
 	}
 	fprintf(fp_json, "],[");
-	//打印止节点
-	for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
+
+	// 打印止节点
+	if (has_neighbors)
 	{
-		for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
+		int first_tar = 1;
+		for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
 		{
-			if (ct_AN == atomnum && h_AN == FNAN[ct_AN])
+			if (FNAN[ct_AN] == 0)
+				continue; // 跳过没有邻居的原子
+			for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
 			{
-				fprintf(fp_json, "%i", natn[ct_AN][h_AN] - 1);
-			}
-			else
-			{
-				fprintf(fp_json, "%i,", natn[ct_AN][h_AN] - 1);
+				if (first_tar)
+				{
+					fprintf(fp_json, "%i", natn[ct_AN][h_AN] - 1);
+					first_tar = 0;
+				}
+				else
+				{
+					fprintf(fp_json, ",%i", natn[ct_AN][h_AN] - 1);
+				}
 			}
 		}
 	}
@@ -885,87 +909,108 @@ int main(int argc, char *argv[])
 
 	/*打印cell_shift*/
 	fprintf(fp_json, "\"cell_shift\": [");
-	for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
+	if (has_neighbors)
 	{
-		for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
+		int first_shift = 1;
+		for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
 		{
-			Rn = ncn[ct_AN][h_AN];
-			if (ct_AN == atomnum && h_AN == FNAN[ct_AN])
+			if (FNAN[ct_AN] == 0)
+				continue; // 跳过没有邻居的原子
+			for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
 			{
-				fprintf(fp_json, "[%i,%i,%i]", atv_ijk[Rn][1], atv_ijk[Rn][2], atv_ijk[Rn][3]);
-			}
-			else
-			{
-				fprintf(fp_json, "[%i,%i,%i],", atv_ijk[Rn][1], atv_ijk[Rn][2], atv_ijk[Rn][3]);
+				Rn = ncn[ct_AN][h_AN];
+				if (first_shift)
+				{
+					fprintf(fp_json, "[%i,%i,%i]", atv_ijk[Rn][1], atv_ijk[Rn][2], atv_ijk[Rn][3]);
+					first_shift = 0;
+				}
+				else
+				{
+					fprintf(fp_json, ",[%i,%i,%i]", atv_ijk[Rn][1], atv_ijk[Rn][2], atv_ijk[Rn][3]);
+				}
 			}
 		}
 	}
 	fprintf(fp_json, "],\n");
 
-	//打印inv_edge_idx
+	// 打印inv_edge_idx
 	fprintf(fp_json, "\"inv_edge_idx\": [");
-	first_print = true;
-	for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
+	if (has_neighbors)
 	{
-		for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
+		first_print = true;
+		for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
 		{
-			Rn = ncn[ct_AN][h_AN];
-			src = ct_AN - 1;
-			tar = natn[ct_AN][h_AN] - 1;
-			for (dir = 0; dir < 3; dir++)
+			if (FNAN[ct_AN] == 0)
+				continue; // 跳过没有邻居的原子
+			for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
 			{
-				shift[dir] = atv_ijk[Rn][dir + 1];
-			}
-			idx_tmp = 0;
-			for (ct_AN_tmp = 1; ct_AN_tmp <= atomnum; ct_AN_tmp++)
-			{
-				for (h_AN_tmp = 1; h_AN_tmp <= FNAN[ct_AN_tmp]; h_AN_tmp++)
+				Rn = ncn[ct_AN][h_AN];
+				src = ct_AN - 1;
+				tar = natn[ct_AN][h_AN] - 1;
+				for (dir = 0; dir < 3; dir++)
 				{
-					Rn_tmp = ncn[ct_AN_tmp][h_AN_tmp];
-					src_tmp = ct_AN_tmp - 1;
-					tar_tmp = natn[ct_AN_tmp][h_AN_tmp] - 1;
-					for (dir = 0; dir < 3; dir++)
+					shift[dir] = atv_ijk[Rn][dir + 1];
+				}
+				idx_tmp = 0;
+				for (ct_AN_tmp = 1; ct_AN_tmp <= atomnum; ct_AN_tmp++)
+				{
+					if (FNAN[ct_AN_tmp] == 0)
+						continue; // 跳过没有邻居的原子
+					for (h_AN_tmp = 1; h_AN_tmp <= FNAN[ct_AN_tmp]; h_AN_tmp++)
 					{
-						shift_tmp[dir] = atv_ijk[Rn_tmp][dir + 1];
-					}
-					//不满足打印条件
-					if ((src_tmp != tar) || (tar_tmp != src) || (shift_tmp[0] + shift[0]) || (shift_tmp[1] + shift[1]) || (shift_tmp[2] + shift[2]))
-					{
-						idx_tmp++;
-						continue;
-					}
-					//满足打印条件
-					if (first_print)
-					{
-						fprintf(fp_json, "%i", idx_tmp);
-						first_print = false;
-					}
-					else
-					{
-						fprintf(fp_json, ",%i", idx_tmp);
-					}
-					goto flag;
-				} // h_AN_tmp
-			}	  // ct_AN_tmp
-		flag:;
-		} // h_AN
-	}	  // ct_AN
+						Rn_tmp = ncn[ct_AN_tmp][h_AN_tmp];
+						src_tmp = ct_AN_tmp - 1;
+						tar_tmp = natn[ct_AN_tmp][h_AN_tmp] - 1;
+						for (dir = 0; dir < 3; dir++)
+						{
+							shift_tmp[dir] = atv_ijk[Rn_tmp][dir + 1];
+						}
+						// 不满足打印条件
+						if ((src_tmp != tar) || (tar_tmp != src) || (shift_tmp[0] + shift[0]) || (shift_tmp[1] + shift[1]) || (shift_tmp[2] + shift[2]))
+						{
+							idx_tmp++;
+							continue;
+						}
+						// 满足打印条件
+						if (first_print)
+						{
+							fprintf(fp_json, "%i", idx_tmp);
+							first_print = false;
+						}
+						else
+						{
+							fprintf(fp_json, ",%i", idx_tmp);
+						}
+						goto flag;
+					} // h_AN_tmp
+				} // ct_AN_tmp
+			flag:;
+			} // h_AN
+		} // ct_AN
+	}
 	fprintf(fp_json, "],\n");
 
 	/*打印nbr_shift*/
 	fprintf(fp_json, "\"nbr_shift\": [");
-	for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
+	if (has_neighbors)
 	{
-		for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
+		int first_nbr = 1;
+		for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
 		{
-			Rn = ncn[ct_AN][h_AN];
-			if (ct_AN == atomnum && h_AN == FNAN[ct_AN])
+			if (FNAN[ct_AN] == 0)
+				continue; // 跳过没有邻居的原子
+			for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
 			{
-				fprintf(fp_json, "[%10.7f,%10.7f,%10.7f]", atv[Rn][1], atv[Rn][2], atv[Rn][3]);
-			}
-			else
-			{
-				fprintf(fp_json, "[%10.7f,%10.7f,%10.7f],", atv[Rn][1], atv[Rn][2], atv[Rn][3]);
+				Rn = ncn[ct_AN][h_AN];
+				if (first_nbr)
+				{
+					fprintf(fp_json, "[%10.7f,%10.7f,%10.7f]", atv[Rn][1], atv[Rn][2], atv[Rn][3]);
+					first_nbr = 0;
+				}
+				else
+				{
+					fprintf(fp_json, ",[%10.7f,%10.7f,%10.7f]", atv[Rn][1], atv[Rn][2], atv[Rn][3]);
+				}
 			}
 		}
 	}
@@ -1024,36 +1069,43 @@ int main(int argc, char *argv[])
 	for (spin = 0; spin <= SpinP_switch; spin++)
 	{
 		fprintf(fp_json, "[");
-		for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
+		if (has_neighbors)
 		{
-			TNO1 = Total_NumOrbs[ct_AN];
-			for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
+			int first_ct_AN = 1;
+			for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
 			{
-				Gh_AN = natn[ct_AN][h_AN];
-				Rn = ncn[ct_AN][h_AN];
-				TNO2 = Total_NumOrbs[Gh_AN];
-				fprintf(fp_json, "[");
-				for (i = 0; i < TNO1; i++)
+				if (FNAN[ct_AN] == 0)
+					continue; // 跳过没有邻居的原子
+				TNO1 = Total_NumOrbs[ct_AN];
+				for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
 				{
-					for (j = 0; j < TNO2; j++)
+					Gh_AN = natn[ct_AN][h_AN];
+					Rn = ncn[ct_AN][h_AN];
+					TNO2 = Total_NumOrbs[Gh_AN];
+					if (first_ct_AN)
 					{
-						if (i == TNO1 - 1 && j == TNO2 - 1)
+						fprintf(fp_json, "[");
+						first_ct_AN = 0;
+					}
+					else
+					{
+						fprintf(fp_json, ",[");
+					}
+					for (i = 0; i < TNO1; i++)
+					{
+						for (j = 0; j < TNO2; j++)
 						{
-							fprintf(fp_json, "%14.10f", Hks[spin][ct_AN][h_AN][i][j]);
-						}
-						else
-						{
-							fprintf(fp_json, "%14.10f,", Hks[spin][ct_AN][h_AN][i][j]);
+							if (i == TNO1 - 1 && j == TNO2 - 1)
+							{
+								fprintf(fp_json, "%14.10f", Hks[spin][ct_AN][h_AN][i][j]);
+							}
+							else
+							{
+								fprintf(fp_json, "%14.10f,", Hks[spin][ct_AN][h_AN][i][j]);
+							}
 						}
 					}
-				}
-				if (ct_AN == atomnum && h_AN == FNAN[ct_AN])
-				{
 					fprintf(fp_json, "]");
-				}
-				else
-				{
-					fprintf(fp_json, "],");
 				}
 			}
 		}
@@ -1123,36 +1175,43 @@ int main(int argc, char *argv[])
 		for (spin = 0; spin <= 2; spin++)
 		{
 			fprintf(fp_json, "[");
-			for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
+			if (has_neighbors)
 			{
-				TNO1 = Total_NumOrbs[ct_AN];
-				for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
+				int first_ct_AN = 1;
+				for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
 				{
-					Gh_AN = natn[ct_AN][h_AN];
-					Rn = ncn[ct_AN][h_AN];
-					TNO2 = Total_NumOrbs[Gh_AN];
-					fprintf(fp_json, "[");
-					for (i = 0; i < TNO1; i++)
+					if (FNAN[ct_AN] == 0)
+						continue; // 跳过没有邻居的原子
+					TNO1 = Total_NumOrbs[ct_AN];
+					for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
 					{
-						for (j = 0; j < TNO2; j++)
+						Gh_AN = natn[ct_AN][h_AN];
+						Rn = ncn[ct_AN][h_AN];
+						TNO2 = Total_NumOrbs[Gh_AN];
+						if (first_ct_AN)
 						{
-							if (i == TNO1 - 1 && j == TNO2 - 1)
+							fprintf(fp_json, "[");
+							first_ct_AN = 0;
+						}
+						else
+						{
+							fprintf(fp_json, ",[");
+						}
+						for (i = 0; i < TNO1; i++)
+						{
+							for (j = 0; j < TNO2; j++)
 							{
-								fprintf(fp_json, "%14.10f", iHks[spin][ct_AN][h_AN][i][j]);
-							}
-							else
-							{
-								fprintf(fp_json, "%14.10f,", iHks[spin][ct_AN][h_AN][i][j]);
+								if (i == TNO1 - 1 && j == TNO2 - 1)
+								{
+									fprintf(fp_json, "%14.10f", iHks[spin][ct_AN][h_AN][i][j]);
+								}
+								else
+								{
+									fprintf(fp_json, "%14.10f,", iHks[spin][ct_AN][h_AN][i][j]);
+								}
 							}
 						}
-					}
-					if (ct_AN == atomnum && h_AN == FNAN[ct_AN])
-					{
 						fprintf(fp_json, "]");
-					}
-					else
-					{
-						fprintf(fp_json, "],");
 					}
 				}
 			}
@@ -1206,36 +1265,43 @@ int main(int argc, char *argv[])
 	fprintf(fp_json, "],\n");
 
 	fprintf(fp_json, "\"Soff\": [");
-	for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
+	if (has_neighbors)
 	{
-		TNO1 = Total_NumOrbs[ct_AN];
-		for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
+		int first_ct_AN = 1;
+		for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
 		{
-			Gh_AN = natn[ct_AN][h_AN];
-			Rn = ncn[ct_AN][h_AN];
-			TNO2 = Total_NumOrbs[Gh_AN];
-			fprintf(fp_json, "[");
-			for (i = 0; i < TNO1; i++)
+			if (FNAN[ct_AN] == 0)
+				continue; // 跳过没有邻居的原子
+			TNO1 = Total_NumOrbs[ct_AN];
+			for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
 			{
-				for (j = 0; j < TNO2; j++)
+				Gh_AN = natn[ct_AN][h_AN];
+				Rn = ncn[ct_AN][h_AN];
+				TNO2 = Total_NumOrbs[Gh_AN];
+				if (first_ct_AN)
 				{
-					if (i == TNO1 - 1 && j == TNO2 - 1)
+					fprintf(fp_json, "[");
+					first_ct_AN = 0;
+				}
+				else
+				{
+					fprintf(fp_json, ",[");
+				}
+				for (i = 0; i < TNO1; i++)
+				{
+					for (j = 0; j < TNO2; j++)
 					{
-						fprintf(fp_json, "%14.10f", OLP[ct_AN][h_AN][i][j]);
-					}
-					else
-					{
-						fprintf(fp_json, "%14.10f,", OLP[ct_AN][h_AN][i][j]);
+						if (i == TNO1 - 1 && j == TNO2 - 1)
+						{
+							fprintf(fp_json, "%14.10f", OLP[ct_AN][h_AN][i][j]);
+						}
+						else
+						{
+							fprintf(fp_json, "%14.10f,", OLP[ct_AN][h_AN][i][j]);
+						}
 					}
 				}
-			}
-			if (ct_AN == atomnum && h_AN == FNAN[ct_AN])
-			{
 				fprintf(fp_json, "]");
-			}
-			else
-			{
-				fprintf(fp_json, "],");
 			}
 		}
 	}
@@ -1281,41 +1347,47 @@ int main(int argc, char *argv[])
 
 	// off-site part
 	fprintf(fp_json, "\"Loff\": [");
-	for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
+	if (has_neighbors)
 	{
-		TNO1 = Total_NumOrbs[ct_AN];
-		for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
+		int first_ct_AN = 1;
+		for (ct_AN = 1; ct_AN <= atomnum; ct_AN++)
 		{
-			Gh_AN = natn[ct_AN][h_AN];
-			Rn = ncn[ct_AN][h_AN];
-			TNO2 = Total_NumOrbs[Gh_AN];
-			fprintf(fp_json, "[");
-			for (i = 0; i < TNO1; i++)
+			if (FNAN[ct_AN] == 0)
+				continue; // 跳过没有邻居的原子
+			TNO1 = Total_NumOrbs[ct_AN];
+			for (h_AN = 1; h_AN <= FNAN[ct_AN]; h_AN++)
 			{
-				for (j = 0; j < TNO2; j++)
+				Gh_AN = natn[ct_AN][h_AN];
+				Rn = ncn[ct_AN][h_AN];
+				TNO2 = Total_NumOrbs[Gh_AN];
+				if (first_ct_AN)
 				{
-					if (i == TNO1 - 1 && j == TNO2 - 1)
+					fprintf(fp_json, "[");
+					first_ct_AN = 0;
+				}
+				else
+				{
+					fprintf(fp_json, ",[");
+				}
+				for (i = 0; i < TNO1; i++)
+				{
+					for (j = 0; j < TNO2; j++)
 					{
-						fprintf(fp_json, "[%10.7f,%10.7f,%10.7f]", OLP_L[ct_AN][h_AN][i][j][0], OLP_L[ct_AN][h_AN][i][j][1], OLP_L[ct_AN][h_AN][i][j][2]);
-					}
-					else
-					{
-						fprintf(fp_json, "[%10.7f,%10.7f,%10.7f],", OLP_L[ct_AN][h_AN][i][j][0], OLP_L[ct_AN][h_AN][i][j][1], OLP_L[ct_AN][h_AN][i][j][2]);
+						if (i == TNO1 - 1 && j == TNO2 - 1)
+						{
+							fprintf(fp_json, "[%10.7f,%10.7f,%10.7f]", OLP_L[ct_AN][h_AN][i][j][0], OLP_L[ct_AN][h_AN][i][j][1], OLP_L[ct_AN][h_AN][i][j][2]);
+						}
+						else
+						{
+							fprintf(fp_json, "[%10.7f,%10.7f,%10.7f],", OLP_L[ct_AN][h_AN][i][j][0], OLP_L[ct_AN][h_AN][i][j][1], OLP_L[ct_AN][h_AN][i][j][2]);
+						}
 					}
 				}
-			}
-			if (ct_AN == atomnum && h_AN == FNAN[ct_AN])
-			{
 				fprintf(fp_json, "]");
-			}
-			else
-			{
-				fprintf(fp_json, "],");
 			}
 		}
 	}
 	fprintf(fp_json, "]\n");
-
 	fprintf(fp_json, "}");
 	fclose(fp_json);
 	return 0;
