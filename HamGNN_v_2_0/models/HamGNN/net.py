@@ -4,7 +4,7 @@ version:
 Author: Yang Zhong
 Date: 2024-08-24 16:14:48
 LastEditors: Yang Zhong
-LastEditTime: 2025-06-09 14:13:10
+LastEditTime: 2025-08-05 15:48:09
 '''
 import torch
 from torch import nn
@@ -2358,7 +2358,7 @@ class HamGNNPlusPlusOut(nn.Module):
                         sigma = torch.view_as_complex(torch.zeros((3,2,2,2)).type_as(J_on))
                         sigma[0] = torch.Tensor([[0.0, 1.0],[1.0, 0.0]]).type_as(sigma)
                         sigma[1] = torch.complex(real=torch.zeros((2,2)), imag=torch.Tensor([[0.0, -1.0],[1.0, 0.0]])).type_as(sigma) 
-                        sigma[2] = torch.complex(real=torch.zeros((2,2)), imag=torch.Tensor([[1.0, 0.0],[0.0, -1.0]])).type_as(sigma) 
+                        sigma[2] = torch.Tensor([[1.0, 0.0],[0.0, -1.0]]).type_as(sigma) 
 
                         spin_vec = data.spin_vec
 
