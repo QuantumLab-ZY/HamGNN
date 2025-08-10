@@ -29,6 +29,33 @@ import socket
 from .models.utils import get_hparam_dict
 import argparse
 
+def initialize_output_parameters(output_params):
+    """
+    Initialize default values for output parameters if they don't already exist.
+    
+    Parameters:
+    -----------
+    output_params : object
+        Object to store output configuration parameters. Can be a SimpleNamespace,
+        custom class instance, or any object supporting attribute access.
+    
+    Returns:
+    --------
+    The same output_params object with default values set where needed.
+    """
+    # Define default parameter values
+    default_params = {
+        'add_H_nonsoc': False,
+        'get_nonzero_mask_tensor': False,
+        'zero_point_shift': True
+    }
+    
+    # Set default values for parameters not already defined
+    for param_name, default_value in default_params.items():
+        if not hasattr(output_params, param_name):
+            setattr(output_params, param_name, default_value)
+    
+    return output_params
 
 def prepare_data(config):
     train_ratio = config.dataset_params.train_ratio
@@ -182,12 +209,7 @@ def build_model(config):
     elif config.setup.property.lower() == 'hamiltonian':
         output_params = config.output_nets.HamGNN_out
         # check parameters
-        if 'add_H_nonsoc' not in output_params:
-            output_params.add_H_nonsoc = False
-        if 'get_nonzero_mask_tensor' not in output_params:
-            output_params.get_nonzero_mask_tensor = False
-        if 'zero_point_shift' not in output_params:
-            output_params.zero_point_shift = False
+        output_params = initialize_output_parameters(output_params)
         
         output_module = HamGNNPlusPlusOut(irreps_in_node = Gnn_net.irreps_node_features, irreps_in_edge = Gnn_net.irreps_node_features, nao_max= output_params.nao_max, ham_type= output_params.ham_type,
                                          ham_only= output_params.ham_only, symmetrize=output_params.symmetrize,calculate_band_energy=output_params.calculate_band_energy,num_k=output_params.num_k,k_path=output_params.k_path,
@@ -335,3 +357,4 @@ def HamGNN():
 
 if __name__ == '__main__':
     HamGNN()
+
