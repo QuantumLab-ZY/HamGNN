@@ -724,7 +724,7 @@ class HamGNNPlusPlusOut(nn.Module):
             1:1,2:2,
             3:1,4:2,5:3,6:4,7:5,8:6,9:7,10:8,
             11:1,12:2,13:3,14:4,15:5,16:6,17:7,18:8,
-            19:1,20:2,22:12
+            19:1,20:2,22:12,31:3,33:5,72:4
         }
         if self.nao_max == 13:
             self.index_change = None       
@@ -751,6 +751,8 @@ class HamGNNPlusPlusOut(nn.Module):
                 18: s1+s2+p1+p2+d1, # Ar
                 19: s1+s2+p1, # K
                 20: s1+s2+p1, # Cl
+                31: s1+s2+p1+p2+d1, # Ga
+                33: s1+s2+p1+p2+d1, # As
             })()
         elif self.nao_max == 19:
             self.index_change = None
