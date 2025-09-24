@@ -6,7 +6,7 @@ build:
     python: "miniconda3-3.12-24.9"
 
 sphinx:
-  configuration: docs/conf.py
+  configuration: docs/source/conf.py
 
 conda:
   environment: docs/environment.yml
