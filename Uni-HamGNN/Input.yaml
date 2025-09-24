@@ -1,0 +1,15 @@
+# Model path
+model_pkl_path: '/public/home/zhongyang/yzhong/Universal_SOC_H/test/model_package/predictor.pkl'
+
+# Data directories
+non_soc_data_dir: '/public/home/zhongyang/yzhong/Universal_SOC_H/test/Bi8Se7/graph_data.npz'
+soc_data_dir: '/public/home/zhongyang/yzhong/Universal_SOC_H/test/Bi8Se7/SOC/graph_data.npz'
+
+# Output directory
+output_dir: './'
+
+# Computation device, 'cpu' or cuda
+device: 'cpu'
+
+# Whether to calculate Mean Absolute Error
+calculate_mae: false

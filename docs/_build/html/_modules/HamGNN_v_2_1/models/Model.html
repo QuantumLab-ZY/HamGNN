@@ -1,0 +1,1143 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HamGNN_v_2_1.models.Model &mdash; HamGNN v2.1 Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=fd3f3429" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=7902463a" />
+
+  
+    <link rel="shortcut icon" href="../../../_static/logo.png"/>
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=c36237e0"></script>
+      <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../../../_static/copybutton.js?v=faab29de"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            HamGNN_v_2_1
+              <img src="../../../_static/logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_guide/index.html">HamGNN User Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../user_guide/introduction.html">HamGNN Introduction</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/introduction.html#key-features">Key Features</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/introduction.html#application-areas">Application Areas</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/introduction.html#latest-developments">Latest Developments</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../user_guide/installation.html">Environment Configuration and Installation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/installation.html#python-environment">Python Environment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/installation.html#third-party-dft-tool-support">Third-party DFT Tool Support</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../user_guide/installation.html#openmx">OpenMX</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../user_guide/installation.html#siesta-honpas">SIESTA/HONPAS</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../user_guide/installation.html#abacus">ABACUS</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../user_guide/installation.html#compiling-openmx-postprocess-and-read-openmx">Compiling <code class="docutils literal notranslate"><span class="pre">openmx_postprocess</span></code> and <code class="docutils literal notranslate"><span class="pre">read_openmx</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/installation.html#hamgnn-installation-steps">HamGNN Installation Steps</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../user_guide/installation.html#step-one-install-conda-environment">Step One: Install Conda Environment</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../user_guide/installation.html#step-two-source-installation-of-hamgnn">Step Two: Source Installation of HamGNN</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../user_guide/data_preparation.html">Construction of graph_data.npz File</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/data_preparation.html#general-process">General Process</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/data_preparation.html#openmx-process">OpenMX Process</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/data_preparation.html#siesta-honpas-process">SIESTA/HONPAS Process</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/data_preparation.html#abacus-process">ABACUS Process</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../user_guide/training.html">Model Training Process</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/training.html#training-mode-classification">Training Mode Classification</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/training.html#training-command">Training Command</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/training.html#key-configuration-items">Key Configuration Items</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/training.html#training-monitoring">Training Monitoring</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../user_guide/prediction.html">Model Prediction Operation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/prediction.html#preparation-for-prediction">Preparation for Prediction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/prediction.html#execute-prediction">Execute Prediction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/prediction.html#output-results">Output Results</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../user_guide/band_calculation.html">Band Structure Calculation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/band_calculation.html#operation-process">Operation Process</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/band_calculation.html#band-calculation-for-large-systems">Band Calculation for Large Systems</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../user_guide/uni_hamgnn.html">Uni-HamGNN Universal Model</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/uni_hamgnn.html#model-introduction">Model Introduction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/uni_hamgnn.html#input-requirements">Input Requirements</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/uni_hamgnn.html#usage-process">Usage Process</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/uni_hamgnn.html#output-results">Output Results</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../user_guide/parameters.html">HamGNN Parameter Details</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/parameters.html#setup-basic-settings">setup (Basic Settings)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/parameters.html#dataset-params-dataset-parameters">dataset_params (Dataset Parameters)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/parameters.html#losses-metrics-loss-functions-and-evaluation-metrics">losses_metrics (Loss Functions and Evaluation Metrics)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/parameters.html#optim-params-optimizer-parameters">optim_params (Optimizer Parameters)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/parameters.html#output-nets-hamgnn-out-output-network-parameters">output_nets.HamGNN_out (Output Network Parameters)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/parameters.html#representation-nets-hamgnn-pre-representation-network-parameters">representation_nets.HamGNN_pre (Representation Network Parameters)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../user_guide/parameters.html#parameter-adjustment-recommendations">Parameter Adjustment Recommendations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../user_guide/parameters.html#references">References</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/model_structure.html">Model Structure</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/model_structure.html#module-HamGNN_v_2_1.models.base_model">Base Model</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.base_model.get_radii_from_atomic_numbers"><code class="docutils literal notranslate"><span class="pre">get_radii_from_atomic_numbers()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.base_model.neighbor_list_and_relative_vec"><code class="docutils literal notranslate"><span class="pre">neighbor_list_and_relative_vec()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.base_model.find_matching_columns_of_A_in_B"><code class="docutils literal notranslate"><span class="pre">find_matching_columns_of_A_in_B()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.base_model.BaseModel"><code class="docutils literal notranslate"><span class="pre">BaseModel</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.base_model.BaseModel.forward"><code class="docutils literal notranslate"><span class="pre">BaseModel.forward()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.base_model.BaseModel.generate_graph"><code class="docutils literal notranslate"><span class="pre">BaseModel.generate_graph()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.base_model.BaseModel.num_params"><code class="docutils literal notranslate"><span class="pre">BaseModel.num_params</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/model_structure.html#module-HamGNN_v_2_1.models.hamgnn_conv">HamGNN Convolution</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_conv.HamGNNConvE3"><code class="docutils literal notranslate"><span class="pre">HamGNNConvE3</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_conv.HamGNNConvE3.forward"><code class="docutils literal notranslate"><span class="pre">HamGNNConvE3.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/model_structure.html#module-HamGNN_v_2_1.models.hamgnn_transformer">HamGNN Transformer</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_transformer.HamGNNTransformer"><code class="docutils literal notranslate"><span class="pre">HamGNNTransformer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_transformer.HamGNNTransformer.forward"><code class="docutils literal notranslate"><span class="pre">HamGNNTransformer.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/model_structure.html#module-HamGNN_v_2_1.models.hamgnn_output">HamGNN Output Head</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamLayer"><code class="docutils literal notranslate"><span class="pre">HamLayer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamLayer.forward"><code class="docutils literal notranslate"><span class="pre">HamLayer.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.merge_tensor_components"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.merge_tensor_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.merge_rank2_tensor_components"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.merge_rank2_tensor_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.merge_rank0_tensor_components"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.merge_rank0_tensor_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.construct_j_coupling_matrix"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.construct_j_coupling_matrix()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.construct_k_coupling_matrix"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.construct_k_coupling_matrix()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.reorder_matrix"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.reorder_matrix()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.construct_molecular_hamiltonian"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.construct_molecular_hamiltonian()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.concatenate_hamiltonians_by_crystal"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.concatenate_hamiltonians_by_crystal()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.symmetrize_hamiltonian"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.symmetrize_hamiltonian()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.symmetrize_onsite_hamiltonian"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.symmetrize_onsite_hamiltonian()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.symmetrize_offsite_hamiltonian"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.symmetrize_offsite_hamiltonian()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.symmetrize_onsite_hamiltonian_soc"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.symmetrize_onsite_hamiltonian_soc()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.symmetrize_offsite_hamiltonian_soc"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.symmetrize_offsite_hamiltonian_soc()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.calculate_band_energies_with_overlap"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.calculate_band_energies_with_overlap()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.calculate_band_energies"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.calculate_band_energies()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.calculate_band_energies_with_spin_orbit_coupling"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.calculate_band_energies_with_spin_orbit_coupling()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.apply_orbital_masks_to_hamiltonians"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.apply_orbital_masks_to_hamiltonians()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.symmetrize_orbital_coefficients"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.symmetrize_orbital_coefficients()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.create_cell_index_mapping"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.create_cell_index_mapping()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.extract_unique_cell_vectors"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.extract_unique_cell_vectors()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.build_edge_lookup_structures"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.build_edge_lookup_structures()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.create_orbital_validity_mask"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.create_orbital_validity_mask()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.build_interaction_masks"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.build_interaction_masks()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.build_column_wise_interaction_masks"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.build_column_wise_interaction_masks()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.build_spin_orbit_interaction_masks"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.build_spin_orbit_interaction_masks()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.calculate_sparsity_ratio"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.calculate_sparsity_ratio()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.validate_elements_in_basis_def"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.validate_elements_in_basis_def()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.forward"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/model_structure.html#module-HamGNN_v_2_1.models.Model">Main Model Implementation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model"><code class="docutils literal notranslate"><span class="pre">Model</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.calculate_loss"><code class="docutils literal notranslate"><span class="pre">Model.calculate_loss()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.training_step"><code class="docutils literal notranslate"><span class="pre">Model.training_step()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.validation_step"><code class="docutils literal notranslate"><span class="pre">Model.validation_step()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.validation_epoch_end"><code class="docutils literal notranslate"><span class="pre">Model.validation_epoch_end()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.test_step"><code class="docutils literal notranslate"><span class="pre">Model.test_step()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.test_epoch_end"><code class="docutils literal notranslate"><span class="pre">Model.test_epoch_end()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.forward"><code class="docutils literal notranslate"><span class="pre">Model.forward()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.log_metrics"><code class="docutils literal notranslate"><span class="pre">Model.log_metrics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.configure_optimizers"><code class="docutils literal notranslate"><span class="pre">Model.configure_optimizers()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/gnn_core.html">GNN Core Layers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/gnn_core/message_passing.html">Message Passing</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/gnn_core/message_passing.html#module-HamGNN_v_2_1.nn.message_passing">Message Pack Blocks</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/message_passing.html#HamGNN_v_2_1.nn.message_passing.MessagePackBlock"><code class="docutils literal notranslate"><span class="pre">MessagePackBlock</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/message_passing.html#HamGNN_v_2_1.nn.message_passing.MessagePackBlockV2"><code class="docutils literal notranslate"><span class="pre">MessagePackBlockV2</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/gnn_core/attention.html">Attention Mechanisms</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/gnn_core/attention.html#module-HamGNN_v_2_1.nn.attention">Attention Layers</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/attention.html#HamGNN_v_2_1.nn.attention.AttentionAggregationV2"><code class="docutils literal notranslate"><span class="pre">AttentionAggregationV2</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/attention.html#HamGNN_v_2_1.nn.attention.AttentionAggregation"><code class="docutils literal notranslate"><span class="pre">AttentionAggregation</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/attention.html#HamGNN_v_2_1.nn.attention.AttentionBlockE3"><code class="docutils literal notranslate"><span class="pre">AttentionBlockE3</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/gnn_core/attention.html#module-HamGNN_v_2_1.nn.attention_utils">Attention Utilities</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/attention.html#HamGNN_v_2_1.nn.attention_utils.VectorToAttentionHeads"><code class="docutils literal notranslate"><span class="pre">VectorToAttentionHeads</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/attention.html#HamGNN_v_2_1.nn.attention_utils.AttentionHeadsToVector"><code class="docutils literal notranslate"><span class="pre">AttentionHeadsToVector</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/gnn_core/convolution.html">Convolution Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/gnn_core/convolution.html#module-HamGNN_v_2_1.nn.convolution">Graph Convolution Operations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/convolution.html#HamGNN_v_2_1.nn.convolution.ConvBlockE3"><code class="docutils literal notranslate"><span class="pre">ConvBlockE3</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/gnn_core/tensor_operations.html">Tensor Operations</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/gnn_core/tensor_operations.html#module-HamGNN_v_2_1.nn.tensor_products">Tensor Products</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/tensor_operations.html#HamGNN_v_2_1.nn.tensor_products.LinearScaleWithWeights"><code class="docutils literal notranslate"><span class="pre">LinearScaleWithWeights</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/tensor_operations.html#HamGNN_v_2_1.nn.tensor_products.TensorProductWithMemoryOptimizationWithWeight"><code class="docutils literal notranslate"><span class="pre">TensorProductWithMemoryOptimizationWithWeight</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/tensor_operations.html#HamGNN_v_2_1.nn.tensor_products.TensorProductWithScalarComponents"><code class="docutils literal notranslate"><span class="pre">TensorProductWithScalarComponents</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/tensor_operations.html#HamGNN_v_2_1.nn.tensor_products.ConcatenatedIrrepsTensorProduct"><code class="docutils literal notranslate"><span class="pre">ConcatenatedIrrepsTensorProduct</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/gnn_core/interaction_blocks.html">Interaction Blocks</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/gnn_core/interaction_blocks.html#module-HamGNN_v_2_1.nn.interaction_blocks">Neural Network Interaction Components</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/interaction_blocks.html#HamGNN_v_2_1.nn.interaction_blocks.PairInteractionBlock"><code class="docutils literal notranslate"><span class="pre">PairInteractionBlock</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/interaction_blocks.html#HamGNN_v_2_1.nn.interaction_blocks.CorrProductBlock"><code class="docutils literal notranslate"><span class="pre">CorrProductBlock</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/interaction_blocks.html#HamGNN_v_2_1.nn.interaction_blocks.ResidualBlock"><code class="docutils literal notranslate"><span class="pre">ResidualBlock</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/gnn_core/physics_tools.html">Physics Tools</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/gnn_core/physics_tools.html#module-HamGNN_v_2_1.physics.Clebsch_Gordan_coefficients">Clebsch-Gordan Coefficients</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/physics_tools.html#HamGNN_v_2_1.physics.Clebsch_Gordan_coefficients.ClebschGordanCoefficients"><code class="docutils literal notranslate"><span class="pre">ClebschGordanCoefficients</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/gnn_core/physics_tools.html#module-HamGNN_v_2_1.physics.kpoints">K-Points</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/physics_tools.html#HamGNN_v_2_1.physics.kpoints.kpoints_generator"><code class="docutils literal notranslate"><span class="pre">kpoints_generator</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/physics_tools.html#HamGNN_v_2_1.physics.kpoints.compute_reciprocal_lattice_vectors"><code class="docutils literal notranslate"><span class="pre">compute_reciprocal_lattice_vectors()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/physics_tools.html#HamGNN_v_2_1.physics.kpoints.generate_kpoint_grid"><code class="docutils literal notranslate"><span class="pre">generate_kpoint_grid()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/gnn_core/physics_tools.html#module-HamGNN_v_2_1.physics.matrix_operations">Matrix Operations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/physics_tools.html#HamGNN_v_2_1.physics.matrix_operations.HamLayer"><code class="docutils literal notranslate"><span class="pre">HamLayer</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/physics_tools.html#HamGNN_v_2_1.physics.matrix_operations.TensorExpansion"><code class="docutils literal notranslate"><span class="pre">TensorExpansion</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/physics_tools.html#HamGNN_v_2_1.physics.matrix_operations.OverlapExpand"><code class="docutils literal notranslate"><span class="pre">OverlapExpand</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/gnn_core/physics_tools.html#HamGNN_v_2_1.physics.matrix_operations.TensorMerge"><code class="docutils literal notranslate"><span class="pre">TensorMerge</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/model_components.html">Model Components</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/model_components.html#module-HamGNN_v_2_1.nn.embeddings">Embeddings</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.nn.embeddings.RadialBasisEdgeEncoding"><code class="docutils literal notranslate"><span class="pre">RadialBasisEdgeEncoding</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.nn.embeddings.RadialBasisEdgeEncoding.out_field"><code class="docutils literal notranslate"><span class="pre">RadialBasisEdgeEncoding.out_field</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.nn.embeddings.RadialBasisEdgeEncoding.forward"><code class="docutils literal notranslate"><span class="pre">RadialBasisEdgeEncoding.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.nn.embeddings.EdgeScalarEmbedding"><code class="docutils literal notranslate"><span class="pre">EdgeScalarEmbedding</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.nn.embeddings.EdgeScalarEmbedding.forward"><code class="docutils literal notranslate"><span class="pre">EdgeScalarEmbedding.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.nn.embeddings.LocalEnvironmentEmbedding"><code class="docutils literal notranslate"><span class="pre">LocalEnvironmentEmbedding</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.nn.embeddings.LocalEnvironmentEmbedding.forward"><code class="docutils literal notranslate"><span class="pre">LocalEnvironmentEmbedding.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.nn.embeddings.PairInteractionEmbeddingBlock"><code class="docutils literal notranslate"><span class="pre">PairInteractionEmbeddingBlock</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.nn.embeddings.PairInteractionEmbeddingBlock.create_linear"><code class="docutils literal notranslate"><span class="pre">PairInteractionEmbeddingBlock.create_linear()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.nn.embeddings.PairInteractionEmbeddingBlock.create_tensor_product"><code class="docutils literal notranslate"><span class="pre">PairInteractionEmbeddingBlock.create_tensor_product()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.nn.embeddings.PairInteractionEmbeddingBlock.init_weight_generator"><code class="docutils literal notranslate"><span class="pre">PairInteractionEmbeddingBlock.init_weight_generator()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.nn.embeddings.PairInteractionEmbeddingBlock.forward"><code class="docutils literal notranslate"><span class="pre">PairInteractionEmbeddingBlock.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.nn.embeddings.Embedding"><code class="docutils literal notranslate"><span class="pre">Embedding</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.nn.embeddings.Embedding.reset_parameters"><code class="docutils literal notranslate"><span class="pre">Embedding.reset_parameters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.nn.embeddings.Embedding.forward"><code class="docutils literal notranslate"><span class="pre">Embedding.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/model_components.html#module-HamGNN_v_2_1.nn.electron_configurations">Electron Configurations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/model_components.html#module-HamGNN_v_2_1.utils.mlp">MLP Utilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.mlp.linear_bn_act"><code class="docutils literal notranslate"><span class="pre">linear_bn_act()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.mlp.denseLayer"><code class="docutils literal notranslate"><span class="pre">denseLayer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.mlp.denseLayer.forward"><code class="docutils literal notranslate"><span class="pre">denseLayer.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.mlp.Dense"><code class="docutils literal notranslate"><span class="pre">Dense</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.mlp.Dense.reset_parameters"><code class="docutils literal notranslate"><span class="pre">Dense.reset_parameters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.mlp.Dense.forward"><code class="docutils literal notranslate"><span class="pre">Dense.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/model_components.html#module-HamGNN_v_2_1.utils.activation">Activation Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.activation.shifted_softplus"><code class="docutils literal notranslate"><span class="pre">shifted_softplus()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.activation.switch_function"><code class="docutils literal notranslate"><span class="pre">switch_function()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.activation.softplus_inverse"><code class="docutils literal notranslate"><span class="pre">softplus_inverse()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.activation.SoftUnitStepCutoff"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.activation.SoftUnitStepCutoff.cutoff"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff.cutoff</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.activation.SoftUnitStepCutoff.cut_param"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff.cut_param</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.activation.SoftUnitStepCutoff.forward"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.activation.swish"><code class="docutils literal notranslate"><span class="pre">swish()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.activation.SSP"><code class="docutils literal notranslate"><span class="pre">SSP</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.activation.SSP.forward"><code class="docutils literal notranslate"><span class="pre">SSP.forward()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.activation.SSP.extra_repr"><code class="docutils literal notranslate"><span class="pre">SSP.extra_repr()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.activation.SWISH"><code class="docutils literal notranslate"><span class="pre">SWISH</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.activation.SWISH.forward"><code class="docutils literal notranslate"><span class="pre">SWISH.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.activation.get_activation"><code class="docutils literal notranslate"><span class="pre">get_activation()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/model_components.html#module-HamGNN_v_2_1.utils.basis_functions">Basis Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.BernsteinRadialBasisFunctions"><code class="docutils literal notranslate"><span class="pre">BernsteinRadialBasisFunctions</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.BernsteinRadialBasisFunctions.reset_parameters"><code class="docutils literal notranslate"><span class="pre">BernsteinRadialBasisFunctions.reset_parameters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.BernsteinRadialBasisFunctions.forward"><code class="docutils literal notranslate"><span class="pre">BernsteinRadialBasisFunctions.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.ExponentialBernsteinRadialBasisFunctions"><code class="docutils literal notranslate"><span class="pre">ExponentialBernsteinRadialBasisFunctions</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.ExponentialBernsteinRadialBasisFunctions.reset_parameters"><code class="docutils literal notranslate"><span class="pre">ExponentialBernsteinRadialBasisFunctions.reset_parameters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.ExponentialBernsteinRadialBasisFunctions.forward"><code class="docutils literal notranslate"><span class="pre">ExponentialBernsteinRadialBasisFunctions.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.ExponentialGaussianRadialBasisFunctions"><code class="docutils literal notranslate"><span class="pre">ExponentialGaussianRadialBasisFunctions</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.ExponentialGaussianRadialBasisFunctions.reset_parameters"><code class="docutils literal notranslate"><span class="pre">ExponentialGaussianRadialBasisFunctions.reset_parameters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.ExponentialGaussianRadialBasisFunctions.forward"><code class="docutils literal notranslate"><span class="pre">ExponentialGaussianRadialBasisFunctions.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.GaussianRadialBasisFunctions"><code class="docutils literal notranslate"><span class="pre">GaussianRadialBasisFunctions</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.GaussianRadialBasisFunctions.reset_parameters"><code class="docutils literal notranslate"><span class="pre">GaussianRadialBasisFunctions.reset_parameters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.GaussianRadialBasisFunctions.forward"><code class="docutils literal notranslate"><span class="pre">GaussianRadialBasisFunctions.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.OverlapBernsteinRadialBasisFunctions"><code class="docutils literal notranslate"><span class="pre">OverlapBernsteinRadialBasisFunctions</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.OverlapBernsteinRadialBasisFunctions.reset_parameters"><code class="docutils literal notranslate"><span class="pre">OverlapBernsteinRadialBasisFunctions.reset_parameters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.OverlapBernsteinRadialBasisFunctions.forward"><code class="docutils literal notranslate"><span class="pre">OverlapBernsteinRadialBasisFunctions.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.sph_harm_layer"><code class="docutils literal notranslate"><span class="pre">sph_harm_layer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.sph_harm_layer.forward"><code class="docutils literal notranslate"><span class="pre">sph_harm_layer.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.BesselBasis"><code class="docutils literal notranslate"><span class="pre">BesselBasis</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.BesselBasis.forward"><code class="docutils literal notranslate"><span class="pre">BesselBasis.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.GaussianSmearing"><code class="docutils literal notranslate"><span class="pre">GaussianSmearing</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.basis_functions.GaussianSmearing.forward"><code class="docutils literal notranslate"><span class="pre">GaussianSmearing.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/model_components.html#module-HamGNN_v_2_1.utils.cutoff_functions">Cutoff Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.cutoff_functions.cutoff_function"><code class="docutils literal notranslate"><span class="pre">cutoff_function()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.cutoff_functions.cuttoff_envelope"><code class="docutils literal notranslate"><span class="pre">cuttoff_envelope</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.cutoff_functions.cuttoff_envelope.forward"><code class="docutils literal notranslate"><span class="pre">cuttoff_envelope.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.cutoff_functions.CosineCutoff"><code class="docutils literal notranslate"><span class="pre">CosineCutoff</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.cutoff_functions.CosineCutoff.forward"><code class="docutils literal notranslate"><span class="pre">CosineCutoff.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.cutoff_functions.SoftUnitStepCutoff"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.cutoff_functions.SoftUnitStepCutoff.cutoff"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff.cutoff</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.cutoff_functions.SoftUnitStepCutoff.cut_param"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff.cut_param</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.cutoff_functions.SoftUnitStepCutoff.forward"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/model_components.html#module-HamGNN_v_2_1.utils.regression_layers">Regression Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.regression_layers.denseRegression"><code class="docutils literal notranslate"><span class="pre">denseRegression</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.regression_layers.denseRegression.forward"><code class="docutils literal notranslate"><span class="pre">denseRegression.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.regression_layers.MLPRegression"><code class="docutils literal notranslate"><span class="pre">MLPRegression</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.regression_layers.MLPRegression.forward"><code class="docutils literal notranslate"><span class="pre">MLPRegression.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/model_components.html#module-HamGNN_v_2_1.utils.hparam">Hyperparameter Configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/model_components.html#HamGNN_v_2_1.utils.hparam.get_hparam_dict"><code class="docutils literal notranslate"><span class="pre">get_hparam_dict()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/data_processing.html">Data Processing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/data_processing.html#graph-data">Graph Data</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/configuration.html">Configuration</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/configuration.html#module-HamGNN_v_2_1.config.config_parsing">Config Parsing</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/configuration.html#HamGNN_v_2_1.config.config_parsing.config_default"><code class="docutils literal notranslate"><span class="pre">config_default</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/configuration.html#HamGNN_v_2_1.config.config_parsing.recursive_update"><code class="docutils literal notranslate"><span class="pre">recursive_update()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/configuration.html#HamGNN_v_2_1.config.config_parsing.load_config"><code class="docutils literal notranslate"><span class="pre">load_config()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/utilities.html">Utilities</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/utilities.html#module-HamGNN_v_2_1.utils.irreps_utils">Irreps Utilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.irreps_utils.extract_scalar_irreps"><code class="docutils literal notranslate"><span class="pre">extract_scalar_irreps()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.irreps_utils.irreps2gate"><code class="docutils literal notranslate"><span class="pre">irreps2gate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.irreps_utils.scale_irreps"><code class="docutils literal notranslate"><span class="pre">scale_irreps()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.irreps_utils.filter_and_split_irreps"><code class="docutils literal notranslate"><span class="pre">filter_and_split_irreps()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/utilities.html#module-HamGNN_v_2_1.utils.triplets">Triplets</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.triplets.triplets"><code class="docutils literal notranslate"><span class="pre">triplets()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/utilities.html#module-HamGNN_v_2_1.utils.math_utils">Math Utilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.math_utils.count_neighbors_per_node"><code class="docutils literal notranslate"><span class="pre">count_neighbors_per_node()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.math_utils.prod"><code class="docutils literal notranslate"><span class="pre">prod()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.math_utils.blockwise_2x2_concat"><code class="docutils literal notranslate"><span class="pre">blockwise_2x2_concat()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.math_utils.extract_elements_above_threshold"><code class="docutils literal notranslate"><span class="pre">extract_elements_above_threshold()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.math_utils.upgrade_tensor_precision"><code class="docutils literal notranslate"><span class="pre">upgrade_tensor_precision()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/utilities.html#module-HamGNN_v_2_1.utils.losses">Loss Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.losses.cosine_similarity_loss"><code class="docutils literal notranslate"><span class="pre">cosine_similarity_loss</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.losses.cosine_similarity_loss.forward"><code class="docutils literal notranslate"><span class="pre">cosine_similarity_loss.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.losses.sum_zero_loss"><code class="docutils literal notranslate"><span class="pre">sum_zero_loss</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.losses.sum_zero_loss.forward"><code class="docutils literal notranslate"><span class="pre">sum_zero_loss.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.losses.Euclidean_loss"><code class="docutils literal notranslate"><span class="pre">Euclidean_loss</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.losses.Euclidean_loss.forward"><code class="docutils literal notranslate"><span class="pre">Euclidean_loss.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.losses.RMSELoss"><code class="docutils literal notranslate"><span class="pre">RMSELoss</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.losses.RMSELoss.forward"><code class="docutils literal notranslate"><span class="pre">RMSELoss.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.losses.parse_metric_func"><code class="docutils literal notranslate"><span class="pre">parse_metric_func()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/utilities.html#module-HamGNN_v_2_1.utils.visualization">Visualization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../api/utilities.html#HamGNN_v_2_1.utils.visualization.scatter_plot"><code class="docutils literal notranslate"><span class="pre">scatter_plot()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">HamGNN_v_2_1</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content style-external-links">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">HamGNN_v_2_1.models.Model</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for HamGNN_v_2_1.models.Model</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">/*</span>
+<span class="sd"> * @Author: Yang Zhong </span>
+<span class="sd"> * @Date: 2021-10-09 13:46:53 </span>
+<span class="sd"> * @Last Modified by: Yang Zhong</span>
+<span class="sd"> * @Last Modified time: 2021-10-29 21:09:02</span>
+<span class="sd"> */</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.optim</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">optim</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="kn">import</span> <span class="n">functional</span> <span class="k">as</span> <span class="n">F</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pytorch_lightning</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Any</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">..utils.visualization</span><span class="w"> </span><span class="kn">import</span> <span class="n">scatter_plot</span>
+
+
+<div class="viewcode-block" id="Model">
+<a class="viewcode-back" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Model</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">LightningModule</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A PyTorch Lightning module for scientific machine learning models.</span>
+<span class="sd">    </span>
+<span class="sd">    This class implements a modular architecture with representation and output components,</span>
+<span class="sd">    handles training, validation, and testing with customizable losses and metrics, and</span>
+<span class="sd">    supports gradient-based computations.</span>
+<span class="sd">    </span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    representation : nn.Module</span>
+<span class="sd">        Neural network module that computes feature representations from input data</span>
+<span class="sd">    output : nn.Module</span>
+<span class="sd">        Neural network module that transforms representations into predictions</span>
+<span class="sd">    losses : List[Dict]</span>
+<span class="sd">        List of dictionaries defining loss functions, their targets, predictions, and weights</span>
+<span class="sd">    validation_metrics : List[Dict]</span>
+<span class="sd">        List of dictionaries defining metrics to track during validation</span>
+<span class="sd">    lr : float, default=1e-3</span>
+<span class="sd">        Initial learning rate for optimizer</span>
+<span class="sd">    lr_decay : float, default=0.1</span>
+<span class="sd">        Factor by which learning rate is reduced on plateau</span>
+<span class="sd">    lr_patience : int, default=100</span>
+<span class="sd">        Number of epochs with no improvement after which learning rate is reduced</span>
+<span class="sd">    lr_monitor : str, default=&quot;training/total_loss&quot;</span>
+<span class="sd">        Metric to monitor for learning rate scheduling</span>
+<span class="sd">    epsilon : float, default=1e-8</span>
+<span class="sd">        Small constant for numerical stability in optimizer</span>
+<span class="sd">    beta1 : float, default=0.99</span>
+<span class="sd">        Exponential decay rate for first moment estimates in Adam optimizer</span>
+<span class="sd">    beta2 : float, default=0.999</span>
+<span class="sd">        Exponential decay rate for second moment estimates in Adam optimizer</span>
+<span class="sd">    amsgrad : bool, default=True</span>
+<span class="sd">        Whether to use AMSGrad variant of Adam optimizer</span>
+<span class="sd">    max_points_to_scatter : int, default=100000</span>
+<span class="sd">        Maximum number of points to include in scatter plots</span>
+<span class="sd">    post_processing : callable, optional</span>
+<span class="sd">        Function for calculating additional physical quantities that may require gradient backpropagation</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">representation</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span>
+            <span class="n">output</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span>
+            <span class="n">losses</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
+            <span class="n">validation_metrics</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
+            <span class="n">lr</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-3</span><span class="p">,</span>
+            <span class="n">lr_decay</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">,</span>
+            <span class="n">lr_patience</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
+            <span class="n">lr_monitor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;training/total_loss&quot;</span><span class="p">,</span>
+            <span class="n">epsilon</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-8</span><span class="p">,</span>
+            <span class="n">beta1</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.99</span><span class="p">,</span>
+            <span class="n">beta2</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.999</span><span class="p">,</span>
+            <span class="n">amsgrad</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="n">max_points_to_scatter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100000</span><span class="p">,</span>
+            <span class="n">post_processing</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">representation</span> <span class="o">=</span> <span class="n">representation</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_module</span> <span class="o">=</span> <span class="n">output</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">losses</span> <span class="o">=</span> <span class="n">losses</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span> <span class="o">=</span> <span class="n">validation_metrics</span>
+        
+        <span class="c1"># Optimizer parameters</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lr</span> <span class="o">=</span> <span class="n">lr</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lr_decay</span> <span class="o">=</span> <span class="n">lr_decay</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lr_patience</span> <span class="o">=</span> <span class="n">lr_patience</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lr_monitor</span> <span class="o">=</span> <span class="n">lr_monitor</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">epsilon</span> <span class="o">=</span> <span class="n">epsilon</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">beta1</span> <span class="o">=</span> <span class="n">beta1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">beta2</span> <span class="o">=</span> <span class="n">beta2</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">amsgrad</span> <span class="o">=</span> <span class="n">amsgrad</span>
+        
+        <span class="c1"># Visualization parameters</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_points_to_scatter</span> <span class="o">=</span> <span class="n">max_points_to_scatter</span>
+        
+        <span class="c1"># Post-processing for gradient-dependent physical quantities</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">post_processing</span> <span class="o">=</span> <span class="n">post_processing</span>
+        
+        <span class="c1"># Track if derivatives are required</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">requires_derivatives</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_module</span><span class="o">.</span><span class="n">derivative</span>
+
+<div class="viewcode-block" id="Model.calculate_loss">
+<a class="viewcode-back" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.calculate_loss">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">calculate_loss</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> 
+                       <span class="n">predictions</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> 
+                       <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Calculate the total loss by summing weighted individual loss components.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        batch : Dict[str, torch.Tensor]</span>
+<span class="sd">            Dictionary containing input data and target values</span>
+<span class="sd">        predictions : Dict[str, torch.Tensor]</span>
+<span class="sd">            Dictionary containing model predictions</span>
+<span class="sd">        mode : str</span>
+<span class="sd">            Current mode (&#39;training&#39;, &#39;validation&#39;, or &#39;test&#39;)</span>
+<span class="sd">            </span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        torch.Tensor</span>
+<span class="sd">            Total weighted loss</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">total_loss</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        
+        <span class="k">for</span> <span class="n">loss_dict</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">losses</span><span class="p">:</span>
+            <span class="n">loss_fn</span> <span class="o">=</span> <span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;metric&quot;</span><span class="p">]</span>
+            
+            <span class="k">if</span> <span class="s2">&quot;target&quot;</span> <span class="ow">in</span> <span class="n">loss_dict</span><span class="p">:</span>
+                <span class="n">prediction</span> <span class="o">=</span> <span class="n">predictions</span><span class="p">[</span><span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;prediction&quot;</span><span class="p">]]</span>
+                <span class="n">target</span> <span class="o">=</span> <span class="n">batch</span><span class="p">[</span><span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;target&quot;</span><span class="p">]]</span>
+                <span class="n">component_loss</span> <span class="o">=</span> <span class="n">loss_fn</span><span class="p">(</span><span class="n">prediction</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span>
+                
+                <span class="c1"># Apply sparsity correction if available and applicable</span>
+                <span class="k">if</span> <span class="p">(</span><span class="s1">&#39;sparsity_ratio&#39;</span> <span class="ow">in</span> <span class="n">predictions</span> <span class="ow">and</span> 
+                    <span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;prediction&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;hamiltonian&#39;</span><span class="p">,</span> <span class="s1">&#39;hamiltonian_real&#39;</span><span class="p">,</span> <span class="s1">&#39;hamiltonian_imag&#39;</span><span class="p">]):</span>
+                    <span class="n">sparsity_ratio</span> <span class="o">=</span> <span class="n">predictions</span><span class="p">[</span><span class="s1">&#39;sparsity_ratio&#39;</span><span class="p">]</span>
+                    <span class="n">component_loss</span> <span class="o">=</span> <span class="n">component_loss</span> <span class="o">*</span> <span class="n">sparsity_ratio</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">component_loss</span> <span class="o">=</span> <span class="n">loss_fn</span><span class="p">(</span><span class="n">predictions</span><span class="p">[</span><span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;prediction&quot;</span><span class="p">]])</span>
+                
+            <span class="c1"># Weight and add the loss component</span>
+            <span class="n">total_loss</span> <span class="o">+=</span> <span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;loss_weight&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="n">component_loss</span>
+            
+            <span class="c1"># Log the individual loss component</span>
+            <span class="n">loss_name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">loss_fn</span><span class="p">,</span> <span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">loss_fn</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">mode</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">loss_name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">loss_dict</span><span class="p">[</span><span class="s1">&#39;prediction&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">component_loss</span><span class="p">,</span>
+                <span class="n">on_step</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="n">on_epoch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="p">)</span>
+            
+        <span class="k">return</span> <span class="n">total_loss</span></div>
+
+
+<div class="viewcode-block" id="Model.training_step">
+<a class="viewcode-back" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.training_step">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">training_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">batch_idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform a single training step.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        batch : Dict[str, torch.Tensor]</span>
+<span class="sd">            Dictionary containing training data</span>
+<span class="sd">        batch_idx : int</span>
+<span class="sd">            Index of the current batch</span>
+<span class="sd">            </span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        torch.Tensor</span>
+<span class="sd">            Training loss for this step</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_enable_position_gradients</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+        <span class="n">predictions</span> <span class="o">=</span> <span class="bp">self</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+        <span class="n">loss</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">calculate_loss</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="s1">&#39;training&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s2">&quot;training/total_loss&quot;</span><span class="p">,</span> <span class="n">loss</span><span class="p">,</span> <span class="n">on_step</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">on_epoch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">prog_bar</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">loss</span></div>
+
+
+<div class="viewcode-block" id="Model.validation_step">
+<a class="viewcode-back" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.validation_step">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validation_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">batch_idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform a single validation step.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        batch : Dict[str, torch.Tensor]</span>
+<span class="sd">            Dictionary containing validation data</span>
+<span class="sd">        batch_idx : int</span>
+<span class="sd">            Index of the current batch</span>
+<span class="sd">            </span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Dict</span>
+<span class="sd">            Dictionary containing predictions and targets for logging</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Enable gradients if required for derivatives</span>
+        <span class="n">torch</span><span class="o">.</span><span class="n">set_grad_enabled</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">requires_derivatives</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_enable_position_gradients</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+        <span class="n">predictions</span> <span class="o">=</span> <span class="bp">self</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+        
+        <span class="n">val_loss</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">calculate_loss</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="s1">&#39;validation&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s2">&quot;validation/total_loss&quot;</span><span class="p">,</span> <span class="n">val_loss</span><span class="p">,</span> <span class="n">on_step</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">on_epoch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">prog_bar</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_metrics</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="s1">&#39;validation&#39;</span><span class="p">)</span>
+        
+        <span class="c1"># Collect outputs for epoch-end processing</span>
+        <span class="n">outputs_pred</span><span class="p">,</span> <span class="n">outputs_target</span> <span class="o">=</span> <span class="p">{},</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">loss_dict</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">losses</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s2">&quot;target&quot;</span> <span class="ow">in</span> <span class="n">loss_dict</span><span class="p">:</span>
+                <span class="n">outputs_pred</span><span class="p">[</span><span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;prediction&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">predictions</span><span class="p">[</span><span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;prediction&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>  
+                <span class="n">outputs_target</span><span class="p">[</span><span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;target&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">batch</span><span class="p">[</span><span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;target&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+                
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;pred&#39;</span><span class="p">:</span> <span class="n">outputs_pred</span><span class="p">,</span> <span class="s1">&#39;target&#39;</span><span class="p">:</span> <span class="n">outputs_target</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="Model.validation_epoch_end">
+<a class="viewcode-back" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.validation_epoch_end">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validation_epoch_end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">validation_step_outputs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Process and log validation results at the end of an epoch.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        validation_step_outputs : List[Dict]</span>
+<span class="sd">            List of outputs from all validation steps in the epoch</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_plot_prediction_vs_target</span><span class="p">(</span><span class="n">validation_step_outputs</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;validation&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Model.test_step">
+<a class="viewcode-back" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.test_step">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">batch_idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform a single test step.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        batch : Dict[str, torch.Tensor]</span>
+<span class="sd">            Dictionary containing test data</span>
+<span class="sd">        batch_idx : int</span>
+<span class="sd">            Index of the current batch</span>
+<span class="sd">            </span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Dict</span>
+<span class="sd">            Dictionary containing predictions, targets, and processed values</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Enable gradients if required for derivatives</span>
+        <span class="n">torch</span><span class="o">.</span><span class="n">set_grad_enabled</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">requires_derivatives</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_enable_position_gradients</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+        
+        <span class="n">processed_values</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">post_processing</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">predictions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">post_processing</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+            <span class="n">post_processing_name</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">post_processing</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            
+            <span class="k">if</span> <span class="n">post_processing_name</span> <span class="o">==</span> <span class="s1">&#39;epc_output&#39;</span><span class="p">:</span>
+                <span class="n">processed_values</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;epc_mat&#39;</span><span class="p">:</span> <span class="n">predictions</span><span class="p">[</span><span class="s1">&#39;epc_mat&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()}</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Post-processing type </span><span class="si">{</span><span class="n">post_processing_name</span><span class="si">}</span><span class="s2"> not implemented&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">predictions</span> <span class="o">=</span> <span class="bp">self</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+        
+        <span class="n">test_loss</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">calculate_loss</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="s1">&#39;test&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="s2">&quot;test/total_loss&quot;</span><span class="p">,</span> <span class="n">test_loss</span><span class="p">,</span> <span class="n">on_step</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">on_epoch</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_metrics</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="s2">&quot;test&quot;</span><span class="p">)</span>
+        
+        <span class="c1"># Collect outputs for epoch-end processing</span>
+        <span class="n">outputs_pred</span><span class="p">,</span> <span class="n">outputs_target</span> <span class="o">=</span> <span class="p">{},</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">loss_dict</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">losses</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s2">&quot;target&quot;</span> <span class="ow">in</span> <span class="n">loss_dict</span><span class="p">:</span>
+                <span class="n">outputs_pred</span><span class="p">[</span><span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;prediction&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">predictions</span><span class="p">[</span><span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;prediction&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>  
+                <span class="n">outputs_target</span><span class="p">[</span><span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;target&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">batch</span><span class="p">[</span><span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;target&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+                
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;pred&#39;</span><span class="p">:</span> <span class="n">outputs_pred</span><span class="p">,</span> 
+            <span class="s1">&#39;target&#39;</span><span class="p">:</span> <span class="n">outputs_target</span><span class="p">,</span> 
+            <span class="s1">&#39;processed_values&#39;</span><span class="p">:</span> <span class="n">processed_values</span>
+        <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="Model.test_epoch_end">
+<a class="viewcode-back" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.test_epoch_end">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_epoch_end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test_step_outputs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Process and log test results at the end of testing.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        test_step_outputs : List[Dict]</span>
+<span class="sd">            List of outputs from all test steps</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Create output directory if it doesn&#39;t exist</span>
+        <span class="n">log_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">trainer</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">log_dir</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">log_dir</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">log_dir</span><span class="p">)</span>
+        
+        <span class="c1"># Save predictions and targets</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_save_predictions_and_targets</span><span class="p">(</span><span class="n">test_step_outputs</span><span class="p">,</span> <span class="n">log_dir</span><span class="p">)</span>
+        
+        <span class="c1"># Generate and log scatter plots</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_plot_prediction_vs_target</span><span class="p">(</span><span class="n">test_step_outputs</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;test&#39;</span><span class="p">)</span>
+        
+        <span class="c1"># Save post-processed values if available</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">post_processing</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">post_processing_name</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">post_processing</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            
+            <span class="k">if</span> <span class="n">post_processing_name</span> <span class="o">==</span> <span class="s1">&#39;epc_output&#39;</span><span class="p">:</span>
+                <span class="n">processed_values</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span>
+                    <span class="n">out</span><span class="p">[</span><span class="s1">&#39;processed_values&#39;</span><span class="p">][</span><span class="s2">&quot;epc_mat&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">out</span> <span class="ow">in</span> <span class="n">test_step_outputs</span> <span class="k">if</span> <span class="n">out</span><span class="p">[</span><span class="s1">&#39;processed_values&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                <span class="p">])</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">log_dir</span><span class="p">,</span> <span class="s1">&#39;processed_values_epc_mat.npy&#39;</span><span class="p">),</span> <span class="n">processed_values</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Model.forward">
+<a class="viewcode-back" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.forward">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Forward pass through the model.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        batch : Dict[str, torch.Tensor]</span>
+<span class="sd">            Dictionary containing input data</span>
+<span class="sd">            </span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Dict[str, torch.Tensor]</span>
+<span class="sd">            Dictionary containing model predictions</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_enable_position_gradients</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+        <span class="n">representation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">representation</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+        <span class="n">predictions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_module</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">representation</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">predictions</span></div>
+
+
+<div class="viewcode-block" id="Model.log_metrics">
+<a class="viewcode-back" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.log_metrics">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> 
+                   <span class="n">predictions</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> 
+                   <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Log evaluation metrics for the current batch.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        batch : Dict[str, torch.Tensor]</span>
+<span class="sd">            Dictionary containing input data and target values</span>
+<span class="sd">        predictions : Dict[str, torch.Tensor]</span>
+<span class="sd">            Dictionary containing model predictions</span>
+<span class="sd">        mode : str</span>
+<span class="sd">            Current mode (&#39;validation&#39; or &#39;test&#39;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">metric_dict</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="p">:</span>
+            <span class="n">metric_fn</span> <span class="o">=</span> <span class="n">metric_dict</span><span class="p">[</span><span class="s2">&quot;metric&quot;</span><span class="p">]</span>
+            
+            <span class="k">if</span> <span class="s2">&quot;target&quot;</span> <span class="ow">in</span> <span class="n">metric_dict</span><span class="p">:</span>
+                <span class="n">prediction</span> <span class="o">=</span> <span class="n">predictions</span><span class="p">[</span><span class="n">metric_dict</span><span class="p">[</span><span class="s2">&quot;prediction&quot;</span><span class="p">]]</span>
+                <span class="n">target</span> <span class="o">=</span> <span class="n">batch</span><span class="p">[</span><span class="n">metric_dict</span><span class="p">[</span><span class="s2">&quot;target&quot;</span><span class="p">]]</span>
+                <span class="n">metric_value</span> <span class="o">=</span> <span class="n">metric_fn</span><span class="p">(</span><span class="n">prediction</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">metric_value</span> <span class="o">=</span> <span class="n">metric_fn</span><span class="p">(</span><span class="n">predictions</span><span class="p">[</span><span class="n">metric_dict</span><span class="p">[</span><span class="s2">&quot;prediction&quot;</span><span class="p">]])</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+                
+            <span class="c1"># Get metric name</span>
+            <span class="n">metric_name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">metric_fn</span><span class="p">,</span> <span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">metric_fn</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            
+            <span class="c1"># Log the metric</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">mode</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">metric_name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">metric_dict</span><span class="p">[</span><span class="s1">&#39;prediction&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">metric_value</span><span class="p">,</span>
+                <span class="n">on_step</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="n">on_epoch</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Model.configure_optimizers">
+<a class="viewcode-back" href="../../../api/model_structure.html#HamGNN_v_2_1.models.Model.Model.configure_optimizers">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">configure_optimizers</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Configure optimizers and learning rate schedulers.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Dict</span>
+<span class="sd">            Configuration dictionary for PyTorch Lightning</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">optimizer</span> <span class="o">=</span> <span class="n">optim</span><span class="o">.</span><span class="n">AdamW</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span>
+            <span class="n">lr</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">lr</span><span class="p">,</span>
+            <span class="n">eps</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">epsilon</span><span class="p">,</span>
+            <span class="n">betas</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">beta1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">beta2</span><span class="p">),</span>
+            <span class="n">weight_decay</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+            <span class="n">amsgrad</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">amsgrad</span>
+        <span class="p">)</span>
+        
+        <span class="n">scheduler</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;scheduler&quot;</span><span class="p">:</span> <span class="n">optim</span><span class="o">.</span><span class="n">lr_scheduler</span><span class="o">.</span><span class="n">ReduceLROnPlateau</span><span class="p">(</span>
+                <span class="n">optimizer</span><span class="p">,</span>
+                <span class="n">factor</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">lr_decay</span><span class="p">,</span>
+                <span class="n">patience</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">lr_patience</span><span class="p">,</span>
+                <span class="n">threshold</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">,</span>
+                <span class="n">cooldown</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">lr_patience</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span>
+                <span class="n">min_lr</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="s2">&quot;monitor&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">lr_monitor</span><span class="p">,</span>
+            <span class="s2">&quot;interval&quot;</span><span class="p">:</span> <span class="s2">&quot;epoch&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;frequency&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="s2">&quot;strict&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="p">}</span>
+        
+        <span class="k">return</span> <span class="p">[</span><span class="n">optimizer</span><span class="p">],</span> <span class="p">[</span><span class="n">scheduler</span><span class="p">]</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_enable_position_gradients</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Enable gradients for position vectors if derivatives are required.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        batch : Dict[str, torch.Tensor]</span>
+<span class="sd">            Dictionary containing input data including position vectors</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">requires_derivatives</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="s1">&#39;pos&#39;</span><span class="p">):</span>
+            <span class="n">batch</span><span class="o">.</span><span class="n">pos</span><span class="o">.</span><span class="n">requires_grad_</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_prepare_data_for_scatter_plot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pred</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Prepare complex data for scatter plotting and handle subsampling.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        pred : np.ndarray</span>
+<span class="sd">            Array of prediction values</span>
+<span class="sd">        target : np.ndarray</span>
+<span class="sd">            Array of target values</span>
+<span class="sd">            </span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        tuple</span>
+<span class="sd">            Processed prediction and target arrays ready for scatter plotting</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Handle complex data</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">pred</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">complex64</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">target</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">complex64</span><span class="p">):</span>
+            <span class="c1"># Check if we need absolute values or real/imag components</span>
+            <span class="k">for</span> <span class="n">loss_dict</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">losses</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">loss_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;metric&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="s1">&#39;name&#39;</span><span class="p">):</span>
+                    <span class="n">lossname</span> <span class="o">=</span> <span class="n">loss_dict</span><span class="p">[</span><span class="s1">&#39;metric&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">name</span>
+                <span class="k">elif</span> <span class="n">loss_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;metric&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">lossname</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">loss_dict</span><span class="p">[</span><span class="s1">&#39;metric&#39;</span><span class="p">])</span><span class="o">.</span><span class="vm">__name__</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">lossname</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+                    
+                <span class="k">if</span> <span class="n">lossname</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s1">&#39;abs_mae&#39;</span><span class="p">:</span>
+                    <span class="n">pred</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">absolute</span><span class="p">(</span><span class="n">pred</span><span class="p">)</span>
+                    <span class="n">target</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">absolute</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+                    <span class="k">break</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Default handling for complex numbers</span>
+                <span class="n">pred</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">pred</span><span class="o">.</span><span class="n">real</span><span class="p">,</span> <span class="n">pred</span><span class="o">.</span><span class="n">imag</span><span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">target</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">target</span><span class="o">.</span><span class="n">real</span><span class="p">,</span> <span class="n">target</span><span class="o">.</span><span class="n">imag</span><span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+        
+        <span class="c1"># Subsample if too many points</span>
+        <span class="k">if</span> <span class="n">pred</span><span class="o">.</span><span class="n">size</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_points_to_scatter</span><span class="p">:</span>
+            <span class="n">random_state</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">(</span><span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
+            <span class="n">perm</span> <span class="o">=</span> <span class="n">random_state</span><span class="o">.</span><span class="n">permutation</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">pred</span><span class="o">.</span><span class="n">size</span><span class="p">))</span>
+            <span class="n">pred</span> <span class="o">=</span> <span class="n">pred</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)[</span><span class="n">perm</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">max_points_to_scatter</span><span class="p">]]</span>
+            <span class="n">target</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)[</span><span class="n">perm</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">max_points_to_scatter</span><span class="p">]]</span>
+            
+        <span class="k">return</span> <span class="n">pred</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">target</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_plot_prediction_vs_target</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">step_outputs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create and log scatter plots comparing predictions to targets.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        step_outputs : List[Dict]</span>
+<span class="sd">            List of outputs from validation or test steps</span>
+<span class="sd">        mode : str</span>
+<span class="sd">            Current mode (&#39;validation&#39; or &#39;test&#39;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">loss_dict</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">losses</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s2">&quot;target&quot;</span> <span class="ow">in</span> <span class="n">loss_dict</span><span class="p">:</span>
+                <span class="n">pred_key</span> <span class="o">=</span> <span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;prediction&quot;</span><span class="p">]</span>
+                <span class="n">target_key</span> <span class="o">=</span> <span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;target&quot;</span><span class="p">]</span>
+                
+                <span class="c1"># Skip if this prediction or target isn&#39;t in the outputs</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">pred_key</span> <span class="ow">in</span> <span class="n">out</span><span class="p">[</span><span class="s1">&#39;pred&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">target_key</span> <span class="ow">in</span> <span class="n">out</span><span class="p">[</span><span class="s1">&#39;target&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">out</span> <span class="ow">in</span> <span class="n">step_outputs</span><span class="p">):</span>
+                    <span class="k">continue</span>
+                
+                <span class="c1"># Concatenate predictions and targets from all batches</span>
+                <span class="n">pred</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">out</span><span class="p">[</span><span class="s1">&#39;pred&#39;</span><span class="p">][</span><span class="n">pred_key</span><span class="p">]</span> <span class="k">for</span> <span class="n">out</span> <span class="ow">in</span> <span class="n">step_outputs</span><span class="p">])</span>
+                <span class="n">target</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">out</span><span class="p">[</span><span class="s1">&#39;target&#39;</span><span class="p">][</span><span class="n">target_key</span><span class="p">]</span> <span class="k">for</span> <span class="n">out</span> <span class="ow">in</span> <span class="n">step_outputs</span><span class="p">])</span>
+                
+                <span class="c1"># Prepare data for plotting</span>
+                <span class="n">plot_pred</span><span class="p">,</span> <span class="n">plot_target</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_data_for_scatter_plot</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span>
+                
+                <span class="c1"># Create and log the scatter plot</span>
+                <span class="n">figure</span> <span class="o">=</span> <span class="n">scatter_plot</span><span class="p">(</span><span class="n">plot_pred</span><span class="p">,</span> <span class="n">plot_target</span><span class="p">)</span>
+                <span class="n">figname</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;PredVSTarget_</span><span class="si">{</span><span class="n">pred_key</span><span class="si">}</span><span class="s1">&#39;</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">experiment</span><span class="o">.</span><span class="n">add_figure</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">mode</span><span class="si">}</span><span class="s1">/</span><span class="si">{</span><span class="n">figname</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">figure</span><span class="p">,</span> <span class="n">global_step</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">global_step</span>
+                <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_save_predictions_and_targets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test_outputs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> <span class="n">log_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Save prediction and target arrays to disk.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        test_outputs : List[Dict]</span>
+<span class="sd">            List of outputs from test steps</span>
+<span class="sd">        log_dir : str</span>
+<span class="sd">            Directory to save the arrays</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">loss_dict</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">losses</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s2">&quot;target&quot;</span> <span class="ow">in</span> <span class="n">loss_dict</span><span class="p">:</span>
+                <span class="n">pred_key</span> <span class="o">=</span> <span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;prediction&quot;</span><span class="p">]</span>
+                <span class="n">target_key</span> <span class="o">=</span> <span class="n">loss_dict</span><span class="p">[</span><span class="s2">&quot;target&quot;</span><span class="p">]</span>
+                
+                <span class="c1"># Skip if this prediction or target isn&#39;t in the outputs</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">pred_key</span> <span class="ow">in</span> <span class="n">out</span><span class="p">[</span><span class="s1">&#39;pred&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">target_key</span> <span class="ow">in</span> <span class="n">out</span><span class="p">[</span><span class="s1">&#39;target&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">out</span> <span class="ow">in</span> <span class="n">test_outputs</span><span class="p">):</span>
+                    <span class="k">continue</span>
+                
+                <span class="c1"># Concatenate predictions and targets from all batches</span>
+                <span class="n">pred</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">out</span><span class="p">[</span><span class="s1">&#39;pred&#39;</span><span class="p">][</span><span class="n">pred_key</span><span class="p">]</span> <span class="k">for</span> <span class="n">out</span> <span class="ow">in</span> <span class="n">test_outputs</span><span class="p">])</span>
+                <span class="n">target</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">out</span><span class="p">[</span><span class="s1">&#39;target&#39;</span><span class="p">][</span><span class="n">target_key</span><span class="p">]</span> <span class="k">for</span> <span class="n">out</span> <span class="ow">in</span> <span class="n">test_outputs</span><span class="p">])</span>
+                
+                <span class="c1"># Save to disk</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">log_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;prediction_</span><span class="si">{</span><span class="n">pred_key</span><span class="si">}</span><span class="s1">.npy&#39;</span><span class="p">),</span> <span class="n">pred</span><span class="p">)</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">log_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;target_</span><span class="si">{</span><span class="n">target_key</span><span class="si">}</span><span class="s1">.npy&#39;</span><span class="p">),</span> <span class="n">target</span><span class="p">)</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright HamGNN Team.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <div class="rst-versions" data-toggle="rst-versions" role="note" aria-label="versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    <span class="fa fa-book"></span>
+    docs | v2.1 | en
+    <span class="fa fa-caret-down"></span>
+  </span>
+  
+  <div class="rst-other-versions">
+    
+    
+    
+    
+    
+    
+    
+    
+
+    <hr>
+    <dl>
+      <dt>项目主页</dt>
+      <dd>
+        <a href="https://github.com/bud-primordium/HamGNN">
+          <span class="fa fa-github"></span> GitHub
+        </a>
+      </dd>
+    </dl>
+  </div>
+</div>
+
+<style>
+/* 自定义样式优化三维切换器 */
+.rst-versions {
+  font-size: 14px;
+}
+
+/* 让版本切换器更醒目 */
+.rst-current-version {
+  background-color: #2c3e50 !important;
+  font-weight: bold !important;
+  font-size: 15px !important;
+  padding: 12px 24px !important;
+}
+
+.rst-current-version:hover {
+  background-color: #34495e !important;
+}
+
+.rst-other-versions dl {
+  margin-bottom: 16px;
+}
+
+.rst-other-versions dt {
+  color: #55a5d9;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.rst-other-versions dd {
+  margin-left: 16px;
+  margin-bottom: 4px;
+}
+
+.rst-other-versions dd.rtd-current-item a {
+  font-weight: bold;
+  color: #55a5d9;
+}
+
+.rst-other-versions hr {
+  margin: 16px 0;
+  border: none;
+  border-top: 1px solid #444;
+}
+</style><script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

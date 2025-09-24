@@ -1,0 +1,112 @@
+<div class="rst-versions" data-toggle="rst-versions" role="note" aria-label="versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    <span class="fa fa-book"></span>
+    {{ current_branch_display }} | {{ current_version_display }} | {{ current_language_display }}
+    <span class="fa fa-caret-down"></span>
+  </span>
+  
+  <div class="rst-other-versions">
+    {# 分支选择 #}
+    {% if branches|length > 1 %}
+    <dl>
+      <dt>{{ _('分支') }}</dt>
+      {% for branch_key, branch_name, branch_url in branches %}
+        {% if branch_key == current_branch %}
+          <dd class="rtd-current-item">
+            <a href="{{ branch_url }}">{{ branch_name }} ✓</a>
+          </dd>
+        {% else %}
+          <dd><a href="{{ branch_url }}">{{ branch_name }}</a></dd>
+        {% endif %}
+      {% endfor %}
+    </dl>
+    {% endif %}
+    
+    {# 版本选择 #}
+    {% if versions|length > 1 %}
+    <dl>
+      <dt>{{ _('版本') }}</dt>
+      {% for version_key, version_name, version_url in versions %}
+        {% if version_key == current_version %}
+          <dd class="rtd-current-item">
+            <a href="{{ version_url }}">{{ version_name }} ✓</a>
+          </dd>
+        {% else %}
+          <dd><a href="{{ version_url }}">{{ version_name }}</a></dd>
+        {% endif %}
+      {% endfor %}
+    </dl>
+    {% endif %}
+    
+    {# 语言选择 #}
+    {% if languages|length > 1 %}
+    <dl>
+      <dt>{{ _('语言') }}</dt>
+      {% for lang in languages %}
+        {% if lang.is_current %}
+          <dd class="rtd-current-item">
+            <a href="{{ lang.url }}">{{ lang.name }} ✓</a>
+          </dd>
+        {% else %}
+          <dd><a href="{{ lang.url }}">{{ lang.name }}</a></dd>
+        {% endif %}
+      {% endfor %}
+    </dl>
+    {% endif %}
+
+    <hr>
+    <dl>
+      <dt>{{ _('项目主页') }}</dt>
+      <dd>
+        <a href="https://github.com/bud-primordium/HamGNN">
+          <span class="fa fa-github"></span> GitHub
+        </a>
+      </dd>
+    </dl>
+  </div>
+</div>
+
+<style>
+/* 自定义样式优化三维切换器 */
+.rst-versions {
+  font-size: 14px;
+}
+
+/* 让版本切换器更醒目 */
+.rst-current-version {
+  background-color: #2c3e50 !important;
+  font-weight: bold !important;
+  font-size: 15px !important;
+  padding: 12px 24px !important;
+}
+
+.rst-current-version:hover {
+  background-color: #34495e !important;
+}
+
+.rst-other-versions dl {
+  margin-bottom: 16px;
+}
+
+.rst-other-versions dt {
+  color: #55a5d9;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.rst-other-versions dd {
+  margin-left: 16px;
+  margin-bottom: 4px;
+}
+
+.rst-other-versions dd.rtd-current-item a {
+  font-weight: bold;
+  color: #55a5d9;
+}
+
+.rst-other-versions hr {
+  margin: 16px 0;
+  border: none;
+  border-top: 1px solid #444;
+}
+</style>

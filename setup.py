@@ -4,7 +4,7 @@ version:
 Author: Yang Zhong
 Date: 2024-10-29 21:19:36
 LastEditors: Yang Zhong
-LastEditTime: 2024-10-29 21:38:12
+LastEditTime: 2025-09-24 00:15:49
 '''
 
 import os.path
@@ -14,7 +14,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="HamGNN",
-    version='2.0.0',
+    version='2.1.0',
     description="Hamiltonian prediction via Graph Neural Network",
     download_url="",
     author="Yang Zhong",
@@ -24,8 +24,7 @@ setup(
     package_data={'': ['*.npz', '*.json'],},
     entry_points={
         "console_scripts": [
-            "HamGNN1.0 = HamGNN_v_1_0.main:HamGNN",
-            "HamGNN2.0 = HamGNN_v_2_0.main:HamGNN",
+            "HamGNN2.0 = HamGNN_v_2_1.main:HamGNN",
             "band_cal = utils_openmx.band_cal:main",
             "graph_data_gen = utils_openmx.graph_data_gen:main",
             "poscar2openmx = utils_openmx.poscar2openmx:main"
