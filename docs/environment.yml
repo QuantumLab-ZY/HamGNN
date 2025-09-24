@@ -1,0 +1,48 @@
+name: hamgnn-docs
+channels:
+  - pytorch
+  - pyg
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - sphinx
+  - sphinx_rtd_theme
+  - sphinx-autodoc-typehints
+  - myst-parser
+  - sphinx-copybutton
+  - graphviz
+
+  # Core dependencies of HamGNN
+  - numpy
+  - pytorch=2.1.0
+  - pytorch-lightning
+  - torchmetrics
+  - scikit-learn
+  - pandas
+  - matplotlib
+  - scipy
+  - natsort
+  - e3nn
+  - pymatgen
+  - easydict
+  - ase
+  - tqdm
+  - numba
+  - tensorboard
+  
+  # PyTorch Geometric and its dependencies (installed via pip)
+  
+  # Other pip dependencies
+  - pip
+  - pip:
+    - --find-links https://data.pyg.org/whl/torch-2.1.0+cpu.html
+    - torch-scatter
+    - torch-sparse
+    - torch-cluster
+    - torch-spline-conv
+    - torch-geometric
+    - torch-ema
+    - torch-runstats
+    - lie_learn
+    - sphinx-intl  # multilanguage support
