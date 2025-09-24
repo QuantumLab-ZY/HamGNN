@@ -1,7 +1,0 @@
-#!/bin/bash
-rm -f p
-for name in *.c
-do echo "FILE=" $name >>p ; /lib/cpp $name |  python filA3.py >>p
-done
-
-

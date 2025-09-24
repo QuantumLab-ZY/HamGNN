@@ -1,0 +1,680 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Configuration &mdash; HamGNN v2.1 Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=fd3f3429" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=7902463a" />
+
+  
+    <link rel="shortcut icon" href="../_static/logo.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=c36237e0"></script>
+      <script src="../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=faab29de"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Utilities" href="utilities.html" />
+    <link rel="prev" title="Data Processing" href="data_processing.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            HamGNN_v_2_1
+              <img src="../_static/logo.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/index.html">HamGNN User Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user_guide/introduction.html">HamGNN Introduction</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/introduction.html#key-features">Key Features</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/introduction.html#application-areas">Application Areas</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/introduction.html#latest-developments">Latest Developments</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../user_guide/installation.html">Environment Configuration and Installation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/installation.html#python-environment">Python Environment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/installation.html#third-party-dft-tool-support">Third-party DFT Tool Support</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide/installation.html#openmx">OpenMX</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide/installation.html#siesta-honpas">SIESTA/HONPAS</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide/installation.html#abacus">ABACUS</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide/installation.html#compiling-openmx-postprocess-and-read-openmx">Compiling <code class="docutils literal notranslate"><span class="pre">openmx_postprocess</span></code> and <code class="docutils literal notranslate"><span class="pre">read_openmx</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/installation.html#hamgnn-installation-steps">HamGNN Installation Steps</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide/installation.html#step-one-install-conda-environment">Step One: Install Conda Environment</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide/installation.html#step-two-source-installation-of-hamgnn">Step Two: Source Installation of HamGNN</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../user_guide/data_preparation.html">Construction of graph_data.npz File</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/data_preparation.html#general-process">General Process</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/data_preparation.html#openmx-process">OpenMX Process</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/data_preparation.html#siesta-honpas-process">SIESTA/HONPAS Process</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/data_preparation.html#abacus-process">ABACUS Process</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../user_guide/training.html">Model Training Process</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/training.html#training-mode-classification">Training Mode Classification</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/training.html#training-command">Training Command</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/training.html#key-configuration-items">Key Configuration Items</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/training.html#training-monitoring">Training Monitoring</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../user_guide/prediction.html">Model Prediction Operation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/prediction.html#preparation-for-prediction">Preparation for Prediction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/prediction.html#execute-prediction">Execute Prediction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/prediction.html#output-results">Output Results</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../user_guide/band_calculation.html">Band Structure Calculation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/band_calculation.html#operation-process">Operation Process</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/band_calculation.html#band-calculation-for-large-systems">Band Calculation for Large Systems</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../user_guide/uni_hamgnn.html">Uni-HamGNN Universal Model</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/uni_hamgnn.html#model-introduction">Model Introduction</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/uni_hamgnn.html#input-requirements">Input Requirements</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/uni_hamgnn.html#usage-process">Usage Process</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/uni_hamgnn.html#output-results">Output Results</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../user_guide/parameters.html">HamGNN Parameter Details</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/parameters.html#setup-basic-settings">setup (Basic Settings)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/parameters.html#dataset-params-dataset-parameters">dataset_params (Dataset Parameters)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/parameters.html#losses-metrics-loss-functions-and-evaluation-metrics">losses_metrics (Loss Functions and Evaluation Metrics)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/parameters.html#optim-params-optimizer-parameters">optim_params (Optimizer Parameters)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/parameters.html#output-nets-hamgnn-out-output-network-parameters">output_nets.HamGNN_out (Output Network Parameters)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/parameters.html#representation-nets-hamgnn-pre-representation-network-parameters">representation_nets.HamGNN_pre (Representation Network Parameters)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../user_guide/parameters.html#parameter-adjustment-recommendations">Parameter Adjustment Recommendations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../user_guide/parameters.html#references">References</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="model_structure.html">Model Structure</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="model_structure.html#module-HamGNN_v_2_1.models.base_model">Base Model</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.base_model.get_radii_from_atomic_numbers"><code class="docutils literal notranslate"><span class="pre">get_radii_from_atomic_numbers()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.base_model.neighbor_list_and_relative_vec"><code class="docutils literal notranslate"><span class="pre">neighbor_list_and_relative_vec()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.base_model.find_matching_columns_of_A_in_B"><code class="docutils literal notranslate"><span class="pre">find_matching_columns_of_A_in_B()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.base_model.BaseModel"><code class="docutils literal notranslate"><span class="pre">BaseModel</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.base_model.BaseModel.forward"><code class="docutils literal notranslate"><span class="pre">BaseModel.forward()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.base_model.BaseModel.generate_graph"><code class="docutils literal notranslate"><span class="pre">BaseModel.generate_graph()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.base_model.BaseModel.num_params"><code class="docutils literal notranslate"><span class="pre">BaseModel.num_params</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model_structure.html#module-HamGNN_v_2_1.models.hamgnn_conv">HamGNN Convolution</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_conv.HamGNNConvE3"><code class="docutils literal notranslate"><span class="pre">HamGNNConvE3</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_conv.HamGNNConvE3.forward"><code class="docutils literal notranslate"><span class="pre">HamGNNConvE3.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model_structure.html#module-HamGNN_v_2_1.models.hamgnn_transformer">HamGNN Transformer</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_transformer.HamGNNTransformer"><code class="docutils literal notranslate"><span class="pre">HamGNNTransformer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_transformer.HamGNNTransformer.forward"><code class="docutils literal notranslate"><span class="pre">HamGNNTransformer.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model_structure.html#module-HamGNN_v_2_1.models.hamgnn_output">HamGNN Output Head</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamLayer"><code class="docutils literal notranslate"><span class="pre">HamLayer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamLayer.forward"><code class="docutils literal notranslate"><span class="pre">HamLayer.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.merge_tensor_components"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.merge_tensor_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.merge_rank2_tensor_components"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.merge_rank2_tensor_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.merge_rank0_tensor_components"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.merge_rank0_tensor_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.construct_j_coupling_matrix"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.construct_j_coupling_matrix()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.construct_k_coupling_matrix"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.construct_k_coupling_matrix()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.reorder_matrix"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.reorder_matrix()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.construct_molecular_hamiltonian"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.construct_molecular_hamiltonian()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.concatenate_hamiltonians_by_crystal"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.concatenate_hamiltonians_by_crystal()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.symmetrize_hamiltonian"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.symmetrize_hamiltonian()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.symmetrize_onsite_hamiltonian"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.symmetrize_onsite_hamiltonian()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.symmetrize_offsite_hamiltonian"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.symmetrize_offsite_hamiltonian()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.symmetrize_onsite_hamiltonian_soc"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.symmetrize_onsite_hamiltonian_soc()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.symmetrize_offsite_hamiltonian_soc"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.symmetrize_offsite_hamiltonian_soc()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.calculate_band_energies_with_overlap"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.calculate_band_energies_with_overlap()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.calculate_band_energies"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.calculate_band_energies()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.calculate_band_energies_with_spin_orbit_coupling"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.calculate_band_energies_with_spin_orbit_coupling()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.apply_orbital_masks_to_hamiltonians"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.apply_orbital_masks_to_hamiltonians()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.symmetrize_orbital_coefficients"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.symmetrize_orbital_coefficients()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.create_cell_index_mapping"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.create_cell_index_mapping()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.extract_unique_cell_vectors"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.extract_unique_cell_vectors()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.build_edge_lookup_structures"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.build_edge_lookup_structures()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.create_orbital_validity_mask"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.create_orbital_validity_mask()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.build_interaction_masks"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.build_interaction_masks()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.build_column_wise_interaction_masks"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.build_column_wise_interaction_masks()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.build_spin_orbit_interaction_masks"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.build_spin_orbit_interaction_masks()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.calculate_sparsity_ratio"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.calculate_sparsity_ratio()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.validate_elements_in_basis_def"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.validate_elements_in_basis_def()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.hamgnn_output.HamGNNPlusPlusOut.forward"><code class="docutils literal notranslate"><span class="pre">HamGNNPlusPlusOut.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model_structure.html#module-HamGNN_v_2_1.models.Model">Main Model Implementation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.Model.Model"><code class="docutils literal notranslate"><span class="pre">Model</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.Model.Model.calculate_loss"><code class="docutils literal notranslate"><span class="pre">Model.calculate_loss()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.Model.Model.training_step"><code class="docutils literal notranslate"><span class="pre">Model.training_step()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.Model.Model.validation_step"><code class="docutils literal notranslate"><span class="pre">Model.validation_step()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.Model.Model.validation_epoch_end"><code class="docutils literal notranslate"><span class="pre">Model.validation_epoch_end()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.Model.Model.test_step"><code class="docutils literal notranslate"><span class="pre">Model.test_step()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.Model.Model.test_epoch_end"><code class="docutils literal notranslate"><span class="pre">Model.test_epoch_end()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.Model.Model.forward"><code class="docutils literal notranslate"><span class="pre">Model.forward()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.Model.Model.log_metrics"><code class="docutils literal notranslate"><span class="pre">Model.log_metrics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_structure.html#HamGNN_v_2_1.models.Model.Model.configure_optimizers"><code class="docutils literal notranslate"><span class="pre">Model.configure_optimizers()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="gnn_core.html">GNN Core Layers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="gnn_core/message_passing.html">Message Passing</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="gnn_core/message_passing.html#module-HamGNN_v_2_1.nn.message_passing">Message Pack Blocks</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/message_passing.html#HamGNN_v_2_1.nn.message_passing.MessagePackBlock"><code class="docutils literal notranslate"><span class="pre">MessagePackBlock</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/message_passing.html#HamGNN_v_2_1.nn.message_passing.MessagePackBlockV2"><code class="docutils literal notranslate"><span class="pre">MessagePackBlockV2</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="gnn_core/attention.html">Attention Mechanisms</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="gnn_core/attention.html#module-HamGNN_v_2_1.nn.attention">Attention Layers</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/attention.html#HamGNN_v_2_1.nn.attention.AttentionAggregationV2"><code class="docutils literal notranslate"><span class="pre">AttentionAggregationV2</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/attention.html#HamGNN_v_2_1.nn.attention.AttentionAggregation"><code class="docutils literal notranslate"><span class="pre">AttentionAggregation</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/attention.html#HamGNN_v_2_1.nn.attention.AttentionBlockE3"><code class="docutils literal notranslate"><span class="pre">AttentionBlockE3</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="gnn_core/attention.html#module-HamGNN_v_2_1.nn.attention_utils">Attention Utilities</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/attention.html#HamGNN_v_2_1.nn.attention_utils.VectorToAttentionHeads"><code class="docutils literal notranslate"><span class="pre">VectorToAttentionHeads</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/attention.html#HamGNN_v_2_1.nn.attention_utils.AttentionHeadsToVector"><code class="docutils literal notranslate"><span class="pre">AttentionHeadsToVector</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="gnn_core/convolution.html">Convolution Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="gnn_core/convolution.html#module-HamGNN_v_2_1.nn.convolution">Graph Convolution Operations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/convolution.html#HamGNN_v_2_1.nn.convolution.ConvBlockE3"><code class="docutils literal notranslate"><span class="pre">ConvBlockE3</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="gnn_core/tensor_operations.html">Tensor Operations</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="gnn_core/tensor_operations.html#module-HamGNN_v_2_1.nn.tensor_products">Tensor Products</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/tensor_operations.html#HamGNN_v_2_1.nn.tensor_products.LinearScaleWithWeights"><code class="docutils literal notranslate"><span class="pre">LinearScaleWithWeights</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/tensor_operations.html#HamGNN_v_2_1.nn.tensor_products.TensorProductWithMemoryOptimizationWithWeight"><code class="docutils literal notranslate"><span class="pre">TensorProductWithMemoryOptimizationWithWeight</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/tensor_operations.html#HamGNN_v_2_1.nn.tensor_products.TensorProductWithScalarComponents"><code class="docutils literal notranslate"><span class="pre">TensorProductWithScalarComponents</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/tensor_operations.html#HamGNN_v_2_1.nn.tensor_products.ConcatenatedIrrepsTensorProduct"><code class="docutils literal notranslate"><span class="pre">ConcatenatedIrrepsTensorProduct</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="gnn_core/interaction_blocks.html">Interaction Blocks</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="gnn_core/interaction_blocks.html#module-HamGNN_v_2_1.nn.interaction_blocks">Neural Network Interaction Components</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/interaction_blocks.html#HamGNN_v_2_1.nn.interaction_blocks.PairInteractionBlock"><code class="docutils literal notranslate"><span class="pre">PairInteractionBlock</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/interaction_blocks.html#HamGNN_v_2_1.nn.interaction_blocks.CorrProductBlock"><code class="docutils literal notranslate"><span class="pre">CorrProductBlock</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/interaction_blocks.html#HamGNN_v_2_1.nn.interaction_blocks.ResidualBlock"><code class="docutils literal notranslate"><span class="pre">ResidualBlock</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="gnn_core/physics_tools.html">Physics Tools</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="gnn_core/physics_tools.html#module-HamGNN_v_2_1.physics.Clebsch_Gordan_coefficients">Clebsch-Gordan Coefficients</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/physics_tools.html#HamGNN_v_2_1.physics.Clebsch_Gordan_coefficients.ClebschGordanCoefficients"><code class="docutils literal notranslate"><span class="pre">ClebschGordanCoefficients</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="gnn_core/physics_tools.html#module-HamGNN_v_2_1.physics.kpoints">K-Points</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/physics_tools.html#HamGNN_v_2_1.physics.kpoints.kpoints_generator"><code class="docutils literal notranslate"><span class="pre">kpoints_generator</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/physics_tools.html#HamGNN_v_2_1.physics.kpoints.compute_reciprocal_lattice_vectors"><code class="docutils literal notranslate"><span class="pre">compute_reciprocal_lattice_vectors()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/physics_tools.html#HamGNN_v_2_1.physics.kpoints.generate_kpoint_grid"><code class="docutils literal notranslate"><span class="pre">generate_kpoint_grid()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="gnn_core/physics_tools.html#module-HamGNN_v_2_1.physics.matrix_operations">Matrix Operations</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/physics_tools.html#HamGNN_v_2_1.physics.matrix_operations.HamLayer"><code class="docutils literal notranslate"><span class="pre">HamLayer</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/physics_tools.html#HamGNN_v_2_1.physics.matrix_operations.TensorExpansion"><code class="docutils literal notranslate"><span class="pre">TensorExpansion</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/physics_tools.html#HamGNN_v_2_1.physics.matrix_operations.OverlapExpand"><code class="docutils literal notranslate"><span class="pre">OverlapExpand</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="gnn_core/physics_tools.html#HamGNN_v_2_1.physics.matrix_operations.TensorMerge"><code class="docutils literal notranslate"><span class="pre">TensorMerge</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="model_components.html">Model Components</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="model_components.html#module-HamGNN_v_2_1.nn.embeddings">Embeddings</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.nn.embeddings.RadialBasisEdgeEncoding"><code class="docutils literal notranslate"><span class="pre">RadialBasisEdgeEncoding</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.nn.embeddings.RadialBasisEdgeEncoding.out_field"><code class="docutils literal notranslate"><span class="pre">RadialBasisEdgeEncoding.out_field</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.nn.embeddings.RadialBasisEdgeEncoding.forward"><code class="docutils literal notranslate"><span class="pre">RadialBasisEdgeEncoding.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.nn.embeddings.EdgeScalarEmbedding"><code class="docutils literal notranslate"><span class="pre">EdgeScalarEmbedding</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.nn.embeddings.EdgeScalarEmbedding.forward"><code class="docutils literal notranslate"><span class="pre">EdgeScalarEmbedding.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.nn.embeddings.LocalEnvironmentEmbedding"><code class="docutils literal notranslate"><span class="pre">LocalEnvironmentEmbedding</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.nn.embeddings.LocalEnvironmentEmbedding.forward"><code class="docutils literal notranslate"><span class="pre">LocalEnvironmentEmbedding.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.nn.embeddings.PairInteractionEmbeddingBlock"><code class="docutils literal notranslate"><span class="pre">PairInteractionEmbeddingBlock</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.nn.embeddings.PairInteractionEmbeddingBlock.create_linear"><code class="docutils literal notranslate"><span class="pre">PairInteractionEmbeddingBlock.create_linear()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.nn.embeddings.PairInteractionEmbeddingBlock.create_tensor_product"><code class="docutils literal notranslate"><span class="pre">PairInteractionEmbeddingBlock.create_tensor_product()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.nn.embeddings.PairInteractionEmbeddingBlock.init_weight_generator"><code class="docutils literal notranslate"><span class="pre">PairInteractionEmbeddingBlock.init_weight_generator()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.nn.embeddings.PairInteractionEmbeddingBlock.forward"><code class="docutils literal notranslate"><span class="pre">PairInteractionEmbeddingBlock.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.nn.embeddings.Embedding"><code class="docutils literal notranslate"><span class="pre">Embedding</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.nn.embeddings.Embedding.reset_parameters"><code class="docutils literal notranslate"><span class="pre">Embedding.reset_parameters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.nn.embeddings.Embedding.forward"><code class="docutils literal notranslate"><span class="pre">Embedding.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model_components.html#module-HamGNN_v_2_1.nn.electron_configurations">Electron Configurations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="model_components.html#module-HamGNN_v_2_1.utils.mlp">MLP Utilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.mlp.linear_bn_act"><code class="docutils literal notranslate"><span class="pre">linear_bn_act()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.mlp.denseLayer"><code class="docutils literal notranslate"><span class="pre">denseLayer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.mlp.denseLayer.forward"><code class="docutils literal notranslate"><span class="pre">denseLayer.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.mlp.Dense"><code class="docutils literal notranslate"><span class="pre">Dense</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.mlp.Dense.reset_parameters"><code class="docutils literal notranslate"><span class="pre">Dense.reset_parameters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.mlp.Dense.forward"><code class="docutils literal notranslate"><span class="pre">Dense.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model_components.html#module-HamGNN_v_2_1.utils.activation">Activation Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.activation.shifted_softplus"><code class="docutils literal notranslate"><span class="pre">shifted_softplus()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.activation.switch_function"><code class="docutils literal notranslate"><span class="pre">switch_function()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.activation.softplus_inverse"><code class="docutils literal notranslate"><span class="pre">softplus_inverse()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.activation.SoftUnitStepCutoff"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.activation.SoftUnitStepCutoff.cutoff"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff.cutoff</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.activation.SoftUnitStepCutoff.cut_param"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff.cut_param</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.activation.SoftUnitStepCutoff.forward"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.activation.swish"><code class="docutils literal notranslate"><span class="pre">swish()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.activation.SSP"><code class="docutils literal notranslate"><span class="pre">SSP</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.activation.SSP.forward"><code class="docutils literal notranslate"><span class="pre">SSP.forward()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.activation.SSP.extra_repr"><code class="docutils literal notranslate"><span class="pre">SSP.extra_repr()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.activation.SWISH"><code class="docutils literal notranslate"><span class="pre">SWISH</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.activation.SWISH.forward"><code class="docutils literal notranslate"><span class="pre">SWISH.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.activation.get_activation"><code class="docutils literal notranslate"><span class="pre">get_activation()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model_components.html#module-HamGNN_v_2_1.utils.basis_functions">Basis Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.BernsteinRadialBasisFunctions"><code class="docutils literal notranslate"><span class="pre">BernsteinRadialBasisFunctions</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.BernsteinRadialBasisFunctions.reset_parameters"><code class="docutils literal notranslate"><span class="pre">BernsteinRadialBasisFunctions.reset_parameters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.BernsteinRadialBasisFunctions.forward"><code class="docutils literal notranslate"><span class="pre">BernsteinRadialBasisFunctions.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.ExponentialBernsteinRadialBasisFunctions"><code class="docutils literal notranslate"><span class="pre">ExponentialBernsteinRadialBasisFunctions</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.ExponentialBernsteinRadialBasisFunctions.reset_parameters"><code class="docutils literal notranslate"><span class="pre">ExponentialBernsteinRadialBasisFunctions.reset_parameters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.ExponentialBernsteinRadialBasisFunctions.forward"><code class="docutils literal notranslate"><span class="pre">ExponentialBernsteinRadialBasisFunctions.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.ExponentialGaussianRadialBasisFunctions"><code class="docutils literal notranslate"><span class="pre">ExponentialGaussianRadialBasisFunctions</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.ExponentialGaussianRadialBasisFunctions.reset_parameters"><code class="docutils literal notranslate"><span class="pre">ExponentialGaussianRadialBasisFunctions.reset_parameters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.ExponentialGaussianRadialBasisFunctions.forward"><code class="docutils literal notranslate"><span class="pre">ExponentialGaussianRadialBasisFunctions.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.GaussianRadialBasisFunctions"><code class="docutils literal notranslate"><span class="pre">GaussianRadialBasisFunctions</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.GaussianRadialBasisFunctions.reset_parameters"><code class="docutils literal notranslate"><span class="pre">GaussianRadialBasisFunctions.reset_parameters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.GaussianRadialBasisFunctions.forward"><code class="docutils literal notranslate"><span class="pre">GaussianRadialBasisFunctions.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.OverlapBernsteinRadialBasisFunctions"><code class="docutils literal notranslate"><span class="pre">OverlapBernsteinRadialBasisFunctions</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.OverlapBernsteinRadialBasisFunctions.reset_parameters"><code class="docutils literal notranslate"><span class="pre">OverlapBernsteinRadialBasisFunctions.reset_parameters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.OverlapBernsteinRadialBasisFunctions.forward"><code class="docutils literal notranslate"><span class="pre">OverlapBernsteinRadialBasisFunctions.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.sph_harm_layer"><code class="docutils literal notranslate"><span class="pre">sph_harm_layer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.sph_harm_layer.forward"><code class="docutils literal notranslate"><span class="pre">sph_harm_layer.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.BesselBasis"><code class="docutils literal notranslate"><span class="pre">BesselBasis</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.BesselBasis.forward"><code class="docutils literal notranslate"><span class="pre">BesselBasis.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.GaussianSmearing"><code class="docutils literal notranslate"><span class="pre">GaussianSmearing</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.basis_functions.GaussianSmearing.forward"><code class="docutils literal notranslate"><span class="pre">GaussianSmearing.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model_components.html#module-HamGNN_v_2_1.utils.cutoff_functions">Cutoff Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.cutoff_functions.cutoff_function"><code class="docutils literal notranslate"><span class="pre">cutoff_function()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.cutoff_functions.cuttoff_envelope"><code class="docutils literal notranslate"><span class="pre">cuttoff_envelope</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.cutoff_functions.cuttoff_envelope.forward"><code class="docutils literal notranslate"><span class="pre">cuttoff_envelope.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.cutoff_functions.CosineCutoff"><code class="docutils literal notranslate"><span class="pre">CosineCutoff</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.cutoff_functions.CosineCutoff.forward"><code class="docutils literal notranslate"><span class="pre">CosineCutoff.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.cutoff_functions.SoftUnitStepCutoff"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.cutoff_functions.SoftUnitStepCutoff.cutoff"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff.cutoff</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.cutoff_functions.SoftUnitStepCutoff.cut_param"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff.cut_param</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.cutoff_functions.SoftUnitStepCutoff.forward"><code class="docutils literal notranslate"><span class="pre">SoftUnitStepCutoff.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model_components.html#module-HamGNN_v_2_1.utils.regression_layers">Regression Layers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.regression_layers.denseRegression"><code class="docutils literal notranslate"><span class="pre">denseRegression</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.regression_layers.denseRegression.forward"><code class="docutils literal notranslate"><span class="pre">denseRegression.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.regression_layers.MLPRegression"><code class="docutils literal notranslate"><span class="pre">MLPRegression</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.regression_layers.MLPRegression.forward"><code class="docutils literal notranslate"><span class="pre">MLPRegression.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model_components.html#module-HamGNN_v_2_1.utils.hparam">Hyperparameter Configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model_components.html#HamGNN_v_2_1.utils.hparam.get_hparam_dict"><code class="docutils literal notranslate"><span class="pre">get_hparam_dict()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="data_processing.html">Data Processing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="data_processing.html#graph-data">Graph Data</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Configuration</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-HamGNN_v_2_1.config.config_parsing">Config Parsing</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#HamGNN_v_2_1.config.config_parsing.config_default"><code class="docutils literal notranslate"><span class="pre">config_default</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#HamGNN_v_2_1.config.config_parsing.recursive_update"><code class="docutils literal notranslate"><span class="pre">recursive_update()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#HamGNN_v_2_1.config.config_parsing.load_config"><code class="docutils literal notranslate"><span class="pre">load_config()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="utilities.html">Utilities</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="utilities.html#module-HamGNN_v_2_1.utils.irreps_utils">Irreps Utilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.irreps_utils.extract_scalar_irreps"><code class="docutils literal notranslate"><span class="pre">extract_scalar_irreps()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.irreps_utils.irreps2gate"><code class="docutils literal notranslate"><span class="pre">irreps2gate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.irreps_utils.scale_irreps"><code class="docutils literal notranslate"><span class="pre">scale_irreps()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.irreps_utils.filter_and_split_irreps"><code class="docutils literal notranslate"><span class="pre">filter_and_split_irreps()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="utilities.html#module-HamGNN_v_2_1.utils.triplets">Triplets</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.triplets.triplets"><code class="docutils literal notranslate"><span class="pre">triplets()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="utilities.html#module-HamGNN_v_2_1.utils.math_utils">Math Utilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.math_utils.count_neighbors_per_node"><code class="docutils literal notranslate"><span class="pre">count_neighbors_per_node()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.math_utils.prod"><code class="docutils literal notranslate"><span class="pre">prod()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.math_utils.blockwise_2x2_concat"><code class="docutils literal notranslate"><span class="pre">blockwise_2x2_concat()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.math_utils.extract_elements_above_threshold"><code class="docutils literal notranslate"><span class="pre">extract_elements_above_threshold()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.math_utils.upgrade_tensor_precision"><code class="docutils literal notranslate"><span class="pre">upgrade_tensor_precision()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="utilities.html#module-HamGNN_v_2_1.utils.losses">Loss Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.losses.cosine_similarity_loss"><code class="docutils literal notranslate"><span class="pre">cosine_similarity_loss</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.losses.cosine_similarity_loss.forward"><code class="docutils literal notranslate"><span class="pre">cosine_similarity_loss.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.losses.sum_zero_loss"><code class="docutils literal notranslate"><span class="pre">sum_zero_loss</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.losses.sum_zero_loss.forward"><code class="docutils literal notranslate"><span class="pre">sum_zero_loss.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.losses.Euclidean_loss"><code class="docutils literal notranslate"><span class="pre">Euclidean_loss</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.losses.Euclidean_loss.forward"><code class="docutils literal notranslate"><span class="pre">Euclidean_loss.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.losses.RMSELoss"><code class="docutils literal notranslate"><span class="pre">RMSELoss</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.losses.RMSELoss.forward"><code class="docutils literal notranslate"><span class="pre">RMSELoss.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.losses.parse_metric_func"><code class="docutils literal notranslate"><span class="pre">parse_metric_func()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="utilities.html#module-HamGNN_v_2_1.utils.visualization">Visualization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="utilities.html#HamGNN_v_2_1.utils.visualization.scatter_plot"><code class="docutils literal notranslate"><span class="pre">scatter_plot()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">HamGNN_v_2_1</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content style-external-links">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Configuration</li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/bud-primordium/HamGNN_2_1_temp/blob/main/docs/api/configuration.rst" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul><div class="rst-breadcrumbs-buttons" role="navigation" aria-label="Sequential page navigation">
+        <a href="data_processing.html" class="btn btn-neutral float-left" title="Data Processing" accesskey="p"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="utilities.html" class="btn btn-neutral float-right" title="Utilities" accesskey="n">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+  </div>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="configuration">
+<h1>Configuration<a class="headerlink" href="#configuration" title="Link to this heading"></a></h1>
+<section id="module-HamGNN_v_2_1.config.config_parsing">
+<span id="config-parsing"></span><h2>Config Parsing<a class="headerlink" href="#module-HamGNN_v_2_1.config.config_parsing" title="Link to this heading"></a></h2>
+<dl class="py data">
+<dt class="sig sig-object py" id="HamGNN_v_2_1.config.config_parsing.config_default">
+<span class="sig-prename descclassname"><span class="pre">HamGNN_v_2_1.config.config_parsing.</span></span><span class="sig-name descname"><span class="pre">config_default</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'dataset_params':</span> <span class="pre">{'batch_size':</span> <span class="pre">1,</span> <span class="pre">'graph_data_path':</span> <span class="pre">'./',</span> <span class="pre">'split_file':</span> <span class="pre">None,</span> <span class="pre">'test_ratio':</span> <span class="pre">0.2,</span> <span class="pre">'train_ratio':</span> <span class="pre">0.6,</span> <span class="pre">'val_ratio':</span> <span class="pre">0.2},</span> <span class="pre">'losses_metrics':</span> <span class="pre">{'losses':</span> <span class="pre">[{'loss_weight':</span> <span class="pre">27.211,</span> <span class="pre">'metric':</span> <span class="pre">'mae',</span> <span class="pre">'prediction':</span> <span class="pre">'hamiltonian',</span> <span class="pre">'target':</span> <span class="pre">'hamiltonian'}],</span> <span class="pre">'metrics':</span> <span class="pre">[{'metric':</span> <span class="pre">'mae',</span> <span class="pre">'prediction':</span> <span class="pre">'hamiltonian',</span> <span class="pre">'target':</span> <span class="pre">'hamiltonian'}]},</span> <span class="pre">'optim_params':</span> <span class="pre">{'gradient_clip_val':</span> <span class="pre">0.0,</span> <span class="pre">'lr':</span> <span class="pre">0.01,</span> <span class="pre">'lr_decay':</span> <span class="pre">0.5,</span> <span class="pre">'lr_patience':</span> <span class="pre">5,</span> <span class="pre">'max_epochs':</span> <span class="pre">3000,</span> <span class="pre">'min_epochs':</span> <span class="pre">100,</span> <span class="pre">'stop_patience':</span> <span class="pre">30},</span> <span class="pre">'output_nets':</span> <span class="pre">{'HamGNN_out':</span> <span class="pre">{'add_H0':</span> <span class="pre">True,</span> <span class="pre">'add_H_nonsoc':</span> <span class="pre">False,</span> <span class="pre">'band_num_control':</span> <span class="pre">8,</span> <span class="pre">'calculate_band_energy':</span> <span class="pre">False,</span> <span class="pre">'collinear_spin':</span> <span class="pre">False,</span> <span class="pre">'get_nonzero_mask_tensor':</span> <span class="pre">False,</span> <span class="pre">'ham_only':</span> <span class="pre">True,</span> <span class="pre">'ham_type':</span> <span class="pre">'openmx',</span> <span class="pre">'k_path':</span> <span class="pre">None,</span> <span class="pre">'minMagneticMoment':</span> <span class="pre">0.5,</span> <span class="pre">'nao_max':</span> <span class="pre">26,</span> <span class="pre">'nonlinearity_type':</span> <span class="pre">'gate',</span> <span class="pre">'num_k':</span> <span class="pre">5,</span> <span class="pre">'soc_switch':</span> <span class="pre">False,</span> <span class="pre">'spin_constrained':</span> <span class="pre">False,</span> <span class="pre">'symmetrize':</span> <span class="pre">True,</span> <span class="pre">'zero_point_shift':</span> <span class="pre">True},</span> <span class="pre">'output_module':</span> <span class="pre">'HamGNN_out'},</span> <span class="pre">'profiler_params':</span> <span class="pre">{'progress_bar_refresh_rat':</span> <span class="pre">1,</span> <span class="pre">'train_dir':</span> <span class="pre">'./'},</span> <span class="pre">'representation_nets':</span> <span class="pre">{'HamGNN_pre':</span> <span class="pre">{'build_internal_graph':</span> <span class="pre">False,</span> <span class="pre">'correlation':</span> <span class="pre">2,</span> <span class="pre">'cutoff':</span> <span class="pre">26.0,</span> <span class="pre">'cutoff_func':</span> <span class="pre">'cos',</span> <span class="pre">'edge_sh_normalization':</span> <span class="pre">'component',</span> <span class="pre">'edge_sh_normalize':</span> <span class="pre">True,</span> <span class="pre">'irreps_edge_sh':</span> <span class="pre">'0e</span> <span class="pre">+</span> <span class="pre">1o</span> <span class="pre">+</span> <span class="pre">2e</span> <span class="pre">+</span> <span class="pre">3o</span> <span class="pre">+</span> <span class="pre">4e</span> <span class="pre">+</span> <span class="pre">5o',</span> <span class="pre">'irreps_node_features':</span> <span class="pre">'64x0e+64x0o+32x1o+16x1e+12x2o+25x2e+18x3o+9x3e+4x4o+9x4e+4x5o+4x5e+2x6e',</span> <span class="pre">'num_hidden_features':</span> <span class="pre">16,</span> <span class="pre">'num_layers':</span> <span class="pre">3,</span> <span class="pre">'num_radial':</span> <span class="pre">64,</span> <span class="pre">'num_types':</span> <span class="pre">96,</span> <span class="pre">'radial_MLP':</span> <span class="pre">[64,</span> <span class="pre">64],</span> <span class="pre">'radius_scale':</span> <span class="pre">1.01,</span> <span class="pre">'radius_type':</span> <span class="pre">'openmx',</span> <span class="pre">'rbf_func':</span> <span class="pre">'bessel',</span> <span class="pre">'set_features':</span> <span class="pre">True,</span> <span class="pre">'use_corr_prod':</span> <span class="pre">False,</span> <span class="pre">'use_kan':</span> <span class="pre">False}},</span> <span class="pre">'setup':</span> <span class="pre">{'GNN_Net':</span> <span class="pre">'HamGNNpre',</span> <span class="pre">'checkpoint_path':</span> <span class="pre">'./',</span> <span class="pre">'hostname':</span> <span class="pre">'host',</span> <span class="pre">'ignore_warnings':</span> <span class="pre">True,</span> <span class="pre">'job_id':</span> <span class="pre">'time_2025',</span> <span class="pre">'load_from_checkpoint':</span> <span class="pre">False,</span> <span class="pre">'num_gpus':</span> <span class="pre">1,</span> <span class="pre">'precision':</span> <span class="pre">32,</span> <span class="pre">'property':</span> <span class="pre">'hamiltonian',</span> <span class="pre">'resume':</span> <span class="pre">False,</span> <span class="pre">'stage':</span> <span class="pre">'fit'}}</span></em><a class="headerlink" href="#HamGNN_v_2_1.config.config_parsing.config_default" title="Link to this definition"></a></dt>
+<dd><p>The parameters for setup</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="HamGNN_v_2_1.config.config_parsing.recursive_update">
+<span class="sig-prename descclassname"><span class="pre">HamGNN_v_2_1.config.config_parsing.</span></span><span class="sig-name descname"><span class="pre">recursive_update</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">update_dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/HamGNN_v_2_1/config/config_parsing.html#recursive_update"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#HamGNN_v_2_1.config.config_parsing.recursive_update" title="Link to this definition"></a></dt>
+<dd><p>Recursively update a dictionary with values from another dictionary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>base_dict</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Dict</span></code></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a>]</span>) – The dictionary to be updated (typically default configuration)</p></li>
+<li><p><strong>update_dict</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Dict</span></code></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a>]</span>) – The dictionary containing updates (typically from user YAML file)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The updated dictionary</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)">str</a>, Any]</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>If a key exists in both dictionaries and both values are dictionaries,
+recursively merge these nested dictionaries</p></li>
+<li><p>If a key exists in both dictionaries but values aren’t both dictionaries,
+the value from update_dict overrides the value in base_dict</p></li>
+<li><p>If a key exists only in update_dict, it’s added to base_dict</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="HamGNN_v_2_1.config.config_parsing.load_config">
+<span class="sig-prename descclassname"><span class="pre">HamGNN_v_2_1.config.config_parsing.</span></span><span class="sig-name descname"><span class="pre">load_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config_file_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/HamGNN_v_2_1/config/config_parsing.html#load_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#HamGNN_v_2_1.config.config_parsing.load_config" title="Link to this definition"></a></dt>
+<dd><p>Load configuration from a YAML file and merge it with default configuration.</p>
+<p>This function reads a YAML configuration file and recursively merges its contents
+with the default configuration. The config file path can be provided either as a
+function parameter or as a command-line argument.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>config_file_path</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a>]</span>) – Path to the YAML configuration file. If None, attempts to
+get the path from command-line arguments. If not provided
+via command line either, uses ‘config_default.yaml’.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>An EasyDict object containing the merged configuration.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>EasyDict</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#FileNotFoundError" title="(in Python v3.13)"><strong>FileNotFoundError</strong></a> – If the configuration file doesn’t exist.</p></li>
+<li><p><strong>yaml.YAMLError</strong> – If the YAML file has parsing errors.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#UnicodeDecodeError" title="(in Python v3.13)"><strong>UnicodeDecodeError</strong></a> – If there are encoding issues when reading the file.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#Exception" title="(in Python v3.13)"><strong>Exception</strong></a> – For any other unexpected errors.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="data_processing.html" class="btn btn-neutral float-left" title="Data Processing" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="utilities.html" class="btn btn-neutral float-right" title="Utilities" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright HamGNN Team.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <div class="rst-versions" data-toggle="rst-versions" role="note" aria-label="versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    <span class="fa fa-book"></span>
+    docs | v2.1 | en
+    <span class="fa fa-caret-down"></span>
+  </span>
+  
+  <div class="rst-other-versions">
+    
+    
+    
+    
+    
+    
+    
+    
+
+    <hr>
+    <dl>
+      <dt>项目主页</dt>
+      <dd>
+        <a href="https://github.com/bud-primordium/HamGNN">
+          <span class="fa fa-github"></span> GitHub
+        </a>
+      </dd>
+    </dl>
+  </div>
+</div>
+
+<style>
+/* 自定义样式优化三维切换器 */
+.rst-versions {
+  font-size: 14px;
+}
+
+/* 让版本切换器更醒目 */
+.rst-current-version {
+  background-color: #2c3e50 !important;
+  font-weight: bold !important;
+  font-size: 15px !important;
+  padding: 12px 24px !important;
+}
+
+.rst-current-version:hover {
+  background-color: #34495e !important;
+}
+
+.rst-other-versions dl {
+  margin-bottom: 16px;
+}
+
+.rst-other-versions dt {
+  color: #55a5d9;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.rst-other-versions dd {
+  margin-left: 16px;
+  margin-bottom: 4px;
+}
+
+.rst-other-versions dd.rtd-current-item a {
+  font-weight: bold;
+  color: #55a5d9;
+}
+
+.rst-other-versions hr {
+  margin: 16px 0;
+  border: none;
+  border-top: 1px solid #444;
+}
+</style><script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

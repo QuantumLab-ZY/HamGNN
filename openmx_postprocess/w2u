@@ -1,4 +1,0 @@
-ls *.h *.c > tmp_ls
-./w2u.prl > tmp_command
-chmod 777 tmp_command
-./tmp_command

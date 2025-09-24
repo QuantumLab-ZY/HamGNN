@@ -1,0 +1,71 @@
+name: hamgnn
+channels:
+  #- conda-forge  # Moved to the first position to ensure priority use
+  #- pytorch
+  #- defaults
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
+  - nvidia
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
+dependencies:
+  # --- Core compiler upgrades ---
+  - gcc=12         # Force upgrade compiler version
+  - gxx=12         # C++ compiler upgrade
+  - cmake=3.26     # New version build tool
+  
+  # --- Core dependencies and Python version ---
+  - python=3.9
+  - pip
+  
+  # --- PyTorch and CUDA ---
+  - cudatoolkit=11.3
+  
+  # --- Pre-compiled binary alternatives ---
+  - libgcc-ng=12   # Supporting library upgrade
+  - libstdcxx-ng=12
+  
+  # --- Build tool optimization ---
+  - ninja          # Replace traditional build
+  - setuptools=59.5.0  # Avoid deprecation warnings
+  
+  # --- Other dependencies (keep as is) ---
+  - natsort
+  - numba
+  - pytorch-lightning=1.5.10
+  - nequip
+  - e3nn
+  - ase
+  - pymatgen
+  - numpy
+  - scipy
+  - scikit-learn
+  - sympy
+  - pyyaml
+  - tqdm
+  - easydict
+  - prettytable
+  - packaging
+  - wandb
+  - opt_einsum
+  - matplotlib
+  - pandas
+  - jupyterlab
+  
+  # --- Optimized Pip installation order ---
+  - pip: 
+    - --extra-index-url https://download.pytorch.org/whl/cu121
+    - torch==2.5.1+cu121 
+    - torchvision==0.20.1+cu121
+    - torchaudio==2.5.1+cu121    
+    # Binary pre-compiled versions (avoid source compilation)
+    - torch-scatter==2.1.2
+    - torch-sparse==0.6.18
+    - torch-geometric==2.6.1
+    # Other dependencies
+    - torch-runstats
+    - torch-ema
+    - torch-dftd
+    - opt_einsum_fx
+    - pillow==9.3.0    
+    - tensorboard

@@ -1,0 +1,3 @@
+
+GRID_SIZE = 3
+GRID_RANGE = [-1, 1]

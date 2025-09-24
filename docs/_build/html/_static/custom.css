@@ -1,0 +1,269 @@
+/* HamGNN RTD 主题美化样式 
+ * 让 RTD 主题更现代化，同时保留其强大功能
+ */
+
+/* ========== 全局字体和颜色优化 ========== */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #333;
+}
+
+/* 代码字体优化 - 使用更现代的等宽字体 */
+code,
+pre,
+.rst-content tt,
+.rst-content code {
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+}
+
+/* ========== 导航栏美化 ========== */
+.wy-nav-side {
+    background: #2c3e50;
+    /* 更深的背景色 */
+}
+
+.wy-side-nav-search {
+    background: #34495e;
+    /* 搜索区域稍浅 */
+}
+
+.wy-side-nav-search>a {
+    color: #fff;
+    font-size: 24px;
+    font-weight: 500;
+}
+
+.wy-menu-vertical a {
+    color: #b3c3d3;
+    font-size: 14px;
+}
+
+.wy-menu-vertical a:hover {
+    background: #34495e;
+    color: #fff;
+}
+
+.wy-menu-vertical li.current>a {
+    background: #3498db;
+    color: #fff;
+    border: none;
+}
+
+/* ========== 内容区域优化 ========== */
+.wy-nav-content {
+    max-width: 1200px;
+    /* 更宽的阅读区域 */
+    background: #fcfcfc;
+}
+
+.rst-content {
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+/* 标题样式改进 */
+.rst-content h1 {
+    font-weight: 600;
+    border-bottom: 3px solid #3498db;
+    padding-bottom: 10px;
+}
+
+.rst-content h2 {
+    font-weight: 500;
+    margin-top: 40px;
+}
+
+.rst-content h3 {
+    font-weight: 500;
+    color: #2c3e50;
+}
+
+/* ========== 代码块美化 ========== */
+.rst-content pre {
+    background: #f8f8f8;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 16px;
+}
+
+.rst-content code {
+    background: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #e1e4e8;
+    color: #e74c3c;
+    font-size: 0.9em;
+}
+
+/* 代码块内的代码不需要额外背景 */
+.rst-content pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+}
+
+/* ========== 版本选择器美化 ========== */
+.rst-versions {
+    background: #2c3e50;
+    border-top: 1px solid #34495e;
+}
+
+.rst-current-version {
+    background: #34495e;
+    color: #fff;
+}
+
+.rst-other-versions {
+    background: #2c3e50;
+}
+
+.rst-other-versions dt {
+    color: #3498db;
+    font-weight: bold;
+}
+
+.rst-other-versions dd a {
+    color: #b3c3d3;
+}
+
+.rst-other-versions dd.rtd-current-item a {
+    color: #3498db;
+    font-weight: bold;
+}
+
+/* ========== 表格美化 ========== */
+.rst-content table.docutils {
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.rst-content table.docutils th {
+    background: #f6f8fa;
+    border-bottom: 2px solid #e1e4e8;
+    font-weight: 600;
+}
+
+.rst-content table.docutils td {
+    border-color: #e1e4e8;
+}
+
+/* ========== 提示框美化 ========== */
+.rst-content .note {
+    background: #e3f2fd;
+    border-left: 4px solid #2196f3;
+}
+
+.rst-content .warning {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+}
+
+.rst-content .danger {
+    background: #ffebee;
+    border-left: 4px solid #f44336;
+}
+
+.rst-content .tip {
+    background: #e8f5e9;
+    border-left: 4px solid #4caf50;
+}
+
+/* ========== 搜索框美化 ========== */
+.wy-side-nav-search input[type="text"] {
+    border-radius: 4px;
+    border: 1px solid #2c3e50;
+    background: #fcfcfc;
+    box-shadow: none;
+}
+
+/* ========== 移动端优化 ========== */
+@media screen and (max-width: 768px) {
+    .wy-nav-content {
+        max-width: 100%;
+    }
+    
+    .rst-content {
+        font-size: 14px;
+    }
+}
+
+/* ========== API 文档特殊样式 ========== */
+/* 函数签名美化 */
+.rst-content dl.function dt,
+.rst-content dl.method dt,
+.rst-content dl.class dt {
+    background: #f6f8fa;
+    border-left: 3px solid #3498db;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+}
+
+/* 参数说明美化 */
+.rst-content dl.field-list {
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 16px;
+    margin: 16px 0;
+}
+
+/* ========== 复制按钮美化 ========== */
+.copybtn {
+    background: #3498db;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    padding: 4px 8px;
+    font-size: 12px;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.copybtn:hover {
+    opacity: 1;
+}
+
+/* ========== 链接样式 ========== */
+.rst-content a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+.rst-content a:hover {
+    color: #2980b9;
+    text-decoration: underline;
+}
+
+/* 外部链接图标 */
+.rst-content a.external::after {
+    content: " \f08e";
+    font-family: FontAwesome;
+    font-size: 12px;
+    color: #999;
+}
+
+/* ========== 面包屑导航美化 ========== */
+.wy-breadcrumbs {
+    background: #f6f8fa;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 24px;
+}
+
+/* ========== 页脚美化 ========== */
+footer {
+    border-top: 2px solid #e1e4e8;
+    margin-top: 48px;
+    padding-top: 24px;
+    color: #666;
+}
+
+/* ========== Logo 透明背景处理 ========== */
+.wy-side-nav-search .wy-dropdown > a img.logo,
+.wy-side-nav-search > a img.logo {
+    background: transparent;
+    max-width: 100%;
+    width: auto;
+}
