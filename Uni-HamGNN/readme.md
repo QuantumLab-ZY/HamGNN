@@ -1,158 +1,353 @@
 
-# Uni-HamGNN User Guide
+# Uni-HamGNN: Universal Spin-Orbit-Coupled Hamiltonian Model
+
 [![GitHub](https://img.shields.io/badge/GitHub-HamGNN-blue)](https://github.com/QuantumLab-ZY/HamGNN)
+[![DOI](https://img.shields.io/badge/DOI-Zenodo.11064223-orange)](https://zenodo.org/records/11064223)
+[![Python 3.9](https://img.shields.io/badge/Python-3.9-green.svg)](https://www.python.org/downloads/release/python-390/)
+
+## Table of Contents
+
+- [Uni-HamGNN: Universal Spin-Orbit-Coupled Hamiltonian Model](#uni-hamgnn-universal-spin-orbit-coupled-hamiltonian-model)
+  - [Table of Contents](#table-of-contents)
+  - [Introduction](#introduction)
+  - [Key Features](#key-features)
+  - [Getting Started](#getting-started)
+    - [Environment Setup](#environment-setup)
+      - [Option 1: Use Pre-built Environment (Recommended)](#option-1-use-pre-built-environment-recommended)
+      - [Option 2: Create Environment Using Configuration File](#option-2-create-environment-using-configuration-file)
+    - [HamGNN Installation](#hamgnn-installation)
+      - [Verify Installation](#verify-installation)
+    - [Dependencies Installation](#dependencies-installation)
+      - [OpenMX](#openmx)
+      - [openmx\_postprocess and read\_openmx](#openmx_postprocess-and-read_openmx)
+  - [Usage Guide](#usage-guide)
+    - [Workflow Overview](#workflow-overview)
+    - [Preparing Input Data](#preparing-input-data)
+      - [Converting Structures to OpenMX Format](#converting-structures-to-openmx-format)
+      - [Processing with openmx\_postprocess](#processing-with-openmx_postprocess)
+      - [Running OpenMX Calculations (Optional for Model Evaluation)](#running-openmx-calculations-optional-for-model-evaluation)
+      - [Generating Graph Data](#generating-graph-data)
+    - [Running Predictions](#running-predictions)
+    - [Band Structure Calculation](#band-structure-calculation)
+  - [Configuration Parameters](#configuration-parameters)
+    - [Input.yaml Parameters](#inputyaml-parameters)
+    - [Example Configuration](#example-configuration)
+  - [License](#license)
 
 ## Introduction
 
-Uni-HamGNN is a universal spin-orbit-coupled Hamiltonian model designed for accelerated quantum material discovery across the periodic table. It addresses the significant challenge of modeling spin-orbit coupling (SOC) effects in diverse complex systems, which traditionally requires computationally expensive density functional theory (DFT) calculations.
+Uni-HamGNN is a universal spin-orbit-coupled Hamiltonian model specifically designed to accelerate quantum material discovery across the periodic table. This tool addresses a significant challenge in computational materials science: efficiently modeling spin-orbit coupling (SOC) effects in complex systems without requiring expensive density functional theory (DFT) calculations.
 
-Uni-HamGNN eliminates the need for system-specific retraining and costly SOC-DFT calculations, enabling efficient high-throughput screening of quantum materials across different dimensional systems. This makes it a powerful tool for quantum material design and property research, significantly accelerating the pace of discovery in condensed matter physics and materials science.
+The model provides accurate predictions of electronic Hamiltonian matrices that incorporate SOC effects, enabling rapid screening and analysis of quantum materials with potential applications in spintronics, topological materials, and other emerging quantum technologies.
 
-## 1. Environment Setup
+## Key Features
 
-We recommend using Python 3.9. HamGNN requires the following Python libraries:
-- `numpy == 1.21.2`
-- `PyTorch == 1.11.0`
-- `PyTorch Geometric == 2.0.4`
-- `pytorch_lightning == 1.5.10`
-- `e3nn == 0.5.0`
-- `pymatgen == 2022.3.7`
-- `tensorboard == 2.8.0`
-- `tqdm`
-- `scipy == 1.7.3`
-- `yaml`
-- `HamGNN`
+- **Universal Applicability**: Works across the periodic table without system-specific retraining
+- **Computational Efficiency**: Eliminates the need for costly SOC-DFT calculations
+- **High-Throughput Screening**: Enables efficient materials evaluation across different dimensional systems
+- **Accelerated Discovery**: Significantly speeds up quantum material research and development
+- **Transferability**: Seamlessly handles diverse material classes with a single model
 
-To avoid potential version conflicts between dependencies, you can download the prebuilt HamGNN Conda environment from [Zenodo](https://zenodo.org/records/11064223). After downloading the `ML.tar.gz` file, extract it into your `conda/envs` directory.
+Uni-HamGNN serves as a powerful tool for materials scientists and physicists, dramatically speeding up the pace of discovery in condensed matter physics and materials science.
 
-## 2. HamGNN Installation Process
+## Getting Started
 
-To install HamGNN, run the following commands:
+### Environment Setup
+
+We recommend using Python 3.9 for optimal compatibility. You can set up your environment in two ways:
+
+#### Option 1: Use Pre-built Environment (Recommended)
+
+Download the prebuilt HamGNN Conda environment from [Zenodo](https://zenodo.org/records/11064223):
 
 ```bash
+# Download environment package
+wget https://zenodo.org/records/11064223/files/ML.tar.gz
+
+# Extract to conda environments directory
+tar -xzf ML.tar.gz -C $CONDA_PREFIX/envs/
+
+# Activate the environment
+conda activate ML
+```
+
+#### Option 2: Create Environment Using Configuration File
+1. Create an environment using the YAML configuration file provided by HamGNN:
+   ```bash
+   conda env create -f ./HamGNN.yml
+   ```
+2. Install additional PyTorch Geometric dependencies (versions must match your PyTorch version):
+   ```bash
+   pip install torch-scatter==2.1.2+pt25cu121 torch-sparse==0.6.18+pt25cu121 -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
+   ```
+   Note: The version numbers in the link must match your actual PyTorch and CUDA versions
+
+### HamGNN Installation
+
+```bash
+# Clone the repository
 git clone https://github.com/QuantumLab-ZY/HamGNN.git
+
+# Navigate to the project directory
 cd HamGNN
+
+# Install the package
 python setup.py install
 ```
 
-### Verify Installation
+#### Verify Installation
 
 ```bash
 # Check if installation was successful
 python -c "import HamGNN_v_2_1; print('HamGNN installed successfully')"
 ```
 
-## 3. Installation of OpenMX，openmx_postprocess and read_openmx
+### Dependencies Installation
 
-### OpenMX
+#### OpenMX
 
-HamGNN requires the tight-binding Hamiltonian generated by OpenMX. You should be familiar with the basic OpenMX parameters and how to use them. OpenMX can be downloaded from [the official website](https://www.openmx-square.org/) and you can follow the instructions on this site to install it.
+HamGNN requires tight-binding Hamiltonians generated by OpenMX:
 
-### openmx_postprocess
+1. Download OpenMX from [the official website](https://www.openmx-square.org/)
+2. Follow the installation instructions provided on the site
 
-[`openmx_postprocess`](https://github.com/QuantumLab-ZY/HamGNN/tree/main/openmx_postprocess) is a modified version of OpenMX for computing overlap matrices and other Hamiltonian matrices analytically. It stores the computed data in a binary file called `overlap.scfout`. To install `openmx_postprocess`:
+#### openmx_postprocess and read_openmx
 
-1. First, install the [GSL](https://www.gnu.org/software/gsl/) library.
-2. Modify the `makefile` in the `openmx_postprocess` directory:
-   - Set `GSL_lib` to the path of the GSL library
-   - Set `GSL_include` to the include path of GSL
-   - Set `MKLROOT` to the Intel MKL path
-   - Set `CMPLR_ROOT` to the Intel compiler path
+These tools compute overlap matrices and other Hamiltonian matrices:
 
-After modifying the `makefile`, execute `make` to generate the executable programs: `openmx_postprocess` and `read_openmx`.
+1. Install the [GSL library](https://www.gnu.org/software/gsl/) first
+2. Navigate to the `openmx_postprocess` directory:
+   ```bash
+   cd HamGNN/openmx_postprocess
+   ```
+3. Modify the `makefile` with your system paths:
+   ```
+   GSL_lib = /path/to/gsl/lib
+   GSL_include = /path/to/gsl/include
+   MKLROOT = /path/to/intel/mkl
+   CMPLR_ROOT = /path/to/intel/compiler
+   ```
+4. Compile the code:
+   ```bash
+   make
+   ```
+   
+This will generate two executable files: `openmx_postprocess` and `read_openmx`.
 
-### read_openmx
-After `openmx_postprocess` is successfully compiled, the `read_openmx` executable file can also be obtained in the source file directory. `read_openmx` is a binary executable used to export matrices from the `overlap.scfout` file to `HS.json`. This binary executable will be used by `graph_data_gen` script.
+## Usage Guide
 
-## 4. Usage
+### Workflow Overview
 
-### Basic Usage Workflow
+The typical Uni-HamGNN workflow consists of four main steps:
 
-1. Prepare input data (`graph_data.npz` files)
-2. Prepare the configuration file (e.g., `Input.yaml`)
-3. Run the script for prediction
-4. Analyze output results
+1. **Prepare input data** - Convert structural files to OpenMX format and create `graph_data.npz` files
+2. **Configure parameters** - Set up your `Input.yaml` configuration file
+3. **Run predictions** - Execute the Uni-HamGNN model on your data
+4. **Analyze results** - Process the output Hamiltonian matrices and calculate properties (e.g., band structures)
 
-### Preparation of `graph_data.npz`
+![Workflow Diagram]
 
-1. **Convert POSCAR to OpenMX Format**: 
-   Edit the `poscar2openmx.yaml` file with appropriate path settings and run:
+### Preparing Input Data
+
+#### Converting Structures to OpenMX Format
+
+1. Edit the `poscar2openmx.yaml` configuration file:
+
+```yaml
+system_name: 'Si'
+poscar_path: "../PC/*.vasp" # Path to POSCAR or CIF files
+filepath: '../PC' # Directory to save OpenMX files
+basic_command: |+  # OpenMX calculation parameters
+  #
+  #      File Name      
+  #
+  System.CurrrentDirectory         ./    # default=./
+  System.Name                     openmx
+  DATA.PATH           /public/home/DFT_DATA19   # default=../DFT_DATA19
+  level.of.stdout                   1    # default=1 (1-3)
+  level.of.fileout                  1    # default=1 (0-2)
+  HS.fileout                   on       # on|off, default=off
+  #
+  # SCF or Electronic System
+  #
+  scf.XcType                  GGA-PBE    # LDA|LSDA-CA|LSDA-PW|GGA-PBE
+  # SOC control
+  scf.SpinPolarization        nc        # On|Off|NC
+  scf.SpinOrbit.Coupling      on
+  # 
+  scf.partialCoreCorrection   on
+  scf.ElectronicTemperature  100.0       # default=300 (K)
+  scf.energycutoff           200.0       # default=150 (Ry)
+  scf.maxIter                 300         # default=40
+  scf.EigenvalueSolver        Band      # DC|GDC|Cluster|Band
+  scf.Kgrid                  6 6 6       # means 4x4x4
+  scf.Mixing.Type           rmm-diis     # Simple|Rmm-Diis|Gr-Pulay|Kerker|Rmm-Diisk
+  scf.Init.Mixing.Weight     0.10        # default=0.30 
+  scf.Min.Mixing.Weight      0.001       # default=0.001 
+  scf.Max.Mixing.Weight      0.400       # default=0.40 
+  scf.Mixing.History          7          # default=5
+  scf.Mixing.StartPulay       5          # default=6
+  scf.criterion             1.0e-7      # default=1.0e-6 (Hartree)
+  #
+  # MD or Geometry Optimization
+  #
+  MD.Type                      Nomd        # Nomd|Opt|NVE|NVT_VS|NVT_NH
+                                         # Constraint_Opt|DIIS2|Constraint_DIIS2
+  MD.Opt.DIIS.History          4
+  MD.Opt.StartDIIS             5         # default=5
+  MD.maxIter                 100         # default=1
+  MD.TimeStep                1.0         # default=0.5 (fs)
+  MD.Opt.criterion          1.0e-4       # default=1.0e-4 (Hartree/bohr)
+  #
+  # MO output
+  #
+  MO.fileout                  off        # on|off, default=off
+  num.HOMOs                    2         # default=1
+  num.LUMOs                    2         # default=1
+  #
+  # DOS and PDOS
+  #
+  Dos.fileout                  off       # on|off, default=off
+  Dos.Erange              -10.0  10.0    # default = -20 20 
+  Dos.Kgrid                 1  1  1      # default = Kgrid1 Kgrid2 Kgrid3
+```
+
+2. Run the conversion tool:
    ```bash
    poscar2openmx --config path/to/poscar2openmx.yaml
    ```
-   This converts the structures into OpenMX's `.dat` format. 
-   
-   > **Note**: If preparing non-SOC data, the DFT parameters for OpenMX in poscar2openmx.yaml should be consistent with non-SOC calculations. If preparing SOC data, the DFT parameters for OpenMX should be consistent with SOC calculations.
 
-2. **Run OpenMX**: 
-   Perform static calculations on the structure files to generate `.scfout` binary files containing Hamiltonian and overlap matrix information. 
-   
-   > **Note**: This step is only required if you need to evaluate the model's mean absolute error (MAE) against the true Hamiltonian matrices. If you're not concerned with the MAE value, you can skip this step.
+> **Note**: When preparing non-SOC data, ensure OpenMX parameters in `poscar2openmx.yaml` have `scf.SpinPolarization` set to `Off` and `scf.SpinOrbit.Coupling` set to `off`. For SOC data, set `scf.SpinPolarization` to `nc` and `scf.SpinOrbit.Coupling` to `on`.
 
-3. **Process with openmx_postprocess**: 
-   Run `openmx_postprocess` to generate the `overlap.scfout` file, which contains the overlap matrix and angular momentum matrix.
+#### Processing with openmx_postprocess
 
-### Graph Data Conversion
+Run the `openmx_postprocess` tool on your OpenMX `.dat` files to generate `overlap.scfout` files:
 
-The universal SOC Hamiltonian model requires two `graph_data.npz` files as input data:
-- One in non-SOC mode
-- One in SOC mode
+```bash
+mpirun -np ncpus ./openmx_postprocess openmx.dat
+```
 
-Both files should be prepared as follows:
+This generates files containing overlap and angular momentum matrices needed for the graph data generation.
 
-1. Set the appropriate paths in the `graph_data_gen.yaml` file.
-2. Run the following to convert the structural and Hamiltonian data into a single input file for the HamGNN network:
+#### Running OpenMX Calculations (Optional for Model Evaluation)
+
+If you want to evaluate the model's accuracy against true Hamiltonian matrices:
+
+1. Perform static calculations on your OpenMX `.dat` files:
+   ```bash
+   mpirun -np ncpus openmx openmx.dat > openmx.std
+   ```
+
+2. This will generate `.scfout` binary files with the ground truth Hamiltonian matrices.
+
+#### Generating Graph Data
+
+The universal SOC Hamiltonian model requires two `graph_data.npz` files:
+
+- One in non-SOC mode (with SOC turned off)
+- One in SOC mode (with SOC turned on)
+
+To prepare these files:
+
+1. Configure `graph_data_gen.yaml`:
+
+```yaml
+nao_max: 26
+graph_data_save_path: '/path/to/save/graph_data/soc'
+read_openmx_path: '/path/to/HamGNN/utils_openmx/read_openmx'
+max_SCF_skip: 200
+scfout_paths: '/path/to/scfout/files/soc' # Directory of .scfout files or wildcard path
+dat_file_name: 'openmx.dat'
+std_file_name: 'openmx.std' # Set to null if no OpenMX computation was performed
+scfout_file_name: 'openmx.scfout' # Use 'overlap.scfout' if target Hamiltonian not needed
+soc_switch: True # True for SOC, False for non-SOC Hamiltonian
+```
+
+2. Run the graph data generator:
    ```bash
    graph_data_gen --config graph_data_gen.yaml
    ```
 
-This generates the `graph_data.npz` file, which will be used as input to HamGNN.
+3. Repeat with `soc_switch: False` to generate the non-SOC graph data.
 
-### Prediction
+### Running Predictions
 
-Follow these steps:
-1. Convert the structures to be predicted into `graph_data.npz`.
-2. Set the parameters in `Input.yaml`.
-3. Run:
+1. Download the pre-trained network weights from [Zenodo](https://zenodo.org/records/15568557)
+
+2. Configure `Input.yaml`:
+   ```yaml
+   model_pkl_path: '/path/to/trained_model.pkl'
+   non_soc_data_dir: '/path/to/non_soc_graph_data'
+   soc_data_dir: '/path/to/soc_graph_data'  # For SOC calculations
+   output_dir: './results'
+   device: 'cuda'  # Or 'cpu'
+   calculate_mae: true  # Set to false if ground truth not available
+   ```
+
+3. Run the prediction script:
    ```bash
    python Uni-HamiltonianPredictor.py --config Input.yaml
    ```
 
-### Output Files
-
-After execution, the script will generate the following files in the specified `output_dir`:
-- `hamiltonian.npy`: Predicted Hamiltonian matrix in NumPy array format
-- If `calculate_mae` is enabled, MAE statistics will be printed to the console
+4. Check the output files in your specified `output_dir`:
+   - `hamiltonian.npy`: Predicted Hamiltonian matrix
+   - `mae_stats.txt`: MAE statistics (if enabled)
+   - Additional diagnostic files
 
 ### Band Structure Calculation
-To calculate the band structure:
-1. Update the `band_cal.yaml` configuration file with the correct path to the Hamiltonian data.
-2. Execute the band structure calculation:
-    ```bash
-    band_cal --config band_cal.yaml
-    ```
 
-## 5. Parameter Description
+To calculate electronic band structure from your predicted Hamiltonian:
 
-Below is a detailed explanation of each parameter in `Input.yaml`:
+1. Configure `band_cal.yaml`:
+   ```yaml
+   nao_max: 26
+   graph_data_path: /path/to/soc/graph_data.npz
+   hamiltonian_path: /path/to/results/hamiltonian.npy  # From prediction step. If set to null, the target Hamiltonian in graph_data will be used only.
+   nk: 120          # Number of k points
+   save_dir: '/path/to/output/band_structure' 
+   strcture_name: 'crystal'  # Base name for output files
+   soc_switch: True
+   spin_colinear: False
+   auto_mode: True  # Auto-generate k-path based on crystal symmetry
+   k_path: [[0.,0.,0.0],[-0.333,.6667,0.0],[0.0,0.5,0.0],[0.,0.,0.0]]  # Used if auto_mode is False
+   label: ['$G$','$K$', '$M$','$G$']  # Labels for k-points in k_path
+   Ham_type: 'openmx'
+   ```
 
-| Parameter | Type | Description | Default Value |
-|-----------|------|-------------|---------------|
-| `model_pkl_path` | String | Path to the trained model pickle file | None (Required) |
-| `non_soc_data_dir` | String | Directory containing non-SOC graph data with graph_data.npz | None (Required) |
-| `soc_data_dir` | String | Directory containing SOC graph data, required only when using SOC models | None (Optional) |
-| `output_dir` | String | Directory for output results | Current directory ('./') |
-| `device` | String | Computing device, 'cpu' or 'cuda' | 'cpu' |
+2. Run the band structure calculator:
+   ```bash
+   band_cal --config band_cal.yaml
+   ```
+
+3. Analyze the generated band structure plots and data in your specified `save_dir`.
+
+## Configuration Parameters
+
+### Input.yaml Parameters
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `model_pkl_path` | String | Path to the trained model pickle file | Required |
+| `non_soc_data_dir` | String | Directory containing non-SOC graph data | Required |
+| `soc_data_dir` | String | Directory containing SOC graph data (for SOC models) | Optional |
+| `output_dir` | String | Directory for output results | './results' |
+| `device` | String | Computing device: 'cpu' or 'cuda' | 'cpu' |
 | `calculate_mae` | Boolean | Whether to calculate Mean Absolute Error | False |
 
-### Example Configuration File (Input.yaml)
+### Example Configuration
 
 ```yaml
 # HamGNN prediction configuration
 model_pkl_path: '/path/to/trained_model.pkl'
 non_soc_data_dir: '/path/to/non_soc_graph_data'
-soc_data_dir: '/path/to/soc_graph_data'  # Optional, required only for SOC calculations
+soc_data_dir: '/path/to/soc_graph_data'  # Optional
 output_dir: './results'
-device: 'cuda'  # Use GPU, will fall back to CPU if unavailable
-calculate_mae: true  # Calculate Mean Absolute Error
+device: 'cuda'  # Falls back to CPU if GPU unavailable
+calculate_mae: true
 ```
+
+## License
+
+This project is licensed under the terms of the GNU General Public License v3.0. The GPL is a copyleft license that requires any modifications or distributions of this code to be made publicly available under the same license terms.
+
+For more information, visit the [GitHub repository](https://github.com/QuantumLab-ZY/HamGNN).
