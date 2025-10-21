@@ -138,6 +138,11 @@ class HamGNNPlusPlusOut(nn.Module):
         self.min_magnetic_moment = minMagneticMoment
         self.collinear_spin = collinear_spin
         self.soc_basis = soc_basis.lower()
+
+        # Adjust SOC basis for non-openmx Hamiltonians
+        if soc_switch:
+            if self.ham_type != 'openmx':
+                self.soc_basis = 'su2'
         
         # Band structure calculations
         self.calculate_band_energy = calculate_band_energy
@@ -172,10 +177,7 @@ class HamGNNPlusPlusOut(nn.Module):
         )
         
         # Spin-orbit coupling networks
-        if soc_switch:
-            if self.ham_type != 'openmx':
-                self.soc_basis = 'su2'
-            
+        if soc_switch:            
             # Initialize based on selected basis
             if self.soc_basis == 'su2':
                 self.onsite_hamiltonian_network = self._create_hamiltonian_layer(
