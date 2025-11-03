@@ -407,7 +407,7 @@ def generate_graph(idx: int, scf_path: str) -> tuple:
             h_sparse = None
         else:
             h_sparse = ABACUSHS(os.path.join(scf_path, 'data-HR-sparse_SPIN0.csr'))
-        s_sparse = ABACUSHS(os.path.join(scf_path, 'data-SR-sparse_SPIN0.csr'))
+        s_sparse = ABACUSHS(os.path.join(scf_path, 'data-S0R-sparse_SPIN0.csr'))
 
         # Generate graphs for Hamiltonian and overlap     
         graph_h0 = h0_sparse.getGraph(crystal, graph={}, isH=True, isSOC=SOC_ENABLED)
@@ -523,4 +523,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()
