@@ -4,7 +4,7 @@ dataset_params:
   test_ratio: 0.1
   train_ratio: 0.8
   val_ratio: 0.1
-  graph_data_path: ./ # Directory where graph_data.npz is located
+  graph_data_path: ./graph_data.npz # Directory where graph_data.npz is located
 
 losses_metrics:
   losses:
