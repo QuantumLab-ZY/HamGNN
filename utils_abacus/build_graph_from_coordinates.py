@@ -256,8 +256,12 @@ def compute_graph_difference(edge_indices_1, cell_shifts_1, edge_indices_2, cell
     # Compute the difference: edges and shifts in the first graph but not in the second
     difference_edges_with_shifts = edges_with_shifts_1 - edges_with_shifts_2
 
-    # Sort the result to ensure a consistent order
+    # The sorted result may be empty, indicating the H0 graph already covers the reference graph
     sorted_edges_with_shifts = sorted(difference_edges_with_shifts)
+    if not sorted_edges_with_shifts:
+        edge_indices_diff = np.empty((2, 0), dtype=edge_indices_1.dtype)
+        cell_shifts_diff = np.empty((0, 3), dtype=cell_shifts_1.dtype)
+        return edge_indices_diff, cell_shifts_diff
 
     # Separate edges and cell shifts
     edge_indices, cell_shifts = zip(*[(edge[:2], edge[2]) for edge in sorted_edges_with_shifts])
