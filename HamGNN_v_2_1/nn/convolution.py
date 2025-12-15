@@ -129,8 +129,10 @@ class ConvBlockE3(nn.Module):
         )
 
         # Aggregate messages
+        # Note: Use num_nodes instead of receiver.max().item()+1 to avoid
+        # GPU-CPU synchronization overhead from .item() calls
         aggregated_messages = scatter(
-            src=messages, index=receiver, dim=0, dim_size=receiver.max().item() + 1
+            src=messages, index=receiver, dim=0, dim_size=num_nodes
         )
         
         # Apply residual block
