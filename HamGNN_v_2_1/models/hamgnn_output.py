@@ -2826,21 +2826,21 @@ class HamGNNPlusPlusOut(nn.Module):
         z = atomic_numbers.to(torch.long)
 
         nao_max_squared = int(self.nao_max) ** 2
-        total = z.new_zeros((), dtype=torch.float32)
-        effective = z.new_zeros((), dtype=torch.float32)
+        total = z.new_zeros((), dtype=torch.long)
+        effective = z.new_zeros((), dtype=torch.long)
 
         # On-site blocks: sum_i (n_i^2); unknown elements default to nao_max^2 (matches legacy behavior).
         if hasattr(data, "Hon"):
             num_atoms = int(z.numel())
-            total = total + float(num_atoms * nao_max_squared)
+            total = total + int(num_atoms * nao_max_squared)
             n_i = n_orbital[z]
-            effective = effective + (n_i.to(torch.float32) ** 2).sum()
+            effective = effective + (n_i * n_i).sum()
 
         # Off-site blocks: sum_e (n_src*n_dst) if both defined else nao_max^2 (matches legacy behavior).
         if hasattr(data, "Hoff") and hasattr(data, "edge_index"):
             edge_index = data.edge_index
             num_edges = int(edge_index.shape[1])
-            total = total + float(num_edges * nao_max_squared)
+            total = total + int(num_edges * nao_max_squared)
 
             src = edge_index[0].to(torch.long)
             dst = edge_index[1].to(torch.long)
@@ -2855,11 +2855,13 @@ class HamGNNPlusPlusOut(nn.Module):
                 n_src * n_dst,
                 n_src.new_full(n_src.shape, nao_max_squared),
             )
-            effective = effective + eff_edges.to(torch.float32).sum()
+            effective = effective + eff_edges.sum()
 
-        inf = torch.full_like(total, float("inf"))
-        ratio = torch.where(effective > 0, total / effective, inf)
-        return ratio.detach()
+        total_f64 = total.to(torch.float64)
+        effective_f64 = effective.to(torch.float64)
+        inf = torch.full_like(total_f64, float("inf"))
+        ratio_f64 = torch.where(effective_f64 > 0, total_f64 / effective_f64, inf)
+        return ratio_f64.to(torch.float32).detach()
 
     def validate_elements_in_basis_def(self, data, raise_error=True):
         """
