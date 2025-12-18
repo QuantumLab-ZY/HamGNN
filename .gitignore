@@ -1,3 +1,6 @@
+# build files
 *.o
 *.pyc
 *.mod
+build/
+HamGNN.egg-info/

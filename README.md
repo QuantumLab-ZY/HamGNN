@@ -118,13 +118,8 @@ To avoid library version conflicts, it is recommended to use one of the followin
 #### Method 2: Create Environment Using Configuration File
 1. Create an environment using the YAML configuration file provided by HamGNN:
    ```bash
-   conda env create -f ./HamGNN.yml
+   conda env create -f ./HamGNN.yaml
    ```
-2. Install additional PyTorch Geometric dependencies (versions must match your PyTorch version):
-   ```bash
-   pip install torch-scatter==2.1.2+pt25cu121 torch-sparse==0.6.18+pt25cu121 -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
-   ```
-   Note: The version numbers in the link must match your actual PyTorch and CUDA versions
 
 ### Step Two: Install HamGNN from Source
 1. Clone the HamGNN repository:
