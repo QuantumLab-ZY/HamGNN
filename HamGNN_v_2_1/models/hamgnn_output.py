@@ -2788,61 +2788,80 @@ class HamGNNPlusPlusOut(nn.Module):
 
         Returns
         -------
-        float
-            The sparsity ratio, defined as the total number of matrix elements
-            divided by the number of effective matrix elements. Returns infinity
-            if there are no effective elements.
+        torch.Tensor
+            A scalar tensor on the same device as ``data.z``. The sparsity ratio is
+            defined as the total number of matrix elements divided by the number of
+            effective matrix elements. Returns ``inf`` if there are no effective elements.
 
         Notes
         -----
         The calculation considers both on-site and off-site Hamiltonian elements
         if they are present in the data object.
         """
-        # Get atomic numbers
+        # Fast path: allow offline precompute/caching on the Data object.
+        if hasattr(data, "sparsity_ratio"):
+            cached = getattr(data, "sparsity_ratio")
+            if torch.is_tensor(cached):
+                return cached.to(device=data.z.device, dtype=torch.float32)
+            return torch.tensor(float(cached), device=data.z.device, dtype=torch.float32)
+
         atomic_numbers = data.z
+        device = atomic_numbers.device
 
-        # Initialize counters
-        total_matrix_elements = 0
-        effective_matrix_elements = 0
+        # Build (and cache) lookup tables on the correct device to avoid per-atom/edge Python loops.
+        cache = getattr(self, "_sparsity_ratio_lookup_tables", None)
+        if cache is None or cache[0].device != device:
+            table_size = 256  # covers Z<=118 and avoids device sync from dynamic sizing
+            n_orbital = torch.full((table_size,), int(self.nao_max), dtype=torch.long, device=device)
+            is_defined = torch.zeros((table_size,), dtype=torch.bool, device=device)
+            for z, basis_indices in self.basis_def.items():
+                zi = int(z)
+                if 0 <= zi < table_size:
+                    n_orbital[zi] = int(len(basis_indices))
+                    is_defined[zi] = True
+            cache = (n_orbital, is_defined)
+            setattr(self, "_sparsity_ratio_lookup_tables", cache)
 
-        # Cache the squared maximum number of atomic orbitals for efficiency
-        nao_max_squared = self.nao_max ** 2
+        n_orbital, is_defined = cache
+        z = atomic_numbers.to(torch.long)
 
-        # Process on-site Hamiltonian (diagonal blocks)
-        if hasattr(data, 'Hon'):
-            num_atoms = len(atomic_numbers)
-            total_matrix_elements += num_atoms * nao_max_squared
+        nao_max_squared = int(self.nao_max) ** 2
+        total = z.new_zeros((), dtype=torch.long)
+        effective = z.new_zeros((), dtype=torch.long)
 
-            for atom_idx in range(num_atoms):
-                atom_type = atomic_numbers[atom_idx].item()
-                if atom_type in self.basis_def:
-                    basis_indices = self.basis_def[atom_type]
-                    effective_matrix_elements += len(basis_indices) ** 2
-                else:
-                    # If atom type is not defined, assume all elements are effective
-                    effective_matrix_elements += nao_max_squared
+        # On-site blocks: sum_i (n_i^2); unknown elements default to nao_max^2 (matches legacy behavior).
+        if hasattr(data, "Hon"):
+            num_atoms = int(z.numel())
+            total = total + int(num_atoms * nao_max_squared)
+            n_i = n_orbital[z]
+            effective = effective + (n_i * n_i).sum()
 
-        # Process off-site Hamiltonian (off-diagonal blocks)
-        if hasattr(data, 'Hoff') and hasattr(data, 'edge_index'):
+        # Off-site blocks: sum_e (n_src*n_dst) if both defined else nao_max^2 (matches legacy behavior).
+        if hasattr(data, "Hoff") and hasattr(data, "edge_index"):
             edge_index = data.edge_index
-            num_edges = edge_index.shape[1]
-            total_matrix_elements += num_edges * nao_max_squared
+            num_edges = int(edge_index.shape[1])
+            total = total + int(num_edges * nao_max_squared)
 
-            for edge_idx in range(num_edges):
-                source_idx = edge_index[0, edge_idx].item()
-                target_idx = edge_index[1, edge_idx].item()
-                source_atom_type = atomic_numbers[source_idx].item()
-                target_atom_type = atomic_numbers[target_idx].item()
+            src = edge_index[0].to(torch.long)
+            dst = edge_index[1].to(torch.long)
+            z_src = z[src]
+            z_dst = z[dst]
 
-                if source_atom_type in self.basis_def and target_atom_type in self.basis_def:
-                    source_basis = self.basis_def[source_atom_type]
-                    target_basis = self.basis_def[target_atom_type]
-                    effective_matrix_elements += len(source_basis) * len(target_basis)
-                else:
-                    effective_matrix_elements += nao_max_squared
+            both_defined = is_defined[z_src] & is_defined[z_dst]
+            n_src = n_orbital[z_src]
+            n_dst = n_orbital[z_dst]
+            eff_edges = torch.where(
+                both_defined,
+                n_src * n_dst,
+                n_src.new_full(n_src.shape, nao_max_squared),
+            )
+            effective = effective + eff_edges.sum()
 
-        # Calculate sparsity ratio (return inf if no effective elements)
-        return total_matrix_elements / effective_matrix_elements if effective_matrix_elements > 0 else float('inf')
+        total_f64 = total.to(torch.float64)
+        effective_f64 = effective.to(torch.float64)
+        inf = torch.full_like(total_f64, float("inf"))
+        ratio_f64 = torch.where(effective_f64 > 0, total_f64 / effective_f64, inf)
+        return ratio_f64.to(torch.float32).detach()
 
     def validate_elements_in_basis_def(self, data, raise_error=True):
         """
