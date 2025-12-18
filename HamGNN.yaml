@@ -1,4 +1,4 @@
-name: hamgnn
+name: HamGNN
 channels:
   #- conda-forge  # Moved to the first position to ensure priority use
   #- pytorch
@@ -19,8 +19,11 @@ dependencies:
   - pip
   
   # --- PyTorch and CUDA ---
-  - cudatoolkit=11.3
-  
+  - pytorch=2.5.0
+  - torchvision=0.20.0
+  - torchaudio=2.5.0
+  - pytorch-cuda=12.1
+
   # --- Pre-compiled binary alternatives ---
   - libgcc-ng=12   # Supporting library upgrade
   - libstdcxx-ng=12
@@ -54,14 +57,11 @@ dependencies:
   
   # --- Optimized Pip installation order ---
   - pip: 
-    - --extra-index-url https://download.pytorch.org/whl/cu121
-    - torch==2.5.1+cu121 
-    - torchvision==0.20.1+cu121
-    - torchaudio==2.5.1+cu121    
+    - -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
     # Binary pre-compiled versions (avoid source compilation)
-    - torch-scatter==2.1.2
-    - torch-sparse==0.6.18
     - torch-geometric==2.6.1
+    - torch-scatter==2.1.2+pt25cu121
+    - torch-sparse==0.6.18+pt25cu121
     # Other dependencies
     - torch-runstats
     - torch-ema
