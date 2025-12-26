@@ -562,7 +562,7 @@ This section provides detailed explanations of the parameter modules and paramet
         ```
         from e3nn import o3
 
-        row=col=o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e+1x2e") # for 'sssppd'
+        row=col=o3.Irreps("1x0e+1x0e+1x0e+1x1o+1x1o+1x2e+1x2e") # for 'sssppdd'
         ham_irreps_dim = []
         ham_irreps = o3.Irreps()
 
