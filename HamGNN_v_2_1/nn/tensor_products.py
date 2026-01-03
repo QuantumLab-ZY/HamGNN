@@ -107,12 +107,15 @@ class TensorProductWithMemoryOptimizationWithWeight(nn.Module):
         # Collect possible irreps and their instructions
         irreps_out_list: List[Tuple[int, o3.Irreps]] = []
         instructions = []
-        for i, (_, ir_in) in enumerate(irreps1):
+        for i, (mul_in, ir_in) in enumerate(irreps1):
             for j, (_, ir_edge) in enumerate(irreps2):
-                for _, (mul, ir_out) in enumerate(target_irreps):
+                for _, (mul_out, ir_out) in enumerate(target_irreps):
                     if ir_out in ir_in * ir_edge:
                         k = len(irreps_out_list)
-                        irreps_out_list.append((mul, ir_out))
+                        if self.tp_mode == 'uvw':
+                            irreps_out_list.append((mul_out, ir_out))
+                        else:
+                            irreps_out_list.append((mul_in, ir_in))
                         instructions.append((i, j, k, self.tp_mode, trainable))
 
         # We sort the output irreps of the tensor product so that we can simplify them
