@@ -42,12 +42,14 @@ class ConvBlockE3(nn.Module):
         nonlinearity_type: str = "gate",
         nonlinearity_scalars: dict = {"e": "ssp", "o": "tanh"},
         nonlinearity_gates: dict = {"e": "ssp", "o": "abs"},
+        tp_mode: str = 'uvw'
     ):
         super().__init__()
 
         self.radial_MLP = radial_MLP or [64, 64, 64]
         self.use_kan = use_kan
         self.use_skip_connections = use_skip_connections
+        self.tp_mode = tp_mode
 
         assert nonlinearity_type in ("gate", "norm"), "Invalid nonlinearity type."
 
@@ -78,7 +80,8 @@ class ConvBlockE3(nn.Module):
             irreps_out=self.irreps_out,
             irreps_edge_scalars=self.irreps_edge_embed, 
             radial_MLP=self.radial_MLP, 
-            use_kan=self.use_kan
+            use_kan=self.use_kan,
+            tp_mode=self.tp_mode
             )
         
         # Skip connection layer

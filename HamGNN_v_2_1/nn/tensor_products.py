@@ -40,7 +40,14 @@ class LinearScaleWithWeights(nn.Module):
 
 @compile_mode("script")
 class TensorProductWithMemoryOptimizationWithWeight(nn.Module):
-    def __init__(self, irreps_input_1, irreps_input_2, irreps_out, irreps_scalar, radial_MLP, use_kan):
+    def __init__(self,
+                 irreps_input_1,
+                 irreps_input_2,
+                 irreps_out,
+                 irreps_scalar,
+                 radial_MLP,
+                 use_kan,
+                 tp_mode):
         """
         Initialize the TensorProductWithMemoryOptimization module.
 
@@ -51,6 +58,7 @@ class TensorProductWithMemoryOptimizationWithWeight(nn.Module):
             irreps_scalar (str): Irreducible representations for scalar inputs.
             radial_MLP (list[int]): List of hidden layer sizes for the radial MLP.
             use_kan (bool): Flag to use KAN instead of FullyConnectedNet.
+            tp_mode (str): Tensor product mode, e.g., 'uvw'.
         """
         super().__init__()
 
@@ -61,6 +69,7 @@ class TensorProductWithMemoryOptimizationWithWeight(nn.Module):
         self.irreps_scalar = o3.Irreps(irreps_scalar)
         self.radial_MLP = radial_MLP
         self.use_kan = use_kan
+        self.tp_mode = tp_mode
 
         # Calculate intermediate irreps and instructions
         self.irreps_mid, self.instructions = self._tp_out_irreps_with_instructions(
@@ -75,7 +84,7 @@ class TensorProductWithMemoryOptimizationWithWeight(nn.Module):
             self.irreps_input_2,
             self.irreps_mid,
             instructions=self.instructions,
-            internal_weights=True, 
+            internal_weights=True,
             shared_weights=True
         )
 
@@ -87,7 +96,8 @@ class TensorProductWithMemoryOptimizationWithWeight(nn.Module):
 
         # Initialize the weight generator
         input_dim = self.irreps_scalar.num_irreps
-        self.weight_generator = self._initialize_weight_generator(input_dim, self.linear_scaler.weight_numel)
+        self.weight_generator = self._initialize_weight_generator(
+            input_dim, self.linear_scaler.weight_numel)
 
     def _tp_out_irreps_with_instructions(
         self, irreps1: o3.Irreps, irreps2: o3.Irreps, target_irreps: o3.Irreps
@@ -98,12 +108,12 @@ class TensorProductWithMemoryOptimizationWithWeight(nn.Module):
         irreps_out_list: List[Tuple[int, o3.Irreps]] = []
         instructions = []
         for i, (_, ir_in) in enumerate(irreps1):
-            for j, (_, ir_edge) in enumerate(irreps2):  
-                for _, (mul, ir_out) in enumerate(target_irreps):                  
+            for j, (_, ir_edge) in enumerate(irreps2):
+                for _, (mul, ir_out) in enumerate(target_irreps):
                     if ir_out in ir_in * ir_edge:
                         k = len(irreps_out_list)
                         irreps_out_list.append((mul, ir_out))
-                        instructions.append((i, j, k, 'uvw', trainable))
+                        instructions.append((i, j, k, self.tp_mode, trainable))
 
         # We sort the output irreps of the tensor product so that we can simplify them
         # when they are provided to the second o3.Linear

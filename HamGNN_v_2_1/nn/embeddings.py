@@ -232,11 +232,13 @@ class PairInteractionEmbeddingBlock(nn.Module):
         nonlinearity_type: str = "gate",
         nonlinearity_scalars: Dict[int, Callable] = {"e": "ssp", "o": "tanh"},
         nonlinearity_gates: Dict[int, Callable] = {"e": "ssp", "o": "abs"},
+        tp_mode: str = 'uvw'
     ) -> None:
         super().__init__()
 
         self.radial_MLP = radial_MLP or [64, 64, 64]
         self.use_kan = use_kan
+        self.tp_mode = tp_mode
 
         # Assign irreps
         self.irreps_node_feats = o3.Irreps(irreps_node_feats)
@@ -267,7 +269,8 @@ class PairInteractionEmbeddingBlock(nn.Module):
                                                                       irreps_out=self.irreps_edge_feats, 
                                                                       irreps_scalar=self.irreps_edge_embed, 
                                                                       radial_MLP=self.radial_MLP, 
-                                                                      use_kan=self.use_kan)
+                                                                      use_kan=self.use_kan,
+                                                                      tp_mode=self.tp_mode)
 
     def create_linear(self, irreps_in, irreps_out=None):
         """Create a linear layer."""
