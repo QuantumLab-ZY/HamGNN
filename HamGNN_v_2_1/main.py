@@ -49,7 +49,7 @@ def initialize_output_parameters(output_params):
     default_params = {
         'add_H_nonsoc': False,          # Add non-spin-orbit coupling Hamiltonian
         'get_nonzero_mask_tensor': False, # Generate mask for non-zero elements
-        'zero_point_shift': False,       # Apply zero-point energy shift
+        'zero_point_shift': True,       # Apply zero-point energy shift
         'soc_basis': 'so3',           # Spin-orbit coupling basis
     }
     
@@ -500,3 +500,4 @@ def HamGNN():
 
 if __name__ == '__main__':
     HamGNN()
+
