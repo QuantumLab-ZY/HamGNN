@@ -115,7 +115,7 @@ class TensorProductWithMemoryOptimizationWithWeight(nn.Module):
                         if self.tp_mode == 'uvw':
                             irreps_out_list.append((mul_out, ir_out))
                         else:
-                            irreps_out_list.append((mul_in, ir_in))
+                            irreps_out_list.append((mul_in, ir_out))
                         instructions.append((i, j, k, self.tp_mode, trainable))
 
         # We sort the output irreps of the tensor product so that we can simplify them
