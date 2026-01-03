@@ -23,7 +23,8 @@ class MessagePackBlock(nn.Module):
         irreps_out: str,
         irreps_edge_scalars: str,
         radial_MLP: List[int] = [64, 64],
-        use_kan: bool = False
+        use_kan: bool = False,
+        tp_mode: str = 'uvw'
     ):
         """
         Initializes the MessagePackBlock.
@@ -36,6 +37,7 @@ class MessagePackBlock(nn.Module):
             irreps_edge_scalars (str): Irreducible representations for edge scalars.
             radial_mlp_layers (List[int]): Layers for radial MLP.
             use_kan (bool): Flag to use KAN for weight generation.
+            tp_mode (str): Tensor product mode, e.g., 'uvw'.
         """
         super().__init__()
         self.irreps_node_feats = o3.Irreps(irreps_node_feats)
@@ -45,6 +47,7 @@ class MessagePackBlock(nn.Module):
         self.irreps_edge_scalars = o3.Irreps(irreps_edge_scalars)
         self.radial_MLP = radial_MLP
         self.use_kan = use_kan
+        self.tp_mode = tp_mode
 
         self.combined_node_irreps = scale_irreps(self.irreps_node_feats, 2)
         self.fuse_node = AttentionHeadsToVector(self.irreps_node_feats)
@@ -112,7 +115,7 @@ class MessagePackBlock(nn.Module):
                     if ir_out in ir_in * ir_edge:
                         k = len(irreps_out_list)
                         irreps_out_list.append((mul, ir_out))
-                        instructions.append((i, j, k, 'uvw', trainable))
+                        instructions.append((i, j, k, self.tp_mode, trainable))
 
         # We sort the output irreps of the tensor product so that we can simplify them
         # when they are provided to the second o3.Linear
