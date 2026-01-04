@@ -48,7 +48,7 @@ class HamGNNConvE3(BaseModel):
             self.use_corr_prod = config.HamGNN_pre.use_corr_prod
 
         # Set product mode
-        self.lite_mode = getattr(config.HamGNN_pre, 'lite_mode', 'False')
+        self.lite_mode = getattr(config.HamGNN_pre, 'lite_mode', False)
 
         # Radial basis function
         self.cutoff = config.HamGNN_pre.cutoff
