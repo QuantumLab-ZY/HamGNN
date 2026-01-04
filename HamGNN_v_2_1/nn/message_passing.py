@@ -74,36 +74,55 @@ class MessagePackBlock(nn.Module):
             self.irreps_local_env_edge,
             self.mid_node_irreps,
             instructions=self.node_instructions,
-            internal_weights=not self.lite_mode,
-            shared_weights=not self.lite_mode
+            internal_weights=True,
+            shared_weights=True
         )
         self.edge_tensor_product = o3.TensorProduct(
             self.irreps_edge_feats,
             self.irreps_local_env_edge,
             self.mid_edge_irreps,
             instructions=self.edge_instructions,
-            internal_weights=not self.lite_mode,
-            shared_weights=not self.lite_mode
+            internal_weights=True,
+            shared_weights=True
         )
 
         # Initialize linear scaling with weights
-        self.node_linear_scaler = LinearScaleWithWeights(
-            irreps_in=self.mid_node_irreps.simplify(),
-            irreps_out=self.irreps_out
-        )
-        self.edge_linear_scaler = LinearScaleWithWeights(
-            irreps_in=self.mid_edge_irreps.simplify(),
-            irreps_out=self.irreps_out
-        )
+        if self.lite_mode:
+            self.node_linear_scaler = o3.Linear(
+                irreps_in=self.mid_node_irreps.simplify(),
+                irreps_out=self.irreps_out
+            )
+            self.edge_linear_scaler = o3.Linear(
+                irreps_in=self.mid_edge_irreps.simplify(),
+                irreps_out=self.irreps_out
+            )
+            self.combine_messages = LinearScaleWithWeights(
+                irreps_in=self.irreps_out.simplify(),
+                irreps_out=self.irreps_out
+            )
+        else:
+            self.node_linear_scaler = LinearScaleWithWeights(
+                irreps_in=self.mid_node_irreps.simplify(),
+                irreps_out=self.irreps_out
+            )
+            self.edge_linear_scaler = LinearScaleWithWeights(
+                irreps_in=self.mid_edge_irreps.simplify(),
+                irreps_out=self.irreps_out
+            )
 
         # Initialize the weight generator
         input_dim = self.irreps_edge_scalars.num_irreps
-        self.node_weight_generator = self._initialize_weight_generator(input_dim, self.node_linear_scaler.weight_numel)
-        self.edge_weight_generator = self._initialize_weight_generator(input_dim, self.edge_linear_scaler.weight_numel)
+        if self.lite_mode:
+            self.weight_generator_combine = self._initialize_weight_generator(
+                input_dim, self.combine_messages.weight_numel)
+        else:
+            self.node_weight_generator = self._initialize_weight_generator(input_dim, self.node_linear_scaler.weight_numel)
+            self.edge_weight_generator = self._initialize_weight_generator(input_dim, self.edge_linear_scaler.weight_numel)
 
         # Linear output layers
-        self.node_linear_out = o3.Linear(self.irreps_out, self.irreps_out, internal_weights=True, shared_weights=True)
-        self.edge_linear_out = o3.Linear(self.irreps_out, self.irreps_out, internal_weights=True, shared_weights=True)
+        if not self.lite_mode:
+            self.node_linear_out = o3.Linear(self.irreps_out, self.irreps_out, internal_weights=True, shared_weights=True)
+            self.edge_linear_out = o3.Linear(self.irreps_out, self.irreps_out, internal_weights=True, shared_weights=True)
 
     def _tp_out_irreps_with_instructions(
         self, irreps1: o3.Irreps, irreps2: o3.Irreps, target_irreps: o3.Irreps
@@ -166,19 +185,39 @@ class MessagePackBlock(nn.Module):
                 local_env_edge: torch.Tensor,
                 edge_scalars: torch.Tensor):
 
-        # Compute tensor products for node interaction
-        node_inter = self.fuse_node(torch.stack([node_feats_src, node_feats_dst], dim=-2))
-        weights_node = self.node_weight_generator(edge_scalars)
-        node_inter_up = self.node_tensor_product(node_inter, local_env_edge)
-        node_inter_dn = self.node_linear_scaler(node_inter_up, weights_node)
-        
-        # Compute tensor products for edge_features
-        weights_edge = self.edge_weight_generator(edge_scalars)
-        edge_feats_up = self.edge_tensor_product(edge_feats, local_env_edge)
-        edge_feats_dn = self.edge_linear_scaler(edge_feats_up, weights_edge)        
+        if self.lite_mode:
+            # Compute tensor products for node interaction
+            node_inter = self.fuse_node(torch.stack(
+                [node_feats_src, node_feats_dst], dim=-2))
+            node_inter_up = self.node_tensor_product(
+                node_inter, local_env_edge)
+            node_inter_dn = self.node_linear_scaler(node_inter_up)
 
-        # output
-        output = self.node_linear_out(node_inter_dn) + self.edge_linear_out(edge_feats_dn)
+            # Compute tensor products for edge_features
+            edge_feats_up = self.edge_tensor_product(
+                edge_feats, local_env_edge)
+            edge_feats_dn = self.edge_linear_scaler(edge_feats_up)
+
+            # Generate weights from edge scalars
+            weights_combine = self.weight_generator_combine(edge_scalars)
+
+            # Combine node and edge features with generated weights
+            combined_features = node_inter_dn + edge_feats_dn
+            output = self.combine_messages(combined_features, weights_combine)
+        else:
+            # Compute tensor products for node interaction
+            node_inter = self.fuse_node(torch.stack([node_feats_src, node_feats_dst], dim=-2))
+            weights_node = self.node_weight_generator(edge_scalars)
+            node_inter_up = self.node_tensor_product(node_inter, local_env_edge)
+            node_inter_dn = self.node_linear_scaler(node_inter_up, weights_node)
+
+            # Compute tensor products for edge_features
+            weights_edge = self.edge_weight_generator(edge_scalars)
+            edge_feats_up = self.edge_tensor_product(edge_feats, local_env_edge)
+            edge_feats_dn = self.edge_linear_scaler(edge_feats_up, weights_edge)        
+
+            # output
+            output = self.node_linear_out(node_inter_dn) + self.edge_linear_out(edge_feats_dn)
 
         return output
 
