@@ -88,8 +88,8 @@ class TensorProductWithMemoryOptimizationWithWeight(nn.Module):
             self.irreps_input_2,
             self.irreps_mid,
             instructions=self.instructions,
-            internal_weights=not self.lite_mode,
-            shared_weights=not self.lite_mode
+            internal_weights=True,
+            shared_weights=True
         )
 
         # Initialize linear scaling with weights
