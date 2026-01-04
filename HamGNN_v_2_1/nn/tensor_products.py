@@ -47,7 +47,7 @@ class TensorProductWithMemoryOptimizationWithWeight(nn.Module):
                  irreps_scalar,
                  radial_MLP,
                  use_kan,
-                 tp_mode):
+                 lite_mode):
         """
         Initialize the TensorProductWithMemoryOptimization module.
 
@@ -58,7 +58,7 @@ class TensorProductWithMemoryOptimizationWithWeight(nn.Module):
             irreps_scalar (str): Irreducible representations for scalar inputs.
             radial_MLP (list[int]): List of hidden layer sizes for the radial MLP.
             use_kan (bool): Flag to use KAN instead of FullyConnectedNet.
-            tp_mode (str): Tensor product mode, e.g., 'uvw'.
+            lite_mode (bool): The mode with the fewest model parameters and the fastest running speed.
         """
         super().__init__()
 
@@ -69,7 +69,11 @@ class TensorProductWithMemoryOptimizationWithWeight(nn.Module):
         self.irreps_scalar = o3.Irreps(irreps_scalar)
         self.radial_MLP = radial_MLP
         self.use_kan = use_kan
-        self.tp_mode = tp_mode
+        self.lite_mode = lite_mode
+        if self.lite_mode:
+            self.tp_mode = 'uvu'
+        else:
+            self.tp_mode = 'uvw'
 
         # Calculate intermediate irreps and instructions
         self.irreps_mid, self.instructions = self._tp_out_irreps_with_instructions(
@@ -84,8 +88,8 @@ class TensorProductWithMemoryOptimizationWithWeight(nn.Module):
             self.irreps_input_2,
             self.irreps_mid,
             instructions=self.instructions,
-            internal_weights=True,
-            shared_weights=True
+            internal_weights=False if self.lite_mode else True,
+            shared_weights=False if self.lite_mode else True
         )
 
         # Initialize linear scaling with weights
@@ -102,7 +106,10 @@ class TensorProductWithMemoryOptimizationWithWeight(nn.Module):
     def _tp_out_irreps_with_instructions(
         self, irreps1: o3.Irreps, irreps2: o3.Irreps, target_irreps: o3.Irreps
     ) -> Tuple[o3.Irreps, List]:
-        trainable = True
+        if self.lite_mode:
+            trainable = False
+        else:
+            trainable = True
 
         # Collect possible irreps and their instructions
         irreps_out_list: List[Tuple[int, o3.Irreps]] = []

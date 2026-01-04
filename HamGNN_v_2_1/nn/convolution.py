@@ -27,6 +27,7 @@ class ConvBlockE3(nn.Module):
     - nonlinearity_type (str): Type of nonlinearity to use ("gate" or "norm"). Defaults to "gate".
     - nonlinearity_scalars (Dict[int, Callable]): Nonlinearity for scalar channels.
     - nonlinearity_gates (Dict[int, Callable]): Nonlinearity for gate channels.
+    - lite_mode (bool): The mode with the fewest model parameters and the fastest running speed.
     """
 
     def __init__(
@@ -42,14 +43,14 @@ class ConvBlockE3(nn.Module):
         nonlinearity_type: str = "gate",
         nonlinearity_scalars: dict = {"e": "ssp", "o": "tanh"},
         nonlinearity_gates: dict = {"e": "ssp", "o": "abs"},
-        tp_mode: str = 'uvw'
+        lite_mode: bool = False
     ):
         super().__init__()
 
         self.radial_MLP = radial_MLP or [64, 64, 64]
         self.use_kan = use_kan
         self.use_skip_connections = use_skip_connections
-        self.tp_mode = tp_mode
+        self.lite_mode = lite_mode
 
         assert nonlinearity_type in ("gate", "norm"), "Invalid nonlinearity type."
 
@@ -81,7 +82,7 @@ class ConvBlockE3(nn.Module):
             irreps_edge_scalars=self.irreps_edge_embed, 
             radial_MLP=self.radial_MLP, 
             use_kan=self.use_kan,
-            tp_mode=self.tp_mode
+            lite_mode=self.lite_mode
             )
         
         # Skip connection layer

@@ -24,7 +24,7 @@ class MessagePackBlock(nn.Module):
         irreps_edge_scalars: str,
         radial_MLP: List[int] = [64, 64],
         use_kan: bool = False,
-        tp_mode: str = 'uvw'
+        lite_mode: bool = False
     ):
         """
         Initializes the MessagePackBlock.
@@ -37,7 +37,7 @@ class MessagePackBlock(nn.Module):
             irreps_edge_scalars (str): Irreducible representations for edge scalars.
             radial_mlp_layers (List[int]): Layers for radial MLP.
             use_kan (bool): Flag to use KAN for weight generation.
-            tp_mode (str): Tensor product mode, e.g., 'uvw'.
+            lite_mode (bool): The mode with the fewest model parameters and the fastest running speed.
         """
         super().__init__()
         self.irreps_node_feats = o3.Irreps(irreps_node_feats)
@@ -47,7 +47,11 @@ class MessagePackBlock(nn.Module):
         self.irreps_edge_scalars = o3.Irreps(irreps_edge_scalars)
         self.radial_MLP = radial_MLP
         self.use_kan = use_kan
-        self.tp_mode = tp_mode
+        self.lite_mode = lite_mode
+        if self.lite_mode:
+            self.tp_mode = 'uvu'
+        else:
+            self.tp_mode = 'uvw'
 
         self.combined_node_irreps = scale_irreps(self.irreps_node_feats, 2)
         self.fuse_node = AttentionHeadsToVector(self.irreps_node_feats)
@@ -70,16 +74,16 @@ class MessagePackBlock(nn.Module):
             self.irreps_local_env_edge,
             self.mid_node_irreps,
             instructions=self.node_instructions,
-            internal_weights=True,
-            shared_weights=True
+            internal_weights=False if self.lite_mode else True,
+            shared_weights=False if self.lite_mode else True
         )
         self.edge_tensor_product = o3.TensorProduct(
             self.irreps_edge_feats,
             self.irreps_local_env_edge,
             self.mid_edge_irreps,
             instructions=self.edge_instructions,
-            internal_weights=True,
-            shared_weights=True
+            internal_weights=False if self.lite_mode else True,
+            shared_weights=False if self.lite_mode else True
         )
 
         # Initialize linear scaling with weights
@@ -104,7 +108,10 @@ class MessagePackBlock(nn.Module):
     def _tp_out_irreps_with_instructions(
         self, irreps1: o3.Irreps, irreps2: o3.Irreps, target_irreps: o3.Irreps
     ) -> Tuple[o3.Irreps, List]:
-        trainable = True
+        if self.lite_mode:
+            trainable = False
+        else:
+            trainable = True
 
         # Collect possible irreps and their instructions
         irreps_out_list: List[Tuple[int, o3.Irreps]] = []

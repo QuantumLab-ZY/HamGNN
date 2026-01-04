@@ -48,7 +48,7 @@ class HamGNNConvE3(BaseModel):
             self.use_corr_prod = config.HamGNN_pre.use_corr_prod
 
         # Set product mode
-        self.tp_mode = getattr(config.HamGNN_pre, 'tp_mode', 'uvw')
+        self.lite_mode = getattr(config.HamGNN_pre, 'lite_mode', 'False')
 
         # Radial basis function
         self.cutoff = config.HamGNN_pre.cutoff
@@ -91,7 +91,7 @@ class HamGNNConvE3(BaseModel):
         self.radial_basis = RadialBasisEdgeEncoding(basis=self.radial_basis_functions,
                                                     cutoff=self.cutoff_func)
 
-       # Edge features embedding
+        # Edge features embedding
         use_kan = config.HamGNN_pre.use_kan
         self.radial_MLP = config.HamGNN_pre.radial_MLP
         self.pair_embedding = PairInteractionEmbeddingBlock(irreps_node_feats=self.atomic_embedding.irreps_out['node_attrs'],
@@ -104,7 +104,7 @@ class HamGNNConvE3(BaseModel):
                                                                 'node_attrs'],
                                                             use_kan=use_kan,
                                                             radial_MLP=self.radial_MLP,
-                                                            tp_mode=self.tp_mode)
+                                                            lite_mode=self.lite_mode)
 
         # Chemical embedding
         self.chemical_embedding = AtomwiseLinear(irreps_in={AtomicDataDict.NODE_FEATURES_KEY: self.atomic_embedding.irreps_out['node_attrs']},
@@ -129,7 +129,7 @@ class HamGNNConvE3(BaseModel):
                                radial_MLP=self.radial_MLP,
                                use_skip_connections=True,
                                use_kan=use_kan,
-                               tp_mode=self.tp_mode)
+                               lite_mode=self.lite_mode)
             self.convolutions.append(conv)
 
             if self.use_corr_prod:
@@ -153,7 +153,7 @@ class HamGNNConvE3(BaseModel):
                                                     use_skip_connections=True if i > 0 else False,
                                                     use_kan=use_kan,
                                                     radial_MLP=self.radial_MLP,
-                                                    tp_mode=self.tp_mode)
+                                                    lite_mode=self.lite_mode)
             self.pair_interactions.append(pair_interaction)
 
     def forward(self, data):
