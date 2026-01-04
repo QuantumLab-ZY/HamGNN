@@ -74,16 +74,16 @@ class MessagePackBlock(nn.Module):
             self.irreps_local_env_edge,
             self.mid_node_irreps,
             instructions=self.node_instructions,
-            internal_weights=False if self.lite_mode else True,
-            shared_weights=False if self.lite_mode else True
+            internal_weights=not self.lite_mode,
+            shared_weights=not self.lite_mode
         )
         self.edge_tensor_product = o3.TensorProduct(
             self.irreps_edge_feats,
             self.irreps_local_env_edge,
             self.mid_edge_irreps,
             instructions=self.edge_instructions,
-            internal_weights=False if self.lite_mode else True,
-            shared_weights=False if self.lite_mode else True
+            internal_weights=not self.lite_mode,
+            shared_weights=not self.lite_mode
         )
 
         # Initialize linear scaling with weights
