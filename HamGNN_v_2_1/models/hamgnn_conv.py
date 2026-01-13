@@ -11,7 +11,8 @@ from ..toolbox.nequip.data import AtomicDataDict
 from ..toolbox.nequip.nn import AtomwiseLinear
 from ..toolbox.nequip.nn.embedding import (
     OneHotAtomEncoding,
-    SphericalHarmonicEdgeAttrs
+    SphericalHarmonicEdgeAttrs,
+    Embedding_block_q
 )
 from ..utils.basis_functions import (
     BernsteinRadialBasisFunctions,
@@ -78,8 +79,18 @@ class HamGNNConvE3(BaseModel):
             config.HamGNN_pre.irreps_node_features)  # Irreps for node features
 
         # Atomic embedding
-        self.atomic_embedding = OneHotAtomEncoding(
-            num_types=self.num_types, set_features=self.set_features)
+        self.apply_charge_doping = getattr(config.HamGNN_pre, 'apply_charge_doping', False)
+        if self.apply_charge_doping:
+            num_node_attr_feas = config.HamGNN_pre.num_node_attr_feas
+            num_charge_attr_feas = getattr(config.HamGNN_pre, 'num_charge_attr_feas', 8)
+            self.atomic_embedding = Embedding_block_q(
+                num_node_attr_feas=num_node_attr_feas,
+                num_charge_attr_feas=num_charge_attr_feas,
+                apply_charge_doping=True,
+                set_features=self.set_features)
+        else:
+            self.atomic_embedding = OneHotAtomEncoding(
+                num_types=self.num_types, set_features=self.set_features)
 
         # Spherical harmonics for edges
         self.spharm_edges = SphericalHarmonicEdgeAttrs(irreps_edge_sh=self.irreps_edge_sh,

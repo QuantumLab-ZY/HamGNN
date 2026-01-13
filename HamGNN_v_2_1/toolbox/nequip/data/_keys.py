@@ -69,6 +69,8 @@ ALL_ENERGY_KEYS: Final[List[str]] = [
 
 BATCH_KEY: Final[str] = "batch"
 
+DOPING_CHARGE_KEY: Final[str] = "doping_charge"
+
 # Make a list of allowed keys
 ALLOWED_KEYS: List[str] = [
     getattr(sys.modules[__name__], k)
