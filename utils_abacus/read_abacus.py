@@ -629,5 +629,153 @@ def process_graph_data():
     with open(fname, 'w') as f:
         f.write(formatted_content)
 
+
+def read_abacus_input(input_file: str) -> dict:
+    """
+    Read ABACUS INPUT file and extract electron-related parameters.
+    
+    Parameters:
+        input_file (str): Path to the ABACUS INPUT file.
+    
+    Returns:
+        dict: Dictionary containing:
+            - 'nelec': Total number of electrons (if specified)
+            - 'nelec_delta': Change in number of electrons (if specified)
+            - 'doping_charge': Computed doping charge (nelec_delta if set, else nelec - neutral)
+    """
+    result = {
+        'nelec': None,
+        'nelec_delta': None,
+        'doping_charge': None
+    }
+    
+    if not os.path.exists(input_file):
+        return result
+    
+    with open(input_file, 'r') as f:
+        for line in f:
+            line = line.split('//')[0].split('#')[0].strip()
+            if not line:
+                continue
+            
+            line_lower = line.lower()
+            
+            if 'nelec_delta' in line_lower:
+                try:
+                    result['nelec_delta'] = float(line.split()[-1])
+                except:
+                    pass
+            
+            elif 'nelec' in line_lower and 'nelec_delta' not in line_lower:
+                try:
+                    result['nelec'] = float(line.split()[-1])
+                except:
+                    pass
+    
+    return result
+
+
+def get_valence_electrons(atomic_number: int) -> int:
+    """
+    Get the number of valence electrons for an element.
+    
+    Parameters:
+        atomic_number (int): Atomic number (Z).
+    
+    Returns:
+        int: Number of valence electrons.
+    """
+    if atomic_number > 118 or atomic_number < 1:
+        return 0
+    
+    from pymatgen.core.periodic_table import Element
+    try:
+        element = Element.from_Z(atomic_number)
+        group = element.group
+        period = element.period
+        
+        # Period 1: H=1 (1 valence), He=2 (2 valence)
+        if period == 1:
+            return 1 if atomic_number == 1 else 2
+        
+        # Period 2: Li(3)=1, Be(4)=2, B(5)=3, C(6)=4, N(7)=5, O(8)=6, F(9)=7, Ne(10)=8
+        elif period == 2:
+            return max(1, atomic_number - 2)
+        
+        # Period >= 3
+        elif period >= 3:
+            if atomic_number <= 12:  # s-block: Na(11)=1, Mg(12)=2
+                return atomic_number - 10
+            else:  # p-block elements: Al(13)=3, Si(14)=4, P(15)=5, S(16)=6
+                # For p-block, valence electrons = group number - 10
+                # Al: group=13, valence=3
+                # Si: group=14, valence=4
+                # P: group=15, valence=5
+                return int(group) - 10
+    
+    except:
+        pass
+    
+    # Fallback: estimate from atomic number
+    # Common valence patterns:
+    if atomic_number <= 2:
+        return atomic_number  # H=1, He=2
+    elif atomic_number <= 10:
+        return atomic_number - 2  # Li=1, Be=2, B=3, C=4, N=5, O=6, F=7, Ne=8
+    elif atomic_number <= 18:
+        return atomic_number - 10  # Na=1, Mg=2, Al=3, Si=4, P=5, S=6, Cl=7, Ar=8
+    else:
+        # For heavier elements, use group-based estimate
+        try:
+            element = Element.from_Z(atomic_number)
+            g = int(group) if group else 14
+            if atomic_number > 12:  # p-block
+                return g - 10
+            else:  # s-block
+                return atomic_number - 10
+        except:
+            return 4  # Default for transition metals
+
+
+def get_neutral_electrons(stru: STRU) -> int:
+    """
+    Calculate the number of valence electrons in a neutral system.
+    
+    Parameters:
+        stru (STRU): STRU object containing atomic information.
+    
+    Returns:
+        int: Total number of valence electrons in the neutral system.
+    """
+    total_valence = 0
+    for z in stru.atomic_numbers:
+        total_valence += get_valence_electrons(int(z))
+    return total_valence
+
+
+def calculate_doping_charge(input_params: dict, neutral_electrons: int) -> float:
+    """
+    Calculate the doping charge from INPUT parameters.
+    
+    Priority:
+    1. If nelec_delta is set, use it directly
+    2. If nelec is set, calculate: doping_charge = nelec - neutral_electrons
+    3. Otherwise, return 0.0 (neutral system)
+    
+    Parameters:
+        input_params (dict): Output from read_abacus_input().
+        neutral_electrons (int): Number of electrons in neutral system.
+    
+    Returns:
+        float: Doping charge (positive = hole doping, negative = electron doping).
+    """
+    if input_params['nelec_delta'] is not None:
+        return float(input_params['nelec_delta'])
+    elif input_params['nelec'] is not None:
+        return float(input_params['nelec'] - neutral_electrons)
+    else:
+        return 0.0
+
+
 if __name__ == '__main__':
     process_graph_data()

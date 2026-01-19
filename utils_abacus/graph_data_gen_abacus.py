@@ -15,28 +15,33 @@ from tqdm import tqdm
 from copy import deepcopy
 import multiprocessing
 from pymatgen.core.periodic_table import Element
-from read_abacus import STRU, ABACUSHS
+from read_abacus import STRU, ABACUSHS, read_abacus_input, get_neutral_electrons, calculate_doping_charge
 from build_graph_from_coordinates import build_graph, compute_graph_difference, find_inverse_edge_index
 from utils import *
 
 ################################ Input Parameters ##############################
 # Maximum number of atomic orbitals (basis set size)
-NAO_MAX = 27
+NAO_MAX = 13
 
 # Scaling factor for radius, used for graph construction.
 # Suggested scaling factors for different functionals:
 # - For HSE: 1.5-2.0, to include long-range interactions. Users should tune this parameter based on their own systems.
 # - For PBE: 1.0
-RADIUS_SCALE_FACTOR = 1.8
+RADIUS_SCALE_FACTOR = 1.0
 
 # Flag to skip DFT Hamiltonian (useful for generating graphs for testing)
 SKIP_DFT_HAMILTONIAN = True
 
 # Paths for input and output data
 GRAPH_DATA_FOLDER = '../graph/'
-SCF_OUTPUT_PATHS = [f"/public/home/zhongyang/yzhong/Abacus_test/lcao_Si2/OUT.ABACUS"]
-STRU_FILE_PATHS = [f"/public/home/zhongyang/yzhong/Abacus_test/lcao_Si2/STRU"]
-SCF_LOG_FILENAME = "running_scf.log" # if SKIP_DFT_HAMILTONIAN is True, this file is not used
+# Base directories containing SCF calculations (each dir has OUT.ABACUS/, STRU, INPUT)
+DATA_DIRS = [f"/data/home/whlu/144-ham_V_Si/nscf/2"]
+SCF_LOG_FILENAME = "running_nscf.log"  # Log filename inside OUT.ABACUS dir
+
+# Derived paths (automatically generated from DATA_DIRS)
+SCF_OUTPUT_DIRS = [os.path.join(d, 'OUT.ABACUS') for d in DATA_DIRS]  # Directory containing sparse CSR files
+STRU_FILE_PATHS = [os.path.join(d, 'STRU') for d in DATA_DIRS]
+INPUT_FILE_PATHS = [os.path.join(d, 'INPUT') for d in DATA_DIRS]
 
 # Maximum SCF iterations (to check for convergence)
 MAX_SCF_SKIP = 200
@@ -63,10 +68,6 @@ else:
 # Create output folder if it doesn't exist
 if not os.path.exists(GRAPH_DATA_FOLDER):
     os.makedirs(GRAPH_DATA_FOLDER)
-
-# Ensure the number of SCF output paths matches the STRU file paths
-if len(SCF_OUTPUT_PATHS) != len(STRU_FILE_PATHS):
-    raise ValueError("Mismatch between SCF output paths and STRU file paths.")
 
 # Dictionary to store graph data
 graph_data = {}
@@ -395,8 +396,16 @@ def generate_graph(idx: int, scf_path: str) -> tuple:
         for species, atom_count in zip(crystal.species, crystal.num_atoms_per_species):
             atomic_numbers += [Element(species).Z] * atom_count
         atomic_numbers = np.array(atomic_numbers, dtype=int)
+        
+        # Calculate doping charge from INPUT file
+        input_file_path = INPUT_FILE_PATHS[idx]
+        input_params = read_abacus_input(input_file_path)
+        neutral_electrons = get_neutral_electrons(crystal)
+        doping_charge = calculate_doping_charge(input_params, neutral_electrons)
+        doping_charge_tensor = torch.FloatTensor([doping_charge])
+        
     except Exception as e:
-        print(f"Error reading STRU file: {e}. Skipping...")
+        print(f"Error reading STRU file or calculating doping charge: {e}. Skipping...")
         return False, None, None
 
     # Read hopping and overlap parameters
@@ -464,7 +473,8 @@ def generate_graph(idx: int, scf_path: str) -> tuple:
                         Hon0 = torch.FloatTensor(H0[:pos.shape[0],:]),
                         Hoff0 = torch.FloatTensor(H0[pos.shape[0]:,:]),
                         Son = torch.FloatTensor(S[:pos.shape[0],:]),
-                        Soff = torch.FloatTensor(S[pos.shape[0]:,:]))
+                        Soff = torch.FloatTensor(S[pos.shape[0]:,:]),
+                        doping_charge=doping_charge_tensor)
     else:
         return True, Data(z=torch.LongTensor(atomic_numbers),
                         cell = torch.Tensor(lattice[None,:,:]),
@@ -485,7 +495,8 @@ def generate_graph(idx: int, scf_path: str) -> tuple:
                         iHon0 = torch.FloatTensor(iH0[:pos.shape[0],:]),
                         iHoff0 = torch.FloatTensor(iH0[pos.shape[0]:,:]),
                         Son = torch.FloatTensor(S[:pos.shape[0],:]),
-                        Soff = torch.FloatTensor(S[pos.shape[0]:,:]))
+                        Soff = torch.FloatTensor(S[pos.shape[0]:,:]),
+                        doping_charge=doping_charge_tensor)
 
 
 def main():
@@ -506,7 +517,7 @@ def main():
 
     # Process all SCF calculations
     results = []
-    for idx, scf_path in enumerate(SCF_OUTPUT_PATHS):
+    for idx, scf_path in enumerate(SCF_OUTPUT_DIRS):
         results.append(pool.apply_async(generate_graph, (idx, scf_path)))
 
     for idx, result in enumerate(tqdm(results, desc="Processing SCF Outputs")):
