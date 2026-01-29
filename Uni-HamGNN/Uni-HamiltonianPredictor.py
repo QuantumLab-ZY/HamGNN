@@ -312,6 +312,10 @@ def predict_and_save_hamiltonian(
     
     predictor = load_model_predictor(model_pkl_path)
 
+    if soc_data_dir is None:
+        print("Warning: soc_data_dir is None. Forcing soc_enabled to False.")
+        predictor.soc_enabled = False
+
     prediction_args = {
         'non_soc_data_path': non_soc_data_dir,
         'soc_data_path': soc_data_dir,
@@ -353,4 +357,5 @@ if __name__ == "__main__":
         output_dir=output_dir,
         device=device,
         calculate_mae=calculate_mae
+
     )
