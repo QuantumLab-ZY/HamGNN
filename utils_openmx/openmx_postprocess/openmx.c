@@ -776,8 +776,7 @@ int main(int argc, char *argv[])
         if (myid == Host_ID)
           printf("\n Calculate S and H0 ...\n");
         CompTime[myid][3] += DFT(MD_iter, (MD_iter - 1) % orbitalOpt_per_MDIter + 1);
-        Set_initial_Hamiltonian("stdout", 1, 0, H0, HNL, H);
-        Set_Orbitals_Grid(0);
+
         if (HS_fileout == 1)
           SCF2File("write", argv[1]);
         if (myid == Host_ID)

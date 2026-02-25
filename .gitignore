@@ -4,3 +4,7 @@
 *.mod
 build/
 HamGNN.egg-info/
+
+# ide & editor
+.idea/
+.vscode/
