@@ -16,6 +16,7 @@ from ..toolbox.mace.modules.irreps_tools import (
 )
 from ..utils.irreps_utils import acts, irreps2gate
 
+
 @compile_mode("script")
 class PairInteractionBlock(nn.Module):
     """
@@ -27,6 +28,8 @@ class PairInteractionBlock(nn.Module):
     - irreps_edge_embed (o3.Irreps): Irreducible representations for edge embeddings.
     - irreps_edge_feats (o3.Irreps): Irreducible representations for edge features.
     - use_skip_connections (bool): Whether to use skip connections.
+    - legacy_edge_update (bool): If True and use_skip_connections is False, keep legacy (buggy) behavior
+        where edge features are not updated by conv_tp output. Use only for reproducing old checkpoints.
     - use_kan (bool): Whether to use KAN for radial MLP.
     - radial_MLP (Optional[List[int]]): Architecture of the radial MLP. Defaults to [64, 64, 64].
     - nonlinearity_type (str): Type of nonlinearity to use ("gate" or "norm").
@@ -43,6 +46,7 @@ class PairInteractionBlock(nn.Module):
         irreps_edge_embed: o3.Irreps,
         irreps_edge_feats: o3.Irreps,
         use_skip_connections: bool = False,
+        legacy_edge_update: bool = False,
         use_kan: bool = False,
         radial_MLP: Optional[List[int]] = None,
         nonlinearity_type: str = "gate",
@@ -54,6 +58,7 @@ class PairInteractionBlock(nn.Module):
 
         self.radial_MLP = radial_MLP or [64, 64, 64]
         self.use_skip_connections = use_skip_connections
+        self.legacy_edge_update = legacy_edge_update
         self.use_kan = use_kan
         self.lite_mode = lite_mode
 
@@ -64,7 +69,8 @@ class PairInteractionBlock(nn.Module):
         self.irreps_edge_feats = o3.Irreps(irreps_edge_feats)
         self.irreps_node_attrs = o3.Irreps(irreps_node_attrs)
 
-        assert nonlinearity_type in ("gate", "norm"), "Invalid nonlinearity type."
+        assert nonlinearity_type in (
+            "gate", "norm"), "Invalid nonlinearity type."
 
         # Convert nonlinearity mappings
         scalar_nonlinearities = {
@@ -86,15 +92,16 @@ class PairInteractionBlock(nn.Module):
             irreps_edge_feats=self.irreps_edge_feats,
             irreps_local_env_edge=self.irreps_edge_attrs,
             irreps_out=self.irreps_edge_feats,
-            irreps_edge_scalars=self.irreps_edge_embed, 
-            radial_MLP=self.radial_MLP, 
+            irreps_edge_scalars=self.irreps_edge_embed,
+            radial_MLP=self.radial_MLP,
             use_kan=self.use_kan,
             lite_mode=self.lite_mode
-            )
+        )
 
         # Skip connection
         if self.use_skip_connections:
-            self.skip_linear = self.create_linear(irreps_edge_feats, irreps_edge_feats)
+            self.skip_linear = self.create_linear(
+                irreps_edge_feats, irreps_edge_feats)
 
     def create_linear(self, irreps_in, irreps_out=None):
         """
@@ -126,20 +133,25 @@ class PairInteractionBlock(nn.Module):
         edge_embed = data[AtomicDataDict.EDGE_EMBEDDING_KEY]
         edge_feats = data[AtomicDataDict.EDGE_FEATURES_KEY]
 
-        # Mixing node features for edge features       
+        # Mixing node features for edge features
         edge_feats_mix = self.conv_tp(
-            self.linear_up_src(node_feats)[edge_src], 
-            self.linear_up_tar(node_feats)[edge_dst], 
-            edge_feats, 
-            data[AtomicDataDict.EDGE_ATTRS_KEY], 
+            self.linear_up_src(node_feats)[edge_src],
+            self.linear_up_tar(node_feats)[edge_dst],
+            edge_feats,
+            data[AtomicDataDict.EDGE_ATTRS_KEY],
             edge_embed
         )
-        
+
         if self.use_skip_connections:
             edge_feats = edge_feats_mix + self.skip_linear(edge_feats)
+        elif self.legacy_edge_update:
+            # Legacy: when no skip, keep original edge_feats (reproduce old buggy behavior)
+            pass
+        else:
+            edge_feats = edge_feats_mix
 
         data[AtomicDataDict.EDGE_FEATURES_KEY] = edge_feats
-        
+
         return edge_feats
 
 
@@ -173,7 +185,8 @@ class CorrProductBlock(nn.Module):
         self.num_elements = num_elements
 
         self.irreps_hidden_features = o3.Irreps(
-            [(self.num_hidden_features, irrep.ir) for irrep in self.irreps_node_feats]
+            [(self.num_hidden_features, irrep.ir)
+             for irrep in self.irreps_node_feats]
         )
 
         # Linear layers for lifting and skip connection
@@ -206,7 +219,7 @@ class CorrProductBlock(nn.Module):
             internal_weights=True,
             shared_weights=True,
         )
-        
+
         self.reshape = reshape_irreps(self.irreps_hidden_features)
 
     def forward(
@@ -223,7 +236,8 @@ class CorrProductBlock(nn.Module):
         - torch.Tensor: Updated node features.
         """
         node_feats = self.linear_pre(data[AtomicDataDict.NODE_FEATURES_KEY])
-        node_feats = self.reshape(node_feats) # [n_nodes, channels, (l + 1)**2]
+        # [n_nodes, channels, (l + 1)**2]
+        node_feats = self.reshape(node_feats)
 
         out = self.prod(node_feats, None, data[AtomicDataDict.NODE_ATTRS_KEY])
         out = self.linear_out(out)
@@ -261,23 +275,29 @@ class ResidualBlock(nn.Module):
         nonlinearity_gates: Dict[int, Callable] = {"e": "ssp", "o": "abs"},
     ):
         super().__init__()
-        
+
         # Ensure valid nonlinearity type
-        assert nonlinearity_type in ("gate", "norm"), "Invalid nonlinearity_type. Choose either 'gate' or 'norm'."
+        assert nonlinearity_type in (
+            "gate", "norm"), "Invalid nonlinearity_type. Choose either 'gate' or 'norm'."
 
         # Convert scalar and gate nonlinearity based on parity
-        nonlinearity_scalars = {1: nonlinearity_scalars["e"], -1: nonlinearity_scalars["o"]}
-        nonlinearity_gates = {1: nonlinearity_gates["e"], -1: nonlinearity_gates["o"]}
+        nonlinearity_scalars = {
+            1: nonlinearity_scalars["e"], -1: nonlinearity_scalars["o"]}
+        nonlinearity_gates = {
+            1: nonlinearity_gates["e"], -1: nonlinearity_gates["o"]}
 
         self.irreps_in = o3.Irreps(irreps_in)
         self.feature_irreps_hidden = o3.Irreps(feature_irreps_hidden)
         self.resnet = resnet
-        
-        self.equivariant_nonlin = self.create_nonlinearity(nonlinearity_type, self.feature_irreps_hidden, nonlinearity_scalars, nonlinearity_gates)
-        
+
+        self.equivariant_nonlin = self.create_nonlinearity(
+            nonlinearity_type, self.feature_irreps_hidden, nonlinearity_scalars, nonlinearity_gates)
+
         # Define linear layers
-        self.linear1 = o3.Linear(irreps_in=self.irreps_in, irreps_out=self.equivariant_nonlin.irreps_in)
-        self.linear2 = o3.Linear(irreps_in=self.equivariant_nonlin.irreps_out, irreps_out=irreps_in)
+        self.linear1 = o3.Linear(
+            irreps_in=self.irreps_in, irreps_out=self.equivariant_nonlin.irreps_in)
+        self.linear2 = o3.Linear(
+            irreps_in=self.equivariant_nonlin.irreps_out, irreps_out=irreps_in)
 
     def create_nonlinearity(self, nonlinearity_type, irreps_mid, nonlinearity_scalars, nonlinearity_gates):
         """Create nonlinearity module."""
@@ -312,20 +332,18 @@ class ResidualBlock(nn.Module):
         """
         # Store old input for resnet connection if applicable
         old_x = x
-        
+
         # Apply first linear transformation
         x = self.linear1(x)
-        
+
         # Apply nonlinearity
         x = self.equivariant_nonlin(x)
-        
+
         # Apply second linear transformation
         x = self.linear2(x)
-        
+
         # Apply residual connection if resnet is enabled
         if self.resnet:
             x = old_x + x
-            
+
         return x
-
-

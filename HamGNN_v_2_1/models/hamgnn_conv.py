@@ -47,6 +47,10 @@ class HamGNNConvE3(BaseModel):
         else:
             self.use_corr_prod = config.HamGNN_pre.use_corr_prod
 
+        # Legacy edge update
+        self.legacy_edge_update = getattr(
+            config.HamGNN_pre, 'legacy_edge_update', False)
+
         # Set product mode
         self.lite_mode = getattr(config.HamGNN_pre, 'lite_mode', False)
 
@@ -150,7 +154,9 @@ class HamGNNConvE3(BaseModel):
                                                     irreps_edge_embed=self.radial_basis.irreps_out[
                                                         AtomicDataDict.EDGE_EMBEDDING_KEY],
                                                     irreps_edge_feats=self.irreps_node_features,
-                                                    use_skip_connections=True if i > 0 else False,
+                                                    use_skip_connections=(
+                                                        True if i > 0 else False) if self.legacy_edge_update else True,
+                                                    legacy_edge_update=self.legacy_edge_update,
                                                     use_kan=use_kan,
                                                     radial_MLP=self.radial_MLP,
                                                     lite_mode=self.lite_mode)
