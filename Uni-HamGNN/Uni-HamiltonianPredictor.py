@@ -13,9 +13,10 @@ import pickle
 from typing import Tuple, List, Optional
 import yaml
 import argparse
-from HamGNN_v_2_1.models.hamgnn_conv import HamGNNConvE3 
+from HamGNN_v_2_1.models.hamgnn_conv import HamGNNConvE3
 from HamGNN_v_2_1.models.hamgnn_output import HamGNNPlusPlusOut
 from HamGNN_v_2_1.main import Model
+
 
 def read_config(config_file_name: str = 'config_default.yaml') -> EasyDict:
     """Read and parse a YAML configuration file into an EasyDict object.
@@ -30,6 +31,7 @@ def read_config(config_file_name: str = 'config_default.yaml') -> EasyDict:
     with open(config_file_name, encoding='utf-8') as rstream:
         config_data = yaml.load(rstream, yaml.SafeLoader)
     return EasyDict(config_data)
+
 
 def build_hamgnn_components(config: EasyDict) -> Tuple[torch.nn.Module, torch.nn.Module]:
     """Build the HamGNN model components including the graph representation network and output module.
@@ -47,9 +49,10 @@ def build_hamgnn_components(config: EasyDict) -> Tuple[torch.nn.Module, torch.nn
     config.representation_nets.HamGNN_pre.ham_type = config.output_nets.HamGNN_out.ham_type.lower()
     config.representation_nets.HamGNN_pre.nao_max = config.output_nets.HamGNN_out.nao_max
     config.representation_nets.HamGNN_pre.use_corr_prod = False
+    config.representation_nets.HamGNN_pre.legacy_edge_update = True
     # Initialize graph representation network
     graph_representation_network = HamGNNConvE3(config.representation_nets)
-    
+
     # Initialize Hamiltonian output module
     output_params = config.output_nets.HamGNN_out
     hamiltonian_output_module = HamGNNPlusPlusOut(
@@ -75,9 +78,11 @@ def build_hamgnn_components(config: EasyDict) -> Tuple[torch.nn.Module, torch.nn
     )
     return graph_representation_network, hamiltonian_output_module
 
+
 def save_model_predictor(predictor, model_filepath):
     with open(model_filepath, 'wb') as f:
         pickle.dump(predictor, f)
+
 
 def load_model_predictor(model_filepath: str, device: Optional[str] = None):
     """
@@ -96,15 +101,17 @@ def load_model_predictor(model_filepath: str, device: Optional[str] = None):
 
     if device:
         model_predictor.device = device
-        model_predictor.non_soc_model = model_predictor.non_soc_model.to(device)
+        model_predictor.non_soc_model = model_predictor.non_soc_model.to(
+            device)
         if hasattr(model_predictor, 'soc_model') and model_predictor.soc_model:
             model_predictor.soc_model = model_predictor.soc_model.to(device)
 
     return model_predictor
 
+
 class HamiltonianPredictor:
     """Manages Hamiltonian prediction using GNN models, handling both non-SOC and SOC calculations."""
-    
+
     @staticmethod
     def _get_most_available_gpu() -> int:
         """Identifies the GPU with the most available memory.
@@ -114,7 +121,8 @@ class HamiltonianPredictor:
         """
         try:
             result = subprocess.run(
-                ["nvidia-smi", "--query-gpu=index,memory.used,memory.total", "--format=csv,noheader,noununits"],
+                ["nvidia-smi", "--query-gpu=index,memory.used,memory.total",
+                    "--format=csv,noheader,noununits"],
                 capture_output=True, text=True, check=True
             )
             gpu_stats = []
@@ -143,17 +151,20 @@ class HamiltonianPredictor:
         """
         self.soc_enabled = soc_switch
         self._validate_config_paths(config_nonsoc_path, config_soc_path)
-        
+
         # Load configurations
         self.config_nonsoc = read_config(config_nonsoc_path)
-        self.config_soc = read_config(config_soc_path) if self.soc_enabled else None
-        
+        self.config_soc = read_config(
+            config_soc_path) if self.soc_enabled else None
+
         # Device configuration
         self.device = self._configure_device(device)
-        
+
         # Model initialization
-        self.non_soc_model = self._load_model(self.config_nonsoc).to(self.device).eval()
-        self.soc_model = self._load_model(self.config_soc).to(self.device).eval() if self.soc_enabled else None
+        self.non_soc_model = self._load_model(
+            self.config_nonsoc).to(self.device).eval()
+        self.soc_model = self._load_model(self.config_soc).to(
+            self.device).eval() if self.soc_enabled else None
 
     def _validate_config_paths(self, *paths: Optional[str]) -> None:
         """Validates existence of required configuration files."""
@@ -198,27 +209,30 @@ class HamiltonianPredictor:
             Tuple containing predicted Hamiltonians and optional MAE metrics.
         """
         non_soc_loader = self._create_data_loader(non_soc_data_path)
-        soc_loader = self._create_data_loader(soc_data_path) if self.soc_enabled else None
-        
+        soc_loader = self._create_data_loader(
+            soc_data_path) if self.soc_enabled else None
+
         hamiltonians = []
         real_mae_values = [] if calculate_mae else None
         imag_mae_values = [] if calculate_mae and self.soc_enabled else None
-        
+
         if calculate_mae:
             self.non_soc_model.output_module.zero_point_shift = True
             self.soc_model.output_module.zero_point_shift = True
         else:
             self.non_soc_model.output_module.zero_point_shift = False
-        
-        data_pairs = zip(non_soc_loader, soc_loader) if self.soc_enabled else non_soc_loader
+
+        data_pairs = zip(
+            non_soc_loader, soc_loader) if self.soc_enabled else non_soc_loader
         for batch in tqdm(data_pairs, total=len(non_soc_loader)):
             batch = self._process_batch(batch)
             with torch.no_grad():
                 pred = self._model_forward(batch)
                 hamiltonians.append(pred['hamiltonian'].cpu().numpy())
                 if calculate_mae:
-                    self._calculate_batch_mae(pred, batch, real_mae_values, imag_mae_values)
-        
+                    self._calculate_batch_mae(
+                        pred, batch, real_mae_values, imag_mae_values)
+
         final_hamiltonian = np.concatenate(hamiltonians)
         if not calculate_mae:
             return (final_hamiltonian,)
@@ -235,7 +249,8 @@ class HamiltonianPredictor:
     @staticmethod
     def _load_graph_data(data_path: str) -> List:
         """Loads graph data from .npz file."""
-        data_file = data_path if data_path.endswith('.npz') else os.path.join(data_path, "graph_data.npz")
+        data_file = data_path if data_path.endswith(
+            '.npz') else os.path.join(data_path, "graph_data.npz")
         return list(np.load(data_file, allow_pickle=True)['graph'].item().values())
 
     def _process_batch(self, batch) -> torch.Tensor:
@@ -250,12 +265,14 @@ class HamiltonianPredictor:
             non_soc_batch, soc_batch = batch
             if 'hamiltonian' not in non_soc_batch:
                 if self.non_soc_model.output_module.zero_point_shift:
-                    non_soc_batch['hamiltonian'] = torch.cat([non_soc_batch['Hon'], non_soc_batch['Hoff']])
+                    non_soc_batch['hamiltonian'] = torch.cat(
+                        [non_soc_batch['Hon'], non_soc_batch['Hoff']])
                 else:
                     non_soc_batch['hamiltonian'] = 0.0
             if 'hamiltonian' not in soc_batch:
                 if self.soc_model.output_module.zero_point_shift:
-                    soc_batch['hamiltonian'] = torch.cat([soc_batch['Hon'], soc_batch['Hoff'], soc_batch['iHon'], soc_batch['iHoff']])
+                    soc_batch['hamiltonian'] = torch.cat(
+                        [soc_batch['Hon'], soc_batch['Hoff'], soc_batch['iHon'], soc_batch['iHoff']])
                 else:
                     soc_batch['hamiltonian'] = 0.0
             non_soc_pred = self.non_soc_model(non_soc_batch)
@@ -264,7 +281,7 @@ class HamiltonianPredictor:
                 'Hoff_nonsoc': non_soc_pred['hamiltonian'][len(soc_batch.z):]
             })
             return self.soc_model(soc_batch)
-        
+
         if 'hamiltonian' not in batch:
             if self.non_soc_model.output_module.zero_point_shift:
                 batch['hamiltonian'] = torch.cat([batch['Hon'], batch['Hoff']])
@@ -277,19 +294,26 @@ class HamiltonianPredictor:
         """Calculates MAE metrics for a batch."""
         if self.soc_enabled:
             _, soc_batch = batch
-            real_diff = torch.abs(pred['hamiltonian_real'] - torch.cat([soc_batch['Hon'], soc_batch['Hoff']]))
-            imag_diff = torch.abs(pred['hamiltonian_imag'] - torch.cat([soc_batch['iHon'], soc_batch['iHoff']]))
-            real_mae.extend(real_diff.flatten()[pred['mask_real_imag'].flatten().bool()].cpu().numpy())
-            imag_mae.extend(imag_diff.flatten()[pred['mask_real_imag'].flatten().bool()].cpu().numpy())
+            real_diff = torch.abs(
+                pred['hamiltonian_real'] - torch.cat([soc_batch['Hon'], soc_batch['Hoff']]))
+            imag_diff = torch.abs(
+                pred['hamiltonian_imag'] - torch.cat([soc_batch['iHon'], soc_batch['iHoff']]))
+            real_mae.extend(real_diff.flatten()[
+                            pred['mask_real_imag'].flatten().bool()].cpu().numpy())
+            imag_mae.extend(imag_diff.flatten()[
+                            pred['mask_real_imag'].flatten().bool()].cpu().numpy())
         else:
-            diff = torch.abs(pred['hamiltonian'] - torch.cat([batch['Hon'], batch['Hoff']]))
-            real_mae.extend(diff.flatten()[pred['mask'].flatten().bool()].cpu().numpy())
+            diff = torch.abs(pred['hamiltonian'] -
+                             torch.cat([batch['Hon'], batch['Hoff']]))
+            real_mae.extend(
+                diff.flatten()[pred['mask'].flatten().bool()].cpu().numpy())
 
     def _package_mae_results(self, hamiltonian, real_mae, imag_mae) -> Tuple:
         """Packages results with MAE metrics."""
         if self.soc_enabled:
             return (hamiltonian, np.mean(real_mae), np.mean(imag_mae))
         return (hamiltonian, np.mean(real_mae))
+
 
 def predict_and_save_hamiltonian(
     model_pkl_path: str,
@@ -309,7 +333,7 @@ def predict_and_save_hamiltonian(
         calculate_mae (bool): Calculate MAE metrics
         output_dir (str): Output directory for results
     """
-    
+
     predictor = load_model_predictor(model_pkl_path)
 
     if soc_data_dir is None:
@@ -322,25 +346,27 @@ def predict_and_save_hamiltonian(
         'calculate_mae': calculate_mae
     }
     results = predictor.predict_hamiltonians(**prediction_args)
-    
+
     np.save(os.path.join(output_dir, 'hamiltonian.npy'), results[0])
 
     if calculate_mae:
-        mae_info = "\n".join([f"MAE ({desc}): {val:.4e}" 
-                            for desc, val in zip(['Real', 'Imag'][:len(results)-1], results[1:])])
+        mae_info = "\n".join([f"MAE ({desc}): {val:.4e}"
+                              for desc, val in zip(['Real', 'Imag'][:len(results)-1], results[1:])])
         print(mae_info)
 
 
 if __name__ == "__main__":
     # Parse command line arguments to specify config file path
-    parser = argparse.ArgumentParser(description='Read parameters from config file and predict Hamiltonian')
-    parser.add_argument('--config', type=str, default='Input.yaml', help='Path to configuration file')
+    parser = argparse.ArgumentParser(
+        description='Read parameters from config file and predict Hamiltonian')
+    parser.add_argument('--config', type=str,
+                        default='Input.yaml', help='Path to configuration file')
     args = parser.parse_args()
-    
+
     # Read YAML configuration file
     with open(args.config, 'r') as config_file:
         config = yaml.safe_load(config_file)
-    
+
     # Extract parameters from configuration
     model_pkl_path = config.get('model_pkl_path', '')
     non_soc_data_dir = config.get('non_soc_data_dir', '')
@@ -348,7 +374,7 @@ if __name__ == "__main__":
     output_dir = config.get('output_dir', './')
     device = config.get('device', 'cpu')
     calculate_mae = config.get('calculate_mae', False)
-    
+
     # Call the function with configured parameters
     predict_and_save_hamiltonian(
         model_pkl_path=model_pkl_path,
