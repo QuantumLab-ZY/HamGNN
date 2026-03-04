@@ -140,146 +140,155 @@ class STRU:
         __init__(file: str) -> None: Initializes the structure by reading data from the given file.
     """
     
-    def __init__(self, file: str) -> None:
-        """
-        Initialize the structure by reading data from the specified file.
-        
-        Args:
-            file (str): Path to the input file containing atomic and lattice information.
-        """
-        # Open the file and initialize attributes
-        with open(file, 'r') as fp:
-            self.species = []
-            self.num_orbitals = []  # Number of orbitals per species.
-            self.num_atoms_per_species = []  # Number of atoms per species.
-            self.cell = []  # Lattice vectors.
-            self.positions = []  # Atomic positions.
-            
-            active_block = None
-            latconst = 1.0  # Default lattice constant
-            
-            # Process file line by line
-            for line in fp:
-                line = line.split('//')[0].split('#')[0].strip()  # Remove comments and whitespace
-                if not line:
-                    continue
+    def __init__(self, file):
+        self.species = []
+        self.num_orbitals = []
+        self.num_atoms_per_species = []
+        self.positions = []
+        self.cell = []
+        self.pos_type = "cartesian"
 
-                if 'ATOMIC_SPECIES' in line:
-                    active_block = 'ATOMIC_SPECIES'
-                elif 'NUMERICAL_ORBITAL' in line:
-                    active_block = 'NUMERICAL_ORBITAL'
-                elif 'LATTICE_CONSTANT' in line:
-                    active_block = 'LATTICE_CONSTANT'
-                elif 'LATTICE_VECTORS' in line:
-                    active_block = 'LATTICE_VECTORS'
-                elif 'ATOMIC_POSITIONS' in line:
-                    active_block = 'ATOMIC_POSITIONS'
+        self.latconst = 1.0
 
-                elif active_block == 'ATOMIC_SPECIES':
-                    self.species.append(line.split()[0])
+        self._parse_file(file)
 
-                elif active_block == 'NUMERICAL_ORBITAL':
-                    # Parse the number of orbitals for each species
-                    orbital_data = line.split('.orb')[0].split('_')[-1]
-                    num_orbitals = self.parse_orbitals(orbital_data)
-                    self.num_orbitals.append(num_orbitals)
-
-                elif active_block == 'LATTICE_CONSTANT':
-                    latconst = float(line)
-
-                elif active_block == 'LATTICE_VECTORS':
-                    lattice_vector = list(map(float, line.split()))
-                    self.cell.append(lattice_vector)
-
-                elif active_block == 'ATOMIC_POSITIONS':
-                    self._process_atomic_positions(fp, line)
-
-        # After reading all lines, finalize the data
-        self.num_species = len(self.species)
-        self.num_atoms_unit_cell = sum(self.num_atoms_per_species)
-        self.cell = np.array(self.cell) * latconst
+        # Convert lattice: Bohr → Å
+        self.cell = np.array(self.cell) * self.latconst
         self.positions = np.array(self.positions)
-        
-        # Convert positions to Cartesian if they are in 'direct' format
+
+        # Atomic numbers
+        self.atomic_numbers = np.array([
+            Element(sp).Z
+            for sp, na in zip(self.species, self.num_atoms_per_species)
+            for _ in range(na)
+        ])
+
+        self.num_species = len(self.species)
+        self.num_atoms_unit_cell = len(self.atomic_numbers)
+
         if self.pos_type == 'direct':
             self.positions = self.convert_to_cartesian()
         else:
-            self.positions = self.positions * latconst
-            
-        # Generate atomic numbers (Z values)
-        self.atomic_numbers = np.array([Element(spec).Z for spec, na in zip(self.species, self.num_atoms_per_species) for _ in range(na)], dtype=int)
+            self.positions = self.positions @ self.cell
 
-    def parse_orbitals(self, orbital_data: str) -> int:
-        """
-        Parse the orbital string and calculate the total number of orbitals for the species.
-        
-        Args:
-            orbital_data (str): The string containing orbital information.
-        
-        Returns:
-            int: The total number of orbitals for the species.
-        """
-        s, p, d, f = 0, 0, 0, 0
-        if 's' in orbital_data:
-            s = int(re.findall(r'\d', orbital_data)[0]) * 1
-        if 'p' in orbital_data:
-            p = int(re.findall(r'\d', orbital_data)[1]) * 3
-        if 'd' in orbital_data:
-            d = int(re.findall(r'\d', orbital_data)[2]) * 5
-        if 'f' in orbital_data:
-            f = int(re.findall(r'\d', orbital_data)[3]) * 7
-        return s + p + d + f
+    # ============================================================
+    # Main parser
+    # ============================================================
+    def _parse_file(self, file):
+        with open(file, "r") as fp:
+            lines = fp.readlines()
 
-    def _process_atomic_positions(self, fp, line):
-        """
-        Process atomic positions block and parse relevant data.
-        
-        Args:
-            fp (file): File pointer to read atomic data.
-            line (str): Line read from the file containing atomic position info.
-            latconst (float): Lattice constant used for scaling.
-        """
-        self.pos_type = line.strip().lower()
-        for is_ in range(len(self.num_orbitals)):
-            # element
-            while True:
-                line = fp.readline().split('//')[0].split('#')[0]
-                if line.strip() == '':
-                    continue
-                break
-            # mag
-            while True:
-                line = fp.readline().split('//')[0].split('#')[0]
-                if line.strip() == '':
-                    continue
-                break
-            # num
-            while True:
-                line = fp.readline().split('//')[0].split('#')[0]
-                if line.strip() == '':
-                    continue
-                na = int(line)
-                self.num_atoms_per_species.append(na)
-                break
-            # pos
-            ia = 0
-            while ia < na:
-                line = fp.readline().split('//')[0].split('#')[0]
-                if line.strip() == '':
-                    continue
-                tmp = line.split()
-                self.positions.append([float(tmp[0]), float(tmp[1]), float(tmp[2])])
-                ia += 1
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
 
-    def convert_to_cartesian(self) -> np.ndarray:
+            # ATOM TYPE BLOCK
+            if line.startswith("READING ATOM TYPE"):
+                i = self._parse_atom_type(lines, i)
+                continue
+
+            # POSITION BLOCK
+            if line.startswith("DIRECT COORDINATES"):
+                i = self._parse_positions(lines, i)
+                continue
+
+            # LATTICE VECTORS
+            if line.startswith("Lattice vectors"):
+                i = self._parse_lattice(lines, i)
+                continue
+
+            if "lattice constant (Bohr)" in line:
+                # print(line)
+                match = re.search(r"=\s*([0-9]*\.?[0-9]+)", line)
+                if match:
+                    # print("match")
+                    self.latconst = float(match.group(1))
+
+            i += 1
+
+    # ============================================================
+    # Parse atom type block
+    # ============================================================
+    def _parse_atom_type(self, lines, i):
         """
-        Convert atomic positions from direct to Cartesian coordinates.
-        
-        Returns:
-            np.ndarray: The atomic positions in Cartesian coordinates.
+        Extract:
+          species
+          number of orbitals for that species
+          number of atoms for that species
         """
-        cartesian_positions = np.dot(self.positions, self.cell)
-        return cartesian_positions
+        i += 1
+        orbitals = 0
+        species = None
+        num_atoms = None
+
+        while i < len(lines):
+            line = lines[i].strip()
+
+            if line.startswith("atom label"):
+                species = line.split("=")[1].strip()
+                self.species.append(species)
+
+            elif line.startswith("L="):
+                # Example: L=1, number of zeta = 2
+                L = int(re.findall(r"L=(\d+)", line)[0])
+                zeta = int(re.findall(r"zeta\s*=\s*(\d+)", line)[0])
+
+                # degenerate orbitals
+                mult = {0: 1, 1: 3, 2: 5, 3: 7}[L]
+                orbitals += mult * zeta
+
+            elif line.startswith("number of atom for this type"):
+                num_atoms = int(line.split("=")[1])
+                self.num_atoms_per_species.append(num_atoms)
+                self.num_orbitals.append(orbitals)
+                return i + 1
+
+            i += 1
+
+        return i
+
+    # ============================================================
+    # Parse positions
+    # ============================================================
+    def _parse_positions(self, lines, i):
+        """
+        DIRECT COORDINATES
+        atom   x y z mag vx vy vz
+        """
+        i += 2  # skip header lines
+
+        while i < len(lines):
+            line = lines[i].strip()
+            if not line:
+                return i
+
+            if not line.startswith("taud_"):
+                return i
+
+            parts = line.split()
+            x, y, z = map(float, parts[1:4])
+            self.positions.append([x, y, z])
+
+            i += 1
+
+        return i
+
+    # ============================================================
+    # Parse lattice vectors
+    # ============================================================
+    def _parse_lattice(self, lines, i):
+        """
+        Lattice vectors (unit Bohr):
+             v1
+             v2
+             v3
+        """
+        i += 1
+        for _ in range(3):
+            vec = list(map(float, lines[i].split()))
+            self.cell.append(vec)
+            i += 1
+        return i
 
 class ABACUSHS:
     """

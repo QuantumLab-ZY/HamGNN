@@ -35,7 +35,6 @@ SKIP_DFT_HAMILTONIAN = True
 # Paths for input and output data
 GRAPH_DATA_FOLDER = '../graph/'
 SCF_OUTPUT_PATHS = [f"/public/home/zhongyang/yzhong/Abacus_test/lcao_Si2/OUT.ABACUS"]
-STRU_FILE_PATHS = [f"/public/home/zhongyang/yzhong/Abacus_test/lcao_Si2/STRU"]
 SCF_LOG_FILENAME = "running_scf.log" # if SKIP_DFT_HAMILTONIAN is True, this file is not used
 
 # Maximum SCF iterations (to check for convergence)
@@ -366,7 +365,6 @@ def generate_graph(idx: int, scf_path: str) -> tuple:
     """
     # Define paths for the required files
     scf_log_path = os.path.join(scf_path, SCF_LOG_FILENAME)
-    stru_file_path = STRU_FILE_PATHS[idx]
 
     # Read energy and SCF iteration data
     if SKIP_DFT_HAMILTONIAN:
@@ -389,7 +387,7 @@ def generate_graph(idx: int, scf_path: str) -> tuple:
 
     # Read crystal structure parameters
     try:
-        crystal = STRU(stru_file_path)
+        crystal = STRU(scf_log_path)
         lattice = crystal.cell
         atomic_numbers = []
         for species, atom_count in zip(crystal.species, crystal.num_atoms_per_species):
@@ -495,14 +493,6 @@ def main():
     multiprocessing.freeze_support()
     num_processes = min(multiprocessing.cpu_count(), NUM_PROCESSES)
     pool = multiprocessing.Pool(processes=num_processes)
-
-    # Initialize cutoff radii
-    crystal = STRU(STRU_FILE_PATHS[0])
-    max_rcut = np.zeros([len(crystal.species), len(crystal.species)])
-    min_rcut = np.zeros_like(max_rcut)
-    for i, spec1 in enumerate(crystal.species):
-        for j, spec2 in enumerate(crystal.species):
-            min_rcut[i, j] = RCUT_dict[spec1] + RCUT_dict[spec2]
 
     # Process all SCF calculations
     results = []
