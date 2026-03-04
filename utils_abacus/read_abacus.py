@@ -239,9 +239,6 @@ class STRU:
                 continue
             # CARTESIAN COORDINATES ( UNIT = ... Bohr ).
             if 'CARTESIAN COORDINATES' in line and 'UNIT' in line:
-                # Extract UNIT value from this line, e.g. "UNIT = 10.2 Bohr" -> 10.2
-                unit_match = re.search(r'UNIT\s*=\s*([\d.eE+-]+)', line)
-                coord_unit = float(unit_match.group(1)) if unit_match else 1.0
                 # Next line is header "atom x y z ...", data starts after that
                 i += 1
                 while i < len(lines):
@@ -252,7 +249,7 @@ class STRU:
                                 parts[2]), float(parts[3])
                             # Multiply coordinates by UNIT to get final Cartesian coords (e.g. Bohr)
                             self.positions.append(
-                                [x * coord_unit, y * coord_unit, z * coord_unit])
+                                [x, y, z])
                         except ValueError:
                             pass
                     i += 1
@@ -771,19 +768,6 @@ def process_graph_data():
     # Load structure and Hamiltonian
     poscar = STRU(os.path.join(
         '/public/home/zhongyang/yzhong/Abacus_test/lcao_Si2-1/OUT.ABACUS/', 'running_scf.log'))
-    # Print structure info for inspection (redirected to file)
-    with open('stru_info.txt', 'w', encoding='utf-8') as fout:
-        fout.write("Species (element types): {}\n".format(poscar.species))
-        fout.write("Number of orbitals per species: {}\n".format(
-            poscar.num_orbitals))
-        fout.write("Number of atoms per species: {}\n".format(
-            poscar.num_atoms_per_species))
-        fout.write("Lattice vectors (cell):\n{}\n".format(poscar.cell))
-        fout.write("Atomic positions:\n{}\n".format(poscar.positions))
-        fout.write("Atomic numbers: {}\n".format(poscar.atomic_numbers))
-        fout.write("Number of species: {}\n".format(poscar.num_species))
-        fout.write("Number of atoms in unit cell: {}\n".format(
-            poscar.num_atoms_unit_cell))
 
     H = ABACUSHS(os.path.join(
         '/public/home/zhongyang/yzhong/Abacus_test/lcao_Si2-1/OUT.ABACUS/', 'data-HR-sparse_SPIN0.csr'))
