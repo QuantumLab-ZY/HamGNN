@@ -30,11 +30,11 @@ NAO_MAX = 27
 RADIUS_SCALE_FACTOR = 1.8
 
 # Flag to skip DFT Hamiltonian (useful for generating graphs for testing)
-SKIP_DFT_HAMILTONIAN = True
+SKIP_DFT_HAMILTONIAN = False
 
 # Paths for input and output data
-GRAPH_DATA_FOLDER = '../graph/'
-SCF_OUTPUT_PATHS = [f"/public/home/zhongyang/yzhong/Abacus_test/lcao_Si2/OUT.ABACUS"]
+GRAPH_DATA_FOLDER = './graph_test/'
+SCF_OUTPUT_PATHS = [f"/public/home/zhongyang/yzhong/Abacus_test/lcao_Si2-1/OUT.ABACUS/"]
 SCF_LOG_FILENAME = "running_scf.log" # if SKIP_DFT_HAMILTONIAN is True, this file is not used
 
 # Maximum SCF iterations (to check for convergence)
@@ -63,13 +63,8 @@ else:
 if not os.path.exists(GRAPH_DATA_FOLDER):
     os.makedirs(GRAPH_DATA_FOLDER)
 
-# Ensure the number of SCF output paths matches the STRU file paths
-if len(SCF_OUTPUT_PATHS) != len(STRU_FILE_PATHS):
-    raise ValueError("Mismatch between SCF output paths and STRU file paths.")
-
 # Dictionary to store graph data
 graph_data = {}
-
 
 def generate_hamiltonian_and_overlap(graph_h0, graph_h, graph_s, z_indices, basis_definition, nao_max, use_soc=False):
     """
@@ -223,7 +218,6 @@ def generate_expanded_graph_h0(atomic_numbers, lattice, pos, graph_h0, soc_enabl
 
     # Select tensors to expand based on SOC_ENABLED flag
     tensors_to_expand = [graph_h0['Hoff']] + ([graph_h0['iHoff']] if soc_enabled else [])
-    
     # Expand the graph by adjusting the edge indices, cell shifts, and tensors
     edge_indices_exp, cell_shifts_exp, nbr_shifts_exp, inv_edge_idx_exp, tensors_expanded = expand_graph(
         lattice=lattice,
@@ -237,7 +231,6 @@ def generate_expanded_graph_h0(atomic_numbers, lattice, pos, graph_h0, soc_enabl
         tensors_to_expand=tensors_to_expand,
         soc_switch=soc_enabled
     )
-
     # Update graph_h0 with the expanded data
     graph_h0.update({
         'edge_index': edge_indices_exp,
@@ -374,8 +367,14 @@ def generate_graph(idx: int, scf_path: str) -> tuple:
         try:
             with open(scf_log_path, 'r') as f:
                 log_content = f.read().strip()
-                energy = float(pattern_eng_abacus.findall(log_content)[0])
-                max_scf_iterations = int(pattern_md_abacus.findall(log_content)[-1])
+            eng_matches = pattern_eng_abacus.findall(log_content)
+            md_matches = pattern_md_abacus.findall(log_content)
+            if not eng_matches:
+                raise ValueError("No match for energy in SCF log (look for 'final etot is ...')")
+            if not md_matches:
+                raise ValueError("No match for SCF iteration count in SCF log (look for 'ELEC= ...')")
+            energy = float(eng_matches[0])
+            max_scf_iterations = int(md_matches[-1])
         except Exception as e:
             print(f"Error reading SCF log file: {e}. Skipping...")
             return False, None, None
@@ -406,7 +405,6 @@ def generate_graph(idx: int, scf_path: str) -> tuple:
         else:
             h_sparse = ABACUSHS(os.path.join(scf_path, 'data-HR-sparse_SPIN0.csr'))
         s_sparse = ABACUSHS(os.path.join(scf_path, 'data-S0R-sparse_SPIN0.csr'))
-
         # Generate graphs for Hamiltonian and overlap     
         graph_h0 = h0_sparse.getGraph(crystal, graph={}, isH=True, isSOC=SOC_ENABLED)
         graph_h0 = generate_expanded_graph_h0(atomic_numbers, lattice, crystal.positions, graph_h0, soc_enabled=SOC_ENABLED, radius_type='abacus', radius_scale=RADIUS_SCALE_FACTOR)
