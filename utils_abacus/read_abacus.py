@@ -603,7 +603,8 @@ def process_graph_data():
     and saves the graph data to a formatted JSON file.
     """
     # Load structure and Hamiltonian
-    poscar = STRU(os.path.join('/public/home/zhongyang/yzhong/CsVSb/50/Training/perturbation_cal/STRU_1', 'STRU'))
+    poscar = STRU(os.path.join(
+        '/public/home/zhongyang/yzhong/CsVSb/50/Training/perturbation_cal/STRU_1/OUT.ABACUS', 'running_scf.log'))  # load structure from running_scf.log
     H = ABACUSHS(os.path.join('/public/home/zhongyang/yzhong/CsVSb/50/Training/perturbation_cal/STRU_1/OUT.ABACUS', 'data-H0R-sparse_SPIN0.csr'))
     graphH = H.getGraph(stru=poscar, graph={}, isH=True, tojson=True)
 
