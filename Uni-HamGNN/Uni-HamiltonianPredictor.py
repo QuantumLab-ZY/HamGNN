@@ -109,6 +109,19 @@ def load_model_predictor(model_filepath: str, device: Optional[str] = None):
     return model_predictor
 
 
+def _patch_legacy_attributes(predictor) -> None:
+    """Patch modules that lack attributes added in newer HamGNN (e.g. when using older installed egg)."""
+    models = [predictor.non_soc_model] + \
+        ([predictor.soc_model] if getattr(predictor, 'soc_model', None) else [])
+    for model in models:
+        for _, module in model.named_modules():
+            cls_name = type(module).__name__
+            if cls_name == 'MessagePackBlock' and not hasattr(module, 'lite_mode'):
+                module.lite_mode = False
+            if cls_name == 'PairInteractionBlock' and not hasattr(module, 'legacy_edge_update'):
+                module.legacy_edge_update = True
+
+
 class HamiltonianPredictor:
     """Manages Hamiltonian prediction using GNN models, handling both non-SOC and SOC calculations."""
 
@@ -334,7 +347,8 @@ def predict_and_save_hamiltonian(
         output_dir (str): Output directory for results
     """
 
-    predictor = load_model_predictor(model_pkl_path)
+    predictor = load_model_predictor(model_pkl_path, device=device)
+    _patch_legacy_attributes(predictor)
 
     if soc_data_dir is None:
         print("Warning: soc_data_dir is None. Forcing soc_enabled to False.")
