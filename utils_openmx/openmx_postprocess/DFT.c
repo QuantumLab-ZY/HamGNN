@@ -265,8 +265,115 @@ double DFT(int MD_iter, int Cnt_Now)
     time12 = Set_ProExpn_VNA(HVNA, HVNA2, DS_VNA);
   }
 
+  if (Cnt_switch==0 || (Cnt_switch==1 && Cnt_Now==1)) Cnt_kind = 0;
+  else if (Cnt_switch==1)                             Cnt_kind = 1;
+  else                                                Cnt_kind = 0;
+
+  time9 = Set_Aden_Grid();
+
+  if (Solver == 4) {
+
+    /*****************************************************
+                      set grid for NEGF
+  *****************************************************/
+
+    TRAN_Set_Electrode_Grid(mpi_comm_level1,
+                            &TRAN_Poisson_flag2,
+                            Grid_Origin, tv, Left_tv, Right_tv, gtv,
+                            Ngrid1, Ngrid2, Ngrid3);
+
+    /* revised by Y. Xiao for Noncollinear NEGF calculations */
+    if (SpinP_switch < 2) {
+      TRAN_Allocate_Lead_Region(mpi_comm_level1);
+      TRAN_Allocate_Cregion(mpi_comm_level1, SpinP_switch, atomnum, WhatSpecies, Spe_Total_CNO);
+    }
+    else {
+      TRAN_Allocate_Lead_Region_NC(mpi_comm_level1);
+      TRAN_Allocate_Cregion_NC(mpi_comm_level1, SpinP_switch, atomnum, WhatSpecies, Spe_Total_CNO);
+    } /* until here by Y. Xiao for Noncollinear NEGF calculations*/
+
+    /*****************************************************
+                     add density from Leads
+*****************************************************/
+
+    TRAN_Add_Density_Lead(mpi_comm_level1,
+                          SpinP_switch, Ngrid1, Ngrid2, Ngrid3,
+                          My_NumGridB_AB, Density_Grid_B);
+
+    TRAN_Add_ADensity_Lead(mpi_comm_level1,
+                           SpinP_switch, Ngrid1, Ngrid2, Ngrid3,
+                           My_NumGridB_AB, ADensity_Grid_B);
+
+  } /* end of if (Solver==4) */
+
+  time10 += Set_Orbitals_Grid(Cnt_kind);
+
+  /* YTL-start */
+  if (CDDF_on == 1) {
+    time10 += Set_dOrbitals_Grid(Cnt_kind);
+    Global_Cnt_kind = Cnt_kind;
+  }
+  /* YTL-end */
+
+  /*****************************************************
+   FFT of the initial density for k-space charge mixing
+  *****************************************************/
+
+  if ((Mixing_switch == 3 || Mixing_switch == 4) && SCF_iter == 1) {
+
+    /* non-spin polarization */
+    if (SpinP_switch == 0) {
+      if (Solver != 4 || TRAN_Poisson_flag2 == 2) {
+        time15 += FFT_Density(1, ReRhok[1][0], ImRhok[1][0]);
+      }
+      else {
+        time15 += FFT2D_Density(1, ReRhok[1][0], ImRhok[1][0]);
+      }
+    }
+
+    /* collinear spin polarization */
+    else if (SpinP_switch == 1) {
+      if (Solver != 4 || TRAN_Poisson_flag2 == 2) {
+        time15 += FFT_Density(1, ReRhok[1][0], ImRhok[1][0]);
+        time15 += FFT_Density(2, ReRhok[1][1], ImRhok[1][1]);
+      }
+      else {
+        time15 += FFT2D_Density(1, ReRhok[1][0], ImRhok[1][0]);
+        time15 += FFT2D_Density(2, ReRhok[1][1], ImRhok[1][1]);
+      }
+    }
+
+    /* non-collinear spin polarization */
+    else if (SpinP_switch == 3) {
+      if (Solver != 4 || TRAN_Poisson_flag2 == 2) {
+        time15 += FFT_Density(1, ReRhok[1][0], ImRhok[1][0]);
+        time15 += FFT_Density(2, ReRhok[1][1], ImRhok[1][1]);
+        time15 += FFT_Density(4, ReRhok[1][2], ImRhok[1][2]);
+      }
+      else {
+        time15 += FFT2D_Density(1, ReRhok[1][0], ImRhok[1][0]);
+        time15 += FFT2D_Density(2, ReRhok[1][1], ImRhok[1][1]);
+        time15 += FFT2D_Density(4, ReRhok[1][2], ImRhok[1][2]);
+      }
+    }
+  }
+
+  if (SpinP_switch==3) diagonalize_nc_density(Density_Grid_B);
+
+  if (core_hole_state_flag && Solver!=4 && ESM_switch==0)      time4 += Poisson(2,ReVk,ImVk);
+  else if (Solver!=4 && ESM_switch==0)                         time4 += Poisson(1,ReVk,ImVk);
+  else if (Solver!=4 && ESM_switch!=0)                         time4 += Poisson_ESM(1,ReVk,ImVk); /* added by Ohwaki */
+  else                                                         time4 += TRAN_Poisson(ReVk,ImVk); 
+
+  time3 += Set_Hamiltonian("nostdout",
+                           MD_iter,
+                           1,
+                           1,
+                           TRAN_Poisson_flag2,
+                           1, Cnt_kind, H0, HNL, DM[0], H);
+
   return 0; // added by Yang Zhong
-  
+
   /* SCF loop */
 
   if (Cnt_switch == 1 && Cnt_Now == 1)
