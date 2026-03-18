@@ -418,7 +418,11 @@ def generate_graph(task: tuple) -> tuple:
         input_params = read_abacus_input(input_file_path)
         neutral_electrons = get_neutral_electrons(crystal)
         doping_charge = calculate_doping_charge(input_params, neutral_electrons)
-        doping_charge = float(np.clip(doping_charge, DOPING_CHARGE_MIN, DOPING_CHARGE_MAX))
+        if not DOPING_CHARGE_MIN <= doping_charge <= DOPING_CHARGE_MAX:
+            raise ValueError(
+                f"doping_charge {doping_charge} is out of allowed range "
+                f"[{DOPING_CHARGE_MIN}, {DOPING_CHARGE_MAX}] for {input_file_path}"
+            )
         doping_charge_tensor = torch.tensor([doping_charge], dtype=torch.float32)
         
     except Exception as e:

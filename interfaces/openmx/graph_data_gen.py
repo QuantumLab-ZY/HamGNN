@@ -45,6 +45,7 @@ def main():
         doping_charge = input['doping_charge']
     else:
         doping_charge = 0.0
+    doping_charge = float(np.clip(doping_charge, -8.0, 8.0))
     ################################ Input parameters end ######################
     
     if nao_max == 14:
