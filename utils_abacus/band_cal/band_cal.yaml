@@ -1,0 +1,15 @@
+nao_max: 13
+graph_data_path: "/ssd/work/whlu/HamGNN2-q/err/version_0/graph_data.npz"
+prediction_hamiltonian_path: "/ssd/work/whlu/HamGNN2-q/err/version_0/prediction_hamiltonian.npy"
+target_hamiltonian_path: "/ssd/work/whlu/HamGNN2-q/err/version_0/target_hamiltonian.npy"
+nk: 20          # the number of k points
+num_workers: 12
+energy_window_ev: 1.5  # plot from VBM-0.5E to VBM+E, and use the same y-axis range
+save_dir: "."
+compare_subdir: "band_compare"
+compare_alignment_mode: "target_vbm"  # self_vbm: each source uses its own VBM; target_vbm: both align to target VBM; raw: no energy shift
+structure_name: "Si"  # Legacy key `strcture_name` is also supported
+soc_switch: False
+auto_mode: False # If the auto_mode is used, users can omit providing k_path and label, as the program will automatically generate them based on the crystal symmetry.
+k_path: [[0.0,0.0,0.0],[0.0,0.5,0.0],[0.5,0.5,0.0],[0.0,0.0,0.0],[0.5,0.5,0.5],[0.0,0.5,0.0]]
+label: ['$G$','$X$','$M$','$G$','$R$','$X$'] # The lable for each k points in K_path
