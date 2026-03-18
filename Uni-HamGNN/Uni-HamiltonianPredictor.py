@@ -13,9 +13,9 @@ import pickle
 from typing import Tuple, List, Optional
 import yaml
 import argparse
-from HamGNN_v_2_1.models.hamgnn_conv import HamGNNConvE3
-from HamGNN_v_2_1.models.hamgnn_output import HamGNNPlusPlusOut
-from HamGNN_v_2_1.main import Model
+from hamgnn.models.hamgnn_conv import HamGNNConvE3
+from hamgnn.models.hamgnn_output import HamGNNPlusPlusOut
+from hamgnn.main import Model
 
 
 def read_config(config_file_name: str = 'config_default.yaml') -> EasyDict:

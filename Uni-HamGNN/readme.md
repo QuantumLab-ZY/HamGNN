@@ -99,7 +99,7 @@ python setup.py install
 
 ```bash
 # Check if installation was successful
-python -c "import HamGNN_v_2_1; print('HamGNN installed successfully')"
+python -c "import hamgnn; print('HamGNN installed successfully')"
 ```
 
 ### Dependencies Installation
@@ -254,7 +254,7 @@ To prepare these files:
 ```yaml
 nao_max: 26
 graph_data_save_path: '/path/to/save/graph_data/soc'
-read_openmx_path: '/path/to/HamGNN/utils_openmx/read_openmx'
+read_openmx_path: '/path/to/HamGNN/interfaces/openmx/read_openmx'
 max_SCF_skip: 200
 scfout_paths: '/path/to/scfout/files/soc' # Directory of .scfout files or wildcard path
 dat_file_name: 'openmx.dat'

@@ -13,7 +13,7 @@ from pymatgen.core.structure import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
 import os
 import natsort
-from utils_openmx.utils import *
+from interfaces.openmx.utils import *
 import argparse
 import yaml
 

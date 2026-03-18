@@ -6,7 +6,7 @@ General utility modules for HamGNN v2.1.
 Irreps Utilities
 ----------------
 
-.. automodule:: HamGNN_v_2_1.utils.irreps_utils
+.. automodule:: hamgnn.utils.irreps_utils
    :members:
    :undoc-members:
    :show-inheritance:
@@ -14,7 +14,7 @@ Irreps Utilities
 Triplets
 --------
 
-.. automodule:: HamGNN_v_2_1.utils.triplets
+.. automodule:: hamgnn.utils.triplets
    :members:
    :undoc-members:
    :show-inheritance:
@@ -22,7 +22,7 @@ Triplets
 Math Utilities
 --------------
 
-.. automodule:: HamGNN_v_2_1.utils.math_utils
+.. automodule:: hamgnn.utils.math_utils
    :members:
    :undoc-members:
    :show-inheritance:
@@ -30,7 +30,7 @@ Math Utilities
 Loss Functions
 --------------
 
-.. automodule:: HamGNN_v_2_1.utils.losses
+.. automodule:: hamgnn.utils.losses
    :members:
    :undoc-members:
    :show-inheritance:
@@ -38,7 +38,7 @@ Loss Functions
 Visualization
 -------------
 
-.. automodule:: HamGNN_v_2_1.utils.visualization
+.. automodule:: hamgnn.utils.visualization
    :members:
    :undoc-members:
    :show-inheritance:
