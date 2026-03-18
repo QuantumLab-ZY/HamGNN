@@ -4,7 +4,7 @@ Physics Tools
 Clebsch-Gordan Coefficients
 ---------------------------
 
-.. automodule:: HamGNN_v_2_1.physics.Clebsch_Gordan_coefficients
+.. automodule:: hamgnn.physics.Clebsch_Gordan_coefficients
    :members:
    :undoc-members:
    :show-inheritance:
@@ -12,7 +12,7 @@ Clebsch-Gordan Coefficients
 K-Points
 --------
 
-.. automodule:: HamGNN_v_2_1.physics.kpoints
+.. automodule:: hamgnn.physics.kpoints
    :members:
    :undoc-members:
    :show-inheritance:
@@ -20,7 +20,7 @@ K-Points
 Matrix Operations
 -----------------
 
-.. automodule:: HamGNN_v_2_1.physics.matrix_operations
+.. automodule:: hamgnn.physics.matrix_operations
    :members:
    :undoc-members:
    :show-inheritance:

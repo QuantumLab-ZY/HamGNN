@@ -55,7 +55,7 @@ OpenMX Process
 
       nao_max: 26  # Maximum number of atomic orbitals
       graph_data_save_path: '/path/to/save/graph_data'
-      read_openmx_path: '/path/to/HamGNN/utils_openmx/read_openmx'
+      read_openmx_path: '/path/to/HamGNN/interfaces.openmx/read_openmx'
       max_SCF_skip: 200
       scfout_paths: '/path/to/scfout/files'  # Directory of .scfout files
       dat_file_name: 'openmx.dat'

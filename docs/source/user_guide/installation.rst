@@ -112,14 +112,14 @@ Step Two: Source Installation of HamGNN
 
    .. code-block:: bash
 
-      cd HamGNN_v_2_1
+      cd hamgnn
       python setup.py install
 
 3. Verify successful installation:
 
    .. code-block:: bash
 
-      python -c "import HamGNN_v_2_1; print('HamGNN installed successfully')"
+      python -c "import hamgnn; print('HamGNN installed successfully')"
 
 4. To upgrade HamGNN version, first uninstall the old version:
 

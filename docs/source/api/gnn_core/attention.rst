@@ -4,7 +4,7 @@ Attention Mechanisms
 Attention Layers
 ----------------
 
-.. automodule:: HamGNN_v_2_1.nn.attention
+.. automodule:: hamgnn.nn.attention
    :members:
    :undoc-members:
    :show-inheritance:
@@ -12,7 +12,7 @@ Attention Layers
 Attention Utilities
 -------------------
 
-.. automodule:: HamGNN_v_2_1.nn.attention_utils
+.. automodule:: hamgnn.nn.attention_utils
    :members:
    :undoc-members:
    :show-inheritance:

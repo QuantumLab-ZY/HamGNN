@@ -4,7 +4,7 @@ Main Entry Point
 Main Module
 -----------
 
-.. automodule:: HamGNN_v_2_1.main
+.. automodule:: hamgnn.main
    :members:
    :undoc-members:
    :show-inheritance:
@@ -12,7 +12,7 @@ Main Module
 Version Information
 -------------------
 
-.. automodule:: HamGNN_v_2_1.version
+.. automodule:: hamgnn.version
    :members:
    :undoc-members:
    :show-inheritance:

@@ -1,6 +1,116 @@
-# build files
-*.o
-*.pyc
-*.mod
+# ============================================
+# HamGNN .gitignore
+# ============================================
+
+# --- Python ---
+*.py[cod]
+*$py.class
+*.so
+.Python
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Virtual Environments ---
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+conda/envs/
+
+# --- Jupyter/IPython ---
+.ipynb_checkpoints
+*.ipynb
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- PyTorch/TensorBoard ---
+*.ckpt
+*.pt
+*.pth
+*.tar
+events/
+logs/
+wandb/
+
+# --- Scientific/ML ---
+*.npz
+*.npy
+*.lmdb
+*.h5
+*.hdf5
+*.csv
+*.pkl
+*.pickle
+*.sqlite
+*.db
+
+# --- DFT Software Outputs ---
+*.scfout
+*.out
+*.dat
+*.HSX
+*.fdf
+
+# --- HamGNN specific ---
 HamGNN.egg-info/
+train_dir/
+test_dir/
+pred_dir/
+prediction_*.npy
+target_*.npy
+
+# --- Documentation build ---
+docs/_build/
+docs/.doctrees/
+docs/html/
+
+# --- Large binary files (use Git LFS) ---
+# *.zip
+# *.tar.gz
+# *.whl
+
+# --- Compiled Fortran/C ---
+*.mod
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.exe
+
+# --- Temporary files ---
+*.tmp
+*.temp
+*.log
+*.bak
+*.backup
+*~
+.#*
+\#*#

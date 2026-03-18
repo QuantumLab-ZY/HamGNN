@@ -1,4 +1,4 @@
-.. HamGNN_v_2_1 documentation master file
+.. hamgnn documentation master file
 
 HamGNN v2.1 Documentation
 =========================

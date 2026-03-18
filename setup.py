@@ -24,10 +24,10 @@ setup(
     package_data={'': ['*.npz', '*.json'],},
     entry_points={
         "console_scripts": [
-            "HamGNN2.0 = HamGNN_v_2_1.main:HamGNN",
-            "band_cal = utils_openmx.band_cal:main",
-            "graph_data_gen = utils_openmx.graph_data_gen:main",
-            "poscar2openmx = utils_openmx.poscar2openmx:main"
+            "HamGNN2.0 = hamgnn.main:HamGNN",
+            "band_cal = interfaces.openmx.band_cal:main",
+            "graph_data_gen = interfaces.openmx.graph_data_gen:main",
+            "poscar2openmx = interfaces.openmx.poscar2openmx:main"
         ]
     },
     install_requires=[

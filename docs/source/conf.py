@@ -4,10 +4,10 @@ import sys
 from pathlib import Path
 import yaml
 # -- Path setup --------------------------------------------------------------
-# Add the project root directory to sys.path so Sphinx can find the HamGNN_v_2_1 module
+# Add the project root directory to sys.path so Sphinx can find the hamgnn module
 sys.path.insert(0, os.path.abspath('../..'))
 # -- Project information -----------------------------------------------------
-project = 'HamGNN_v_2_1'
+project = 'hamgnn'
 copyright = 'HamGNN Team'
 author = 'HamGNN Team'
 release = '2.1'
@@ -34,7 +34,7 @@ autodoc_member_order = "bysource"
 autosummary_generate = True
 source_suffix = [".rst", ".md"]
 templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '**/toolbox/**', 'HamGNN_v_2_1/toolbox/**', 'TRANSLATION_README.md']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '**/toolbox/**', 'hamgnn/toolbox/**', 'TRANSLATION_README.md']
 # Additional exclusion rules for multi-version builds
 build_all_docs = os.environ.get("build_all_docs")
 if build_all_docs:

@@ -6,7 +6,7 @@ This section contains various general components that make up the HamGNN v2.1 mo
 Embeddings
 ----------
 
-.. automodule:: HamGNN_v_2_1.nn.embeddings
+.. automodule:: hamgnn.nn.embeddings
    :members:
    :undoc-members:
    :show-inheritance:
@@ -14,7 +14,7 @@ Embeddings
 Electron Configurations
 -----------------------
 
-.. automodule:: HamGNN_v_2_1.nn.electron_configurations
+.. automodule:: hamgnn.nn.electron_configurations
    :members:
    :undoc-members:
    :show-inheritance:
@@ -22,7 +22,7 @@ Electron Configurations
 MLP Utilities
 -------------
 
-.. automodule:: HamGNN_v_2_1.utils.mlp
+.. automodule:: hamgnn.utils.mlp
    :members:
    :undoc-members:
    :show-inheritance:
@@ -30,7 +30,7 @@ MLP Utilities
 Activation Functions
 --------------------
 
-.. automodule:: HamGNN_v_2_1.utils.activation
+.. automodule:: hamgnn.utils.activation
    :members:
    :undoc-members:
    :show-inheritance:
@@ -38,7 +38,7 @@ Activation Functions
 Basis Functions
 ---------------
 
-.. automodule:: HamGNN_v_2_1.utils.basis_functions
+.. automodule:: hamgnn.utils.basis_functions
    :members:
    :undoc-members:
    :show-inheritance:
@@ -46,7 +46,7 @@ Basis Functions
 Cutoff Functions
 ----------------
 
-.. automodule:: HamGNN_v_2_1.utils.cutoff_functions
+.. automodule:: hamgnn.utils.cutoff_functions
    :members:
    :undoc-members:
    :show-inheritance:
@@ -54,7 +54,7 @@ Cutoff Functions
 Regression Layers
 -----------------
 
-.. automodule:: HamGNN_v_2_1.utils.regression_layers
+.. automodule:: hamgnn.utils.regression_layers
    :members:
    :undoc-members:
    :show-inheritance:
@@ -62,7 +62,7 @@ Regression Layers
 Hyperparameter Configuration
 -----------------------------
 
-.. automodule:: HamGNN_v_2_1.utils.hparam
+.. automodule:: hamgnn.utils.hparam
    :members:
    :undoc-members:
    :show-inheritance:

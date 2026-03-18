@@ -133,7 +133,7 @@ To avoid library version conflicts, it is recommended to use one of the followin
    ```
 3. Verify that the installation was successful:
    ```bash
-   python -c "import HamGNN_v_2_1; print('HamGNN installed successfully')"
+   python -c "import hamgnn; print('HamGNN installed successfully')"
    ```
 4. To upgrade HamGNN version, first uninstall the old version:
    ```bash
@@ -180,7 +180,7 @@ Regardless of which DFT software is used, the basic process for constructing `gr
    ```yaml
    nao_max: 26  # Maximum atomic orbital number
    graph_data_save_path: '/path/to/save/graph_data'
-   read_openmx_path: '/path/to/HamGNN/utils_openmx/read_openmx'
+   read_openmx_path: '/path/to/HamGNN/interfaces/openmx/read_openmx'
    max_SCF_skip: 200
    scfout_paths: '/path/to/scfout/files'  # Directory of .scfout files
    dat_file_name: 'openmx.dat'

@@ -15,7 +15,7 @@ from pymatgen.symmetry.kpath import KPathSeek
 from pymatgen.core.periodic_table import Element
 import math
 import os
-from utils_openmx.utils import *
+from interfaces.openmx.utils import *
 import argparse
 import yaml
 import torch
