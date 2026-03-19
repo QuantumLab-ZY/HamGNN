@@ -10,6 +10,7 @@ import os
 import numpy as np
 import pandas as pd
 import torch
+import torch.distributed as dist
 import torch.nn as nn
 import torch.optim as optim
 from torch.nn import functional as F
@@ -101,6 +102,29 @@ class Model(pl.LightningModule):
         # Track if derivatives are required
         self.requires_derivatives = self.output_module.derivative
 
+    def _use_sync_dist(self) -> bool:
+        """Return whether distributed metric synchronization is active."""
+        return dist.is_available() and dist.is_initialized()
+
+    def _is_global_zero(self) -> bool:
+        """Return whether the current process is the global rank zero process."""
+        return getattr(self.trainer, 'is_global_zero', True)
+
+    def _gather_step_outputs(self, step_outputs: List[Dict]) -> List[Dict]:
+        """Gather validation/test outputs from all distributed ranks."""
+        if not self._use_sync_dist():
+            return step_outputs
+
+        gathered_outputs = [None for _ in range(dist.get_world_size())]
+        dist.all_gather_object(gathered_outputs, step_outputs)
+
+        merged_outputs = []
+        for rank_outputs in gathered_outputs:
+            if rank_outputs is not None:
+                merged_outputs.extend(rank_outputs)
+
+        return merged_outputs
+
     def calculate_loss(self, batch: Dict[str, torch.Tensor], 
                        predictions: Dict[str, torch.Tensor], 
                        mode: str) -> torch.Tensor:
@@ -149,6 +173,7 @@ class Model(pl.LightningModule):
                 component_loss,
                 on_step=False,
                 on_epoch=True,
+                sync_dist=self._use_sync_dist(),
             )
             
         return total_loss
@@ -172,7 +197,14 @@ class Model(pl.LightningModule):
         self._enable_position_gradients(batch)
         predictions = self(batch)
         loss = self.calculate_loss(batch, predictions, 'training')
-        self.log("training/total_loss", loss, on_step=True, on_epoch=True, prog_bar=False)
+        self.log(
+            "training/total_loss",
+            loss,
+            on_step=True,
+            on_epoch=True,
+            prog_bar=False,
+            sync_dist=self._use_sync_dist(),
+        )
         return loss
 
     def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict:
@@ -198,7 +230,14 @@ class Model(pl.LightningModule):
         predictions = self(batch)
         
         val_loss = self.calculate_loss(batch, predictions, 'validation')
-        self.log("validation/total_loss", val_loss, on_step=False, on_epoch=True, prog_bar=False)
+        self.log(
+            "validation/total_loss",
+            val_loss,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=False,
+            sync_dist=self._use_sync_dist(),
+        )
         self.log_metrics(batch, predictions, 'validation')
         
         # Collect outputs for epoch-end processing
@@ -219,6 +258,11 @@ class Model(pl.LightningModule):
         validation_step_outputs : List[Dict]
             List of outputs from all validation steps in the epoch
         """
+        validation_step_outputs = self._gather_step_outputs(validation_step_outputs)
+
+        if not self._is_global_zero() or not validation_step_outputs:
+            return
+
         self._plot_prediction_vs_target(validation_step_outputs, mode='validation')
 
     def test_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict:
@@ -255,7 +299,13 @@ class Model(pl.LightningModule):
             predictions = self(batch)
         
         test_loss = self.calculate_loss(batch, predictions, 'test')
-        self.log("test/total_loss", test_loss, on_step=False, on_epoch=True)
+        self.log(
+            "test/total_loss",
+            test_loss,
+            on_step=False,
+            on_epoch=True,
+            sync_dist=self._use_sync_dist(),
+        )
         self.log_metrics(batch, predictions, "test")
         
         # Collect outputs for epoch-end processing
@@ -280,6 +330,11 @@ class Model(pl.LightningModule):
         test_step_outputs : List[Dict]
             List of outputs from all test steps
         """
+        test_step_outputs = self._gather_step_outputs(test_step_outputs)
+
+        if not self._is_global_zero() or not test_step_outputs:
+            return
+
         # Create output directory if it doesn't exist
         log_dir = self.trainer.logger.log_dir
         if not os.path.exists(log_dir):
@@ -354,6 +409,7 @@ class Model(pl.LightningModule):
                 metric_value,
                 on_step=False,
                 on_epoch=True,
+                sync_dist=self._use_sync_dist(),
             )
 
     def configure_optimizers(self) -> Dict:
