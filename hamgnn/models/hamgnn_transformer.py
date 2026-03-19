@@ -11,7 +11,8 @@ from ..toolbox.nequip.data import AtomicDataDict
 from ..toolbox.nequip.nn import AtomwiseLinear
 from ..toolbox.nequip.nn.embedding import (
     OneHotAtomEncoding,
-    SphericalHarmonicEdgeAttrs
+    SphericalHarmonicEdgeAttrs,
+    Embedding_block_q
 )
 
 from ..utils.basis_functions import (
@@ -24,21 +25,18 @@ from ..utils.basis_functions import (
 )
 from ..utils.cutoff_functions import CosineCutoff
 
-
 class HamGNNTransformer(BaseModel):
     def __init__(self, config):
         if 'radius_scale' not in config.HamGNN_pre:
             config.HamGNN_pre.radius_scale = 1.0
         else:
             assert config.HamGNN_pre.radius_scale > 1.0, "The radius scaling factor must be greater than 1.0."
-        super().__init__(radius_type=config.HamGNN_pre.radius_type,
-                         radius_scale=config.HamGNN_pre.radius_scale)
-
+        super().__init__(radius_type=config.HamGNN_pre.radius_type, radius_scale=config.HamGNN_pre.radius_scale)
+        
         # Configuration settings
         self.num_types = config.HamGNN_pre.num_types  # Number of atomic species
         self.set_features = True  # Whether to set one-hot encoding as node features
-        # Irreps for edge spherical harmonics
-        self.irreps_edge_sh = o3.Irreps(config.HamGNN_pre.irreps_edge_sh)
+        self.irreps_edge_sh = o3.Irreps(config.HamGNN_pre.irreps_edge_sh)  # Irreps for edge spherical harmonics
         self.edge_sh_normalization = config.HamGNN_pre.edge_sh_normalization
         self.edge_sh_normalize = config.HamGNN_pre.edge_sh_normalize
         self.build_internal_graph = config.HamGNN_pre.build_internal_graph
@@ -48,80 +46,75 @@ class HamGNNTransformer(BaseModel):
         self.rbf_func = config.HamGNN_pre.rbf_func.lower()
         self.num_radial = config.HamGNN_pre.num_radial
         if self.rbf_func == 'gaussian':
-            self.radial_basis_functions = GaussianSmearing(
-                start=0.0, stop=self.cutoff, num_gaussians=self.num_radial, cutoff_func=None)
+            self.radial_basis_functions = GaussianSmearing(start=0.0, stop=self.cutoff, num_gaussians=self.num_radial, cutoff_func=None)
         elif self.rbf_func == 'bessel':
-            self.radial_basis_functions = BesselBasis(
-                cutoff=self.cutoff, n_rbf=self.num_radial, cutoff_func=None)
+            self.radial_basis_functions = BesselBasis(cutoff=self.cutoff, n_rbf=self.num_radial, cutoff_func=None)
         elif self.rbf_func == 'exp-gaussian':
-            self.radial_basis_functions = ExponentialGaussianRadialBasisFunctions(
-                self.num_radial, self.cutoff)
+            self.radial_basis_functions = ExponentialGaussianRadialBasisFunctions(self.num_radial, self.cutoff)
         elif self.rbf_func == 'exp-bernstein':
-            self.radial_basis_functions = ExponentialBernsteinRadialBasisFunctions(
-                self.num_radial, self.cutoff)
+            self.radial_basis_functions = ExponentialBernsteinRadialBasisFunctions(self.num_radial, self.cutoff)
         elif self.rbf_func == 'bernstein':
-            self.radial_basis_functions = BernsteinRadialBasisFunctions(
-                self.num_radial, self.cutoff)
+            self.radial_basis_functions = BernsteinRadialBasisFunctions(self.num_radial, self.cutoff)
         else:
-            raise ValueError(
-                f'Unsupported radial basis function: {self.rbf_func}')
-
+            raise ValueError(f'Unsupported radial basis function: {self.rbf_func}')
+        
         self.num_layers = config.HamGNN_pre.num_layers  # Number of transformer layers
-        self.irreps_node_features = o3.Irreps(
-            config.HamGNN_pre.irreps_node_features)  # Irreps for node features
-
+        self.irreps_node_features = o3.Irreps(config.HamGNN_pre.irreps_node_features)  # Irreps for node features
+        
         # Atomic embedding
-        self.atomic_embedding = OneHotAtomEncoding(
-            num_types=self.num_types, set_features=self.set_features)
-
+        self.apply_charge_doping = getattr(config.HamGNN_pre, 'apply_charge_doping', False)
+        if self.apply_charge_doping:
+            num_charge_attr_feas = getattr(config.HamGNN_pre, 'num_charge_attr_feas', 8)
+            self.atomic_embedding = Embedding_block_q(
+                num_types=self.num_types,
+                num_charge_attr_feas=num_charge_attr_feas,
+                apply_charge_doping=True,
+                set_features=self.set_features)
+        else:
+            self.atomic_embedding = OneHotAtomEncoding(num_types=self.num_types, set_features=self.set_features)
+        
         # Spherical harmonics for edges
-        self.spharm_edges = SphericalHarmonicEdgeAttrs(irreps_edge_sh=self.irreps_edge_sh,
+        self.spharm_edges = SphericalHarmonicEdgeAttrs(irreps_edge_sh=self.irreps_edge_sh, 
                                                        edge_sh_normalization=self.edge_sh_normalization,
                                                        edge_sh_normalize=self.edge_sh_normalize)
-
+        
         # Radial basis for edges
         self.cutoff_func = CosineCutoff(self.cutoff)
-        self.radial_basis = RadialBasisEdgeEncoding(basis=self.radial_basis_functions,
+        self.radial_basis = RadialBasisEdgeEncoding(basis=self.radial_basis_functions, 
                                                     cutoff=self.cutoff_func)
-
+        
         # Edge features embedding
         use_kan = config.HamGNN_pre.use_kan
         self.radial_MLP = config.HamGNN_pre.radial_MLP
         self.pair_embedding = PairInteractionEmbeddingBlock(irreps_node_feats=self.atomic_embedding.irreps_out['node_attrs'],
-                                                            irreps_edge_attrs=self.spharm_edges.irreps_out[
-                                                                AtomicDataDict.EDGE_ATTRS_KEY],
-                                                            irreps_edge_embed=self.radial_basis.irreps_out[
-                                                                AtomicDataDict.EDGE_EMBEDDING_KEY],
-                                                            irreps_edge_feats=self.irreps_node_features,
-                                                            irreps_node_attrs=self.atomic_embedding.irreps_out[
-                                                                'node_attrs'],
-                                                            use_kan=use_kan,
-                                                            radial_MLP=self.radial_MLP)
-
+                                        irreps_edge_attrs=self.spharm_edges.irreps_out[AtomicDataDict.EDGE_ATTRS_KEY],
+                                        irreps_edge_embed=self.radial_basis.irreps_out[AtomicDataDict.EDGE_EMBEDDING_KEY],
+                                        irreps_edge_feats=self.irreps_node_features,
+                                        irreps_node_attrs=self.atomic_embedding.irreps_out['node_attrs'],
+                                        use_kan=use_kan,
+                                        radial_MLP=self.radial_MLP)
+        
         # Chemical embedding
-        self.chemical_embedding = AtomwiseLinear(irreps_in={AtomicDataDict.NODE_FEATURES_KEY: self.atomic_embedding.irreps_out['node_attrs']},
+        self.chemical_embedding = AtomwiseLinear(irreps_in={AtomicDataDict.NODE_FEATURES_KEY: self.atomic_embedding.irreps_out['node_attrs']}, 
                                                  irreps_out=self.irreps_node_features)
-
+        
         # Define the OrbTransformer layers
         self.num_heads = config.HamGNN_pre.num_heads
         correlation = config.HamGNN_pre.correlation
         num_hidden_features = config.HamGNN_pre.num_hidden_features
-
+        
         self.orb_transformers = torch.nn.ModuleList()
         self.corr_products = torch.nn.ModuleList()
         self.pair_interactions = torch.nn.ModuleList()
-
+        
         for i in range(self.num_layers):
             orb_transformer = AttentionBlockE3(irreps_in=self.irreps_node_features,
-                                               irreps_node_attrs=self.atomic_embedding.irreps_out[
-                                                   'node_attrs'],
+                                               irreps_node_attrs=self.atomic_embedding.irreps_out['node_attrs'],
                                                irreps_out=self.irreps_node_features,
                                                irreps_edge_feats=self.irreps_node_features,
-                                               irreps_edge_attrs=self.spharm_edges.irreps_out[
-                                                   AtomicDataDict.EDGE_ATTRS_KEY],
-                                               irreps_edge_embed=self.radial_basis.irreps_out[
-                                                   AtomicDataDict.EDGE_EMBEDDING_KEY],
-                                               num_heads=self.num_heads,
+                                               irreps_edge_attrs=self.spharm_edges.irreps_out[AtomicDataDict.EDGE_ATTRS_KEY],                      
+                                               irreps_edge_embed=self.radial_basis.irreps_out[AtomicDataDict.EDGE_EMBEDDING_KEY],
+                                               num_heads=self.num_heads, 
                                                max_radius=self.cutoff,
                                                radial_MLP=self.radial_MLP,
                                                use_skip_connections=True,
@@ -138,12 +131,9 @@ class HamGNNTransformer(BaseModel):
             self.corr_products.append(corr_product)
 
             pair_interaction = PairInteractionBlock(irreps_node_feats=self.irreps_node_features,
-                                                    irreps_node_attrs=self.atomic_embedding.irreps_out[
-                                                        'node_attrs'],
-                                                    irreps_edge_attrs=self.spharm_edges.irreps_out[
-                                                        AtomicDataDict.EDGE_ATTRS_KEY],
-                                                    irreps_edge_embed=self.radial_basis.irreps_out[
-                                                        AtomicDataDict.EDGE_EMBEDDING_KEY],
+                                                    irreps_node_attrs=self.atomic_embedding.irreps_out['node_attrs'],
+                                                    irreps_edge_attrs=self.spharm_edges.irreps_out[AtomicDataDict.EDGE_ATTRS_KEY],
+                                                    irreps_edge_embed=self.radial_basis.irreps_out[AtomicDataDict.EDGE_EMBEDDING_KEY],
                                                     irreps_edge_feats=self.irreps_node_features,
                                                     use_skip_connections=True,
                                                     legacy_edge_update=getattr(
@@ -151,12 +141,12 @@ class HamGNNTransformer(BaseModel):
                                                     use_kan=use_kan,
                                                     radial_MLP=self.radial_MLP)
             self.pair_interactions.append(pair_interaction)
-
+    
     def forward(self, data):
         if self.build_internal_graph:
-            graph = self.generate_graph(data)
+            graph = self.generate_graph(data) 
         else:
-            graph = data
+            graph = data       
         self.atomic_embedding(graph)
         self.spharm_edges(graph)
         self.radial_basis(graph)
