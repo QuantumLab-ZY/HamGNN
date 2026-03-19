@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 import numpy as np
 import torch
 import pytorch_lightning as pl
@@ -13,6 +14,7 @@ import pickle
 from typing import Tuple, List, Optional
 import yaml
 import argparse
+import hamgnn
 from hamgnn.models.hamgnn_conv import HamGNNConvE3
 from hamgnn.models.hamgnn_output import HamGNNPlusPlusOut
 from hamgnn.main import Model
@@ -84,6 +86,16 @@ def save_model_predictor(predictor, model_filepath):
         pickle.dump(predictor, f)
 
 
+def _register_legacy_package_aliases() -> None:
+    legacy_prefix = 'HamGNN_v_2_1'
+    current_prefix = 'hamgnn'
+
+    for module_name, module in list(sys.modules.items()):
+        if module_name == current_prefix or module_name.startswith(f'{current_prefix}.'):
+            legacy_name = module_name.replace(current_prefix, legacy_prefix, 1)
+            sys.modules.setdefault(legacy_name, module)
+
+
 def load_model_predictor(model_filepath: str, device: Optional[str] = None):
     """
     Loads a model predictor from a pickle file and assigns it to the specified device.
@@ -96,6 +108,8 @@ def load_model_predictor(model_filepath: str, device: Optional[str] = None):
     Returns:
         Predictor: The loaded predictor model with device assigned if specified.
     """
+    _register_legacy_package_aliases()
+
     with open(model_filepath, 'rb') as file_handle:
         model_predictor = pickle.load(file_handle)
 
