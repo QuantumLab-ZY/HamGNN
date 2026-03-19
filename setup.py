@@ -35,6 +35,7 @@ setup(
         "torch",
         "torch_geometric",
         "e3nn",
+        "lmdb",
         "pymatgen",
         "tqdm",
         "tensorboard",
