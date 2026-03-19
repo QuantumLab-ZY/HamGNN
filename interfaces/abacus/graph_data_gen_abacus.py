@@ -7,6 +7,9 @@ Last Modified by:   Yang Zhong
 Last Modified time: 2025-02-6 10:34:01 
 '''
 import os
+import pickle
+import shutil
+import lmdb
 import numpy as np
 import torch
 from torch_geometric.data import Data
@@ -29,27 +32,193 @@ NAO_MAX = 13
 RADIUS_SCALE_FACTOR = 1.0
 
 # Flag to skip DFT Hamiltonian (useful for generating graphs for testing)
-SKIP_DFT_HAMILTONIAN = True
+SKIP_DFT_HAMILTONIAN = False
 
 # Paths for input and output data
 # Base directories containing SCF calculations (each dir has OUT.ABACUS/, STRU, INPUT)
 # Default value if not provided via command line
 DEFAULT_DATA_DIRS = [f"/data/home/whlu/144-ham_V_Si/scf/{i:04d}" for i in range(1,500)]
-SCF_LOG_FILENAME = "running_nscf.log"  # Log filename inside OUT.ABACUS dir
+DEFAULT_GRAPH_DATA_FOLDER = '../graph/'
+DEFAULT_OUTPUT_FORMAT = 'lmdb'
+DEFAULT_NUM_PROCESSES = 0
+DEFAULT_WORKER_THREADS = 1
+DEFAULT_POOL_CHUNKSIZE = 0
+DEFAULT_LMDB_COMMIT_INTERVAL = 64
+LMDB_OUTPUT_FILENAME = 'graph_data.lmdb'
+NPZ_OUTPUT_FILENAME = 'graph_data.npz'
+LMDB_INITIAL_MAP_SIZE = 64 * 1024 ** 3
+SCF_LOG_FILENAME = "running_scf.log"  # Log filename inside OUT.ABACUS dir
+
+DATA_DIRS = []
+GRAPH_DATA_FOLDER = DEFAULT_GRAPH_DATA_FOLDER
+OUTPUT_FORMAT = DEFAULT_OUTPUT_FORMAT
+NUM_PROCESSES = DEFAULT_NUM_PROCESSES
+WORKER_THREADS = DEFAULT_WORKER_THREADS
+POOL_CHUNKSIZE = DEFAULT_POOL_CHUNKSIZE
+LMDB_COMMIT_INTERVAL = DEFAULT_LMDB_COMMIT_INTERVAL
+SCF_OUTPUT_DIRS = []
+STRU_FILE_PATHS = []
+INPUT_FILE_PATHS = []
+_THREADPOOL_LIMITS = None
 
 # Command line argument parsing
 def parse_args():
     parser = argparse.ArgumentParser(description='Generate graph data from ABACUS SCF calculations')
     parser.add_argument('--data-dirs', nargs='+', type=str, default=DEFAULT_DATA_DIRS,
                        help='Directories containing SCF calculations (each dir has OUT.ABACUS/, STRU, INPUT)')
-    parser.add_argument('--graph-data-folder', type=str, default='../graph/',
-                       help='Output folder for graph data')
+    parser.add_argument('--graph-data-folder', type=str, default=DEFAULT_GRAPH_DATA_FOLDER,
+                       help='Output folder for graph data. LMDB is the default output format.')
+    parser.add_argument('--output-format', choices=('lmdb', 'npz', 'both'), default=DEFAULT_OUTPUT_FORMAT,
+                       help='Output format: `lmdb` (default), `npz` for legacy behavior, or `both`.')
+    parser.add_argument('--num-processes', type=int, default=DEFAULT_NUM_PROCESSES,
+                       help='Number of worker processes. Use 0 (default) to automatically use all available CPU cores.')
+    parser.add_argument('--worker-threads', type=int, default=DEFAULT_WORKER_THREADS,
+                       help='Max CPU threads used inside each worker process. Default is 1 to avoid oversubscription.')
+    parser.add_argument('--chunksize', type=int, default=DEFAULT_POOL_CHUNKSIZE,
+                       help='Tasks submitted to each worker per batch. Use 0 (default) to choose automatically.')
+    parser.add_argument('--lmdb-commit-interval', type=int, default=DEFAULT_LMDB_COMMIT_INTERVAL,
+                       help='Number of graphs buffered before each LMDB write transaction.')
     return parser.parse_args()
 
-# Parse arguments
-args = parse_args()
-DATA_DIRS = args.data_dirs
-GRAPH_DATA_FOLDER = args.graph_data_folder
+
+def build_runtime_config(parsed_args):
+    data_dirs = parsed_args.data_dirs
+    scf_output_dirs = [os.path.join(d, 'OUT.ABACUS') for d in data_dirs]
+    return {
+        'data_dirs': data_dirs,
+        'graph_data_folder': parsed_args.graph_data_folder,
+        'output_format': parsed_args.output_format,
+        'num_processes': parsed_args.num_processes,
+        'worker_threads': parsed_args.worker_threads,
+        'chunksize': parsed_args.chunksize,
+        'lmdb_commit_interval': parsed_args.lmdb_commit_interval,
+        'scf_output_dirs': scf_output_dirs,
+        'stru_file_paths': [os.path.join(d, 'STRU') for d in data_dirs],
+        'input_file_paths': [os.path.join(d, 'INPUT') for d in scf_output_dirs],
+    }
+
+
+def configure_runtime(runtime_config):
+    global DATA_DIRS, GRAPH_DATA_FOLDER, OUTPUT_FORMAT
+    global NUM_PROCESSES, WORKER_THREADS, POOL_CHUNKSIZE, LMDB_COMMIT_INTERVAL
+    global SCF_OUTPUT_DIRS, STRU_FILE_PATHS, INPUT_FILE_PATHS
+
+    DATA_DIRS = runtime_config['data_dirs']
+    GRAPH_DATA_FOLDER = runtime_config['graph_data_folder']
+    OUTPUT_FORMAT = runtime_config['output_format']
+    NUM_PROCESSES = runtime_config['num_processes']
+    WORKER_THREADS = runtime_config['worker_threads']
+    POOL_CHUNKSIZE = runtime_config['chunksize']
+    LMDB_COMMIT_INTERVAL = runtime_config['lmdb_commit_interval']
+    SCF_OUTPUT_DIRS = runtime_config['scf_output_dirs']
+    STRU_FILE_PATHS = runtime_config['stru_file_paths']
+    INPUT_FILE_PATHS = runtime_config['input_file_paths']
+
+
+def get_available_cpu_count() -> int:
+    try:
+        return len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        return os.cpu_count() or 1
+
+
+def resolve_num_processes(requested_num_processes: int, total_tasks: int) -> int:
+    available_cpu_count = get_available_cpu_count()
+    if requested_num_processes <= 0:
+        requested_num_processes = available_cpu_count
+    return max(1, min(requested_num_processes, available_cpu_count, max(1, total_tasks)))
+
+
+def resolve_chunksize(total_tasks: int, num_processes: int, requested_chunksize: int) -> int:
+    if requested_chunksize > 0:
+        return requested_chunksize
+    return max(1, total_tasks // (num_processes * 4))
+
+
+def configure_worker_threads(worker_threads: int) -> None:
+    worker_threads = max(1, int(worker_threads))
+    try:
+        torch.set_num_threads(worker_threads)
+    except Exception:
+        pass
+    try:
+        torch.set_num_interop_threads(1)
+    except Exception:
+        pass
+
+    global _THREADPOOL_LIMITS
+    try:
+        from threadpoolctl import threadpool_limits
+
+        _THREADPOOL_LIMITS = threadpool_limits(limits=worker_threads)
+        _THREADPOOL_LIMITS.__enter__()
+    except Exception:
+        _THREADPOOL_LIMITS = None
+
+
+def initialize_worker(runtime_config) -> None:
+    configure_runtime(runtime_config)
+    configure_worker_threads(WORKER_THREADS)
+
+
+def remove_output_path(path: str) -> None:
+    if os.path.isdir(path):
+        shutil.rmtree(path)
+    elif os.path.exists(path):
+        os.remove(path)
+
+
+class LMDBGraphWriter:
+    def __init__(self, lmdb_path: str, map_size: int = LMDB_INITIAL_MAP_SIZE, commit_interval: int = DEFAULT_LMDB_COMMIT_INTERVAL):
+        remove_output_path(lmdb_path)
+        self.lmdb_path = lmdb_path
+        self.map_size = map_size
+        self.commit_interval = max(1, int(commit_interval))
+        self.count = 0
+        self.buffer = []
+        self.env = lmdb.open(lmdb_path, map_size=self.map_size, subdir=True, meminit=False)
+
+    def _grow_map_size(self) -> None:
+        self.map_size *= 2
+        self.env.set_mapsize(self.map_size)
+        print(f"LMDB map_size increased to {self.map_size / (1024 ** 3):.1f} GB")
+
+    def _put_items(self, items) -> None:
+        while True:
+            try:
+                with self.env.begin(write=True) as txn:
+                    for key, value in items:
+                        txn.put(key, value)
+                return
+            except lmdb.MapFullError:
+                self._grow_map_size()
+
+    def flush(self) -> None:
+        if not self.buffer:
+            return
+        self._put_items(self.buffer)
+        self.buffer.clear()
+
+    def write_payload(self, payload: bytes) -> None:
+        self.buffer.append((f'graph_{self.count}'.encode(), payload))
+        self.count += 1
+        if len(self.buffer) >= self.commit_interval:
+            self.flush()
+
+    def write_graph(self, graph: Data) -> None:
+        payload = pickle.dumps(graph, protocol=pickle.HIGHEST_PROTOCOL)
+        self.write_payload(payload)
+
+    def finalize(self) -> None:
+        self.flush()
+        self._put_items([(b'num_graphs', str(self.count).encode())])
+        self.env.sync()
+
+    def close(self) -> None:
+        if self.env is not None:
+            self.flush()
+            self.env.close()
+            self.env = None
 
 # Derived paths (automatically generated from DATA_DIRS)
 SCF_OUTPUT_DIRS = [os.path.join(d, 'OUT.ABACUS') for d in DATA_DIRS]  # Directory containing sparse CSR files
@@ -62,10 +231,7 @@ MAX_SCF_SKIP = 200
 # SOC flag (Spin-Orbit Coupling)
 SOC_ENABLED = False
 
-# Number of processes for parallelization
-NUM_PROCESSES = 1
-
-# Doping charge clamp range (global graph-level charge)
+# Allowed doping charge range (global graph-level charge)
 DOPING_CHARGE_MIN = -8.0
 DOPING_CHARGE_MAX = 8.0
 ################################################################################
@@ -86,14 +252,6 @@ else:
 BASIS_NUM = np.zeros((99,), dtype=int)
 for k in BASIS_DEF.keys():
     BASIS_NUM[k] = len(BASIS_DEF[k])
-
-# Create output folder if it doesn't exist
-if not os.path.exists(GRAPH_DATA_FOLDER):
-    os.makedirs(GRAPH_DATA_FOLDER)
-
-# Dictionary to store graph data
-graph_data = {}
-
 
 @lru_cache(maxsize=None)
 def _get_mask_indices(z_src: int, z_tar: int) -> np.ndarray:
@@ -378,10 +536,11 @@ def generate_graph(task: tuple) -> tuple:
         task (tuple): (index, scf_path) pair.
 
     Returns:
-        tuple: (index, success_flag, graph_data) where:
+        tuple: (index, success_flag, graph_data, serialized_graph) where:
                - index (int): Index of the SCF calculation.
                - success_flag (bool): Indicates if graph generation was successful.
                - graph_data (torch_geometric.data.Data): Graph object with properties.
+               - serialized_graph (bytes): Pickled graph payload for LMDB-only output.
     """
     idx, scf_path = task
     # Define paths for the required files
@@ -400,12 +559,12 @@ def generate_graph(task: tuple) -> tuple:
                 max_scf_iterations = int(pattern_md_abacus.findall(log_content)[-1])
         except Exception as e:
             print(f"Error reading SCF log file: {e}. Skipping...")
-            return idx, False, None
+            return idx, False, None, None
 
     # Check SCF convergence
     if max_scf_iterations >= MAX_SCF_SKIP:
         print("Error: SCF did not converge. Skipping...")
-        return idx, False, None
+        return idx, False, None, None
 
     # Read crystal structure parameters
     try:
@@ -427,7 +586,7 @@ def generate_graph(task: tuple) -> tuple:
         
     except Exception as e:
         print(f"Error reading STRU file or calculating doping charge: {e}. Skipping...")
-        return idx, False, None
+        return idx, False, None, None
 
     # Read hopping and overlap parameters
     try:
@@ -462,7 +621,7 @@ def generate_graph(task: tuple) -> tuple:
         s_sparse.close()
     except Exception as e:
         print(f"Error reading Hamiltonian or overlap matrices: {e}. Skipping...")
-        return idx, False, None
+        return idx, False, None, None
 
     # Prepare Hamiltonian and overlap matrices
     try:
@@ -472,82 +631,128 @@ def generate_graph(task: tuple) -> tuple:
             H, H0, S = generate_hamiltonian_and_overlap(graph_h0, graph_h, graph_s, atomic_numbers, BASIS_DEF, NAO_MAX, use_soc=SOC_ENABLED)
     except Exception as e:
         print(f"Error preparing Hamiltonian or overlap matrices: {e}. Skipping...")
-        return idx, False, None
+        return idx, False, None, None
 
     # Create a graph data object
 
     # save in Data
     if not SOC_ENABLED:
-        return idx, True, Data(z=torch.LongTensor(atomic_numbers),
-                        cell = torch.Tensor(lattice[None,:,:]),
-                        total_energy = torch.Tensor([energy]),
-                        pos=torch.FloatTensor(pos),
-                        node_counts=torch.LongTensor([len(atomic_numbers)]),
-                        edge_index=torch.LongTensor(edge_index),
-                        inv_edge_idx=torch.LongTensor(inv_edge_idx),
-                        nbr_shift=torch.FloatTensor(nbr_shift),
-                        cell_shift=torch.LongTensor(cell_shift),
-                        hamiltonian=torch.FloatTensor(H),
-                        overlap=torch.FloatTensor(S),
-                        Hon = torch.FloatTensor(H[:pos.shape[0],:]),
-                        Hoff = torch.FloatTensor(H[pos.shape[0]:,:]),
-                        Hon0 = torch.FloatTensor(H0[:pos.shape[0],:]),
-                        Hoff0 = torch.FloatTensor(H0[pos.shape[0]:,:]),
-                        Son = torch.FloatTensor(S[:pos.shape[0],:]),
-                        Soff = torch.FloatTensor(S[pos.shape[0]:,:]),
-                        doping_charge=doping_charge_tensor)
+        graph = Data(z=torch.LongTensor(atomic_numbers),
+                    cell = torch.Tensor(lattice[None,:,:]),
+                    total_energy = torch.Tensor([energy]),
+                    pos=torch.FloatTensor(pos),
+                    node_counts=torch.LongTensor([len(atomic_numbers)]),
+                    edge_index=torch.LongTensor(edge_index),
+                    inv_edge_idx=torch.LongTensor(inv_edge_idx),
+                    nbr_shift=torch.FloatTensor(nbr_shift),
+                    cell_shift=torch.LongTensor(cell_shift),
+                    hamiltonian=torch.FloatTensor(H),
+                    overlap=torch.FloatTensor(S),
+                    Hon = torch.FloatTensor(H[:pos.shape[0],:]),
+                    Hoff = torch.FloatTensor(H[pos.shape[0]:,:]),
+                    Hon0 = torch.FloatTensor(H0[:pos.shape[0],:]),
+                    Hoff0 = torch.FloatTensor(H0[pos.shape[0]:,:]),
+                    Son = torch.FloatTensor(S[:pos.shape[0],:]),
+                    Soff = torch.FloatTensor(S[pos.shape[0]:,:]),
+                    doping_charge=doping_charge_tensor)
     else:
-        return idx, True, Data(z=torch.LongTensor(atomic_numbers),
-                        cell = torch.Tensor(lattice[None,:,:]),
-                        total_energy = torch.Tensor([energy]),
-                        pos=torch.FloatTensor(pos),
-                        node_counts=torch.LongTensor([len(atomic_numbers)]),
-                        edge_index=torch.LongTensor(edge_index),
-                        inv_edge_idx=torch.LongTensor(inv_edge_idx),
-                        nbr_shift=torch.FloatTensor(nbr_shift),
-                        cell_shift=torch.LongTensor(cell_shift),
-                        overlap=torch.FloatTensor(S),
-                        Hon = torch.FloatTensor(H[:pos.shape[0],:]),
-                        Hoff = torch.FloatTensor(H[pos.shape[0]:,:]),
-                        iHon = torch.FloatTensor(iH[:pos.shape[0],:]),
-                        iHoff = torch.FloatTensor(iH[pos.shape[0]:,:]),
-                        Hon0 = torch.FloatTensor(H0[:pos.shape[0],:]),
-                        Hoff0 = torch.FloatTensor(H0[pos.shape[0]:,:]),
-                        iHon0 = torch.FloatTensor(iH0[:pos.shape[0],:]),
-                        iHoff0 = torch.FloatTensor(iH0[pos.shape[0]:,:]),
-                        Son = torch.FloatTensor(S[:pos.shape[0],:]),
-                        Soff = torch.FloatTensor(S[pos.shape[0]:,:]),
-                        doping_charge=doping_charge_tensor)
+        graph = Data(z=torch.LongTensor(atomic_numbers),
+                    cell = torch.Tensor(lattice[None,:,:]),
+                    total_energy = torch.Tensor([energy]),
+                    pos=torch.FloatTensor(pos),
+                    node_counts=torch.LongTensor([len(atomic_numbers)]),
+                    edge_index=torch.LongTensor(edge_index),
+                    inv_edge_idx=torch.LongTensor(inv_edge_idx),
+                    nbr_shift=torch.FloatTensor(nbr_shift),
+                    cell_shift=torch.LongTensor(cell_shift),
+                    overlap=torch.FloatTensor(S),
+                    Hon = torch.FloatTensor(H[:pos.shape[0],:]),
+                    Hoff = torch.FloatTensor(H[pos.shape[0]:,:]),
+                    iHon = torch.FloatTensor(iH[:pos.shape[0],:]),
+                    iHoff = torch.FloatTensor(iH[pos.shape[0]:,:]),
+                    Hon0 = torch.FloatTensor(H0[:pos.shape[0],:]),
+                    Hoff0 = torch.FloatTensor(H0[pos.shape[0]:,:]),
+                    iHon0 = torch.FloatTensor(iH0[:pos.shape[0],:]),
+                    iHoff0 = torch.FloatTensor(iH0[pos.shape[0]:,:]),
+                    Son = torch.FloatTensor(S[:pos.shape[0],:]),
+                    Soff = torch.FloatTensor(S[pos.shape[0]:,:]),
+                    doping_charge=doping_charge_tensor)
+
+    if OUTPUT_FORMAT == 'lmdb':
+        return idx, True, None, pickle.dumps(graph, protocol=pickle.HIGHEST_PROTOCOL)
+    return idx, True, graph, None
 
 
 def main():
     """
     Main function to generate graphs for all SCF calculations and save results.
     """
+    args = parse_args()
+    runtime_config = build_runtime_config(args)
+    configure_runtime(runtime_config)
+
     multiprocessing.freeze_support()
-    num_processes = min(multiprocessing.cpu_count(), NUM_PROCESSES)
     tasks = list(enumerate(SCF_OUTPUT_DIRS))
     total_tasks = len(tasks)
+    num_processes = resolve_num_processes(NUM_PROCESSES, total_tasks)
+    chunksize = resolve_chunksize(total_tasks, num_processes, POOL_CHUNKSIZE)
+    os.makedirs(GRAPH_DATA_FOLDER, exist_ok=True)
 
-    if num_processes <= 1:
-        for task in tqdm(tasks, desc="Processing SCF Outputs", total=total_tasks):
-            idx, success, graph = generate_graph(task)
-            if success:
-                graph_data[idx] = graph
-    else:
-        chunksize = max(1, total_tasks // (num_processes * 4))
-        with multiprocessing.Pool(processes=num_processes) as pool:
-            for idx, success, graph in tqdm(
-                pool.imap_unordered(generate_graph, tasks, chunksize=chunksize),
-                desc="Processing SCF Outputs",
-                total=total_tasks,
-            ):
-                if success:
-                    graph_data[idx] = graph
+    save_npz = OUTPUT_FORMAT in ('npz', 'both')
+    save_lmdb = OUTPUT_FORMAT in ('lmdb', 'both')
+    graph_data = {} if save_npz else None
+    lmdb_path = os.path.join(GRAPH_DATA_FOLDER, LMDB_OUTPUT_FILENAME)
+    lmdb_writer = LMDBGraphWriter(lmdb_path, commit_interval=LMDB_COMMIT_INTERVAL) if save_lmdb else None
+    saved_graphs = 0
 
-    # Save graph data and cutoff radii
-    graph_data_path = os.path.join(GRAPH_DATA_FOLDER, 'graph_data.npz')
-    np.savez(graph_data_path, graph=graph_data)
+    print(f'Processing {total_tasks} SCF outputs with {num_processes} worker(s), worker_threads={max(1, WORKER_THREADS)}, chunksize={chunksize}.')
+
+    def handle_graph_result(success: bool, graph: Data = None, payload: bytes = None) -> None:
+        nonlocal saved_graphs
+        if not success:
+            return
+        if graph_data is not None:
+            graph_data[saved_graphs] = graph
+        if lmdb_writer is not None:
+            if payload is not None:
+                lmdb_writer.write_payload(payload)
+            else:
+                lmdb_writer.write_graph(graph)
+        saved_graphs += 1
+
+    try:
+        if num_processes <= 1:
+            for task in tqdm(tasks, desc="Processing SCF Outputs", total=total_tasks):
+                _, success, graph, payload = generate_graph(task)
+                handle_graph_result(success, graph, payload)
+        else:
+            with multiprocessing.Pool(
+                processes=num_processes,
+                initializer=initialize_worker,
+                initargs=(runtime_config,),
+            ) as pool:
+                for _, success, graph, payload in tqdm(
+                    pool.imap_unordered(generate_graph, tasks, chunksize=chunksize),
+                    desc="Processing SCF Outputs",
+                    total=total_tasks,
+                ):
+                    handle_graph_result(success, graph, payload)
+
+        if saved_graphs == 0:
+            print('No valid data found! Please check the input paths or if the DFT calculations are converged.')
+            return
+
+        if graph_data is not None:
+            graph_data_path = os.path.join(GRAPH_DATA_FOLDER, NPZ_OUTPUT_FILENAME)
+            np.savez(graph_data_path, graph=graph_data)
+            print(f'Saved {saved_graphs} graphs to {graph_data_path}')
+
+        if lmdb_writer is not None:
+            lmdb_writer.finalize()
+            print(f'Saved {lmdb_writer.count} graphs to {lmdb_path}')
+    finally:
+        if lmdb_writer is not None:
+            lmdb_writer.close()
 
 
 if __name__ == "__main__":
