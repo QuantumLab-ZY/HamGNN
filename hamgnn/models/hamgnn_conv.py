@@ -1,4 +1,5 @@
 import torch
+from torch.utils.checkpoint import checkpoint as torch_checkpoint
 from e3nn import o3
 from easydict import EasyDict
 
@@ -42,6 +43,7 @@ class HamGNNConvE3(BaseModel):
         self.edge_sh_normalization = config.HamGNN_pre.edge_sh_normalization
         self.edge_sh_normalize = config.HamGNN_pre.edge_sh_normalize
         self.build_internal_graph = config.HamGNN_pre.build_internal_graph
+        self._use_gradient_checkpointing = getattr(config.HamGNN_pre, 'use_gradient_checkpointing', False)
         if 'use_corr_prod' not in config.HamGNN_pre:
             self.use_corr_prod = False
         else:
@@ -176,12 +178,28 @@ class HamGNNConvE3(BaseModel):
         self.radial_basis(graph)
         self.pair_embedding(graph)
         self.chemical_embedding(graph)
-        # Orbital convolution
+        # Orbital convolution with optional gradient checkpointing
+        _use_ckpt = getattr(self, '_use_gradient_checkpointing', False) and self.training
         for i in range(self.num_layers):
-            self.convolutions[i](graph)
-            if self.use_corr_prod:
-                self.corr_products[i](graph)
-            self.pair_interactions[i](graph)
+            if _use_ckpt:
+                nf = graph[AtomicDataDict.NODE_FEATURES_KEY]
+                ef = graph[AtomicDataDict.EDGE_FEATURES_KEY]
+                def _layer_fn(_nf, _ef, _i=i):
+                    graph[AtomicDataDict.NODE_FEATURES_KEY] = _nf
+                    graph[AtomicDataDict.EDGE_FEATURES_KEY] = _ef
+                    self.convolutions[_i](graph)
+                    if self.use_corr_prod:
+                        self.corr_products[_i](graph)
+                    self.pair_interactions[_i](graph)
+                    return graph[AtomicDataDict.NODE_FEATURES_KEY], graph[AtomicDataDict.EDGE_FEATURES_KEY]
+                nf, ef = torch_checkpoint(_layer_fn, nf, ef, use_reentrant=False)
+                graph[AtomicDataDict.NODE_FEATURES_KEY] = nf
+                graph[AtomicDataDict.EDGE_FEATURES_KEY] = ef
+            else:
+                self.convolutions[i](graph)
+                if self.use_corr_prod:
+                    self.corr_products[i](graph)
+                self.pair_interactions[i](graph)
 
         graph_representation = EasyDict()
         graph_representation['node_attr'] = graph[AtomicDataDict.NODE_FEATURES_KEY]
@@ -190,3 +208,5 @@ class HamGNNConvE3(BaseModel):
         else:
             graph_representation['edge_attr'] = graph[AtomicDataDict.EDGE_FEATURES_KEY]
         return graph_representation
+
+

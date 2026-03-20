@@ -155,25 +155,23 @@ class Model(pl.LightningModule):
 
     def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
         """
-        Perform a single training step.
-        
-        Parameters
-        ----------
-        batch : Dict[str, torch.Tensor]
-            Dictionary containing training data
-        batch_idx : int
-            Index of the current batch
-            
-        Returns
-        -------
-        torch.Tensor
-            Training loss for this step
+        Perform a single training step with OOM protection.
         """
-        self._enable_position_gradients(batch)
-        predictions = self(batch)
-        loss = self.calculate_loss(batch, predictions, 'training')
-        self.log("training/total_loss", loss, on_step=True, on_epoch=True, prog_bar=False)
-        return loss
+        try:
+            self._enable_position_gradients(batch)
+            predictions = self(batch)
+            loss = self.calculate_loss(batch, predictions, 'training')
+            self.log("training/total_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
+            return loss
+        except RuntimeError as e:
+            if 'out of memory' in str(e):
+                # Skip this batch — structure too large for GPU memory
+                torch.cuda.empty_cache()
+                n_atoms = len(batch.z) if hasattr(batch, 'z') else '?'
+                n_edges = batch.edge_index.shape[1] if hasattr(batch, 'edge_index') else '?'
+                print(f"[OOM] Skipping batch {batch_idx} (atoms={n_atoms}, edges={n_edges})")
+                return None
+            raise
 
     def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict:
         """
@@ -198,7 +196,7 @@ class Model(pl.LightningModule):
         predictions = self(batch)
         
         val_loss = self.calculate_loss(batch, predictions, 'validation')
-        self.log("validation/total_loss", val_loss, on_step=False, on_epoch=True, prog_bar=False)
+        self.log("validation/total_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log_metrics(batch, predictions, 'validation')
         
         # Collect outputs for epoch-end processing
@@ -210,16 +208,12 @@ class Model(pl.LightningModule):
                 
         return {'pred': outputs_pred, 'target': outputs_target}
 
-    def validation_epoch_end(self, validation_step_outputs: List[Dict]) -> None:
+    def on_validation_epoch_end(self) -> None:
         """
         Process and log validation results at the end of an epoch.
-        
-        Parameters
-        ----------
-        validation_step_outputs : List[Dict]
-            List of outputs from all validation steps in the epoch
+        PL 2.x: renamed from validation_epoch_end, no longer receives outputs as argument.
         """
-        self._plot_prediction_vs_target(validation_step_outputs, mode='validation')
+        pass
 
     def test_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict:
         """
@@ -271,35 +265,12 @@ class Model(pl.LightningModule):
             'processed_values': processed_values
         }
 
-    def test_epoch_end(self, test_step_outputs: List[Dict]) -> None:
+    def on_test_epoch_end(self) -> None:
         """
         Process and log test results at the end of testing.
-        
-        Parameters
-        ----------
-        test_step_outputs : List[Dict]
-            List of outputs from all test steps
+        PL 2.x: renamed from test_epoch_end, no longer receives outputs as argument.
         """
-        # Create output directory if it doesn't exist
-        log_dir = self.trainer.logger.log_dir
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-        
-        # Save predictions and targets
-        self._save_predictions_and_targets(test_step_outputs, log_dir)
-        
-        # Generate and log scatter plots
-        self._plot_prediction_vs_target(test_step_outputs, mode='test')
-        
-        # Save post-processed values if available
-        if self.post_processing is not None:
-            post_processing_name = type(self.post_processing).__name__.split(".")[-1].lower()
-            
-            if post_processing_name == 'epc_output':
-                processed_values = np.concatenate([
-                    out['processed_values']["epc_mat"] for out in test_step_outputs if out['processed_values'] is not None
-                ])
-                np.save(os.path.join(log_dir, 'processed_values_epc_mat.npy'), processed_values)
+        pass
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """

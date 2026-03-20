@@ -18,13 +18,14 @@ import torch.nn as nn
 import numpy as np
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.callbacks import TQDMProgressBar
 import pprint
 
 from .data.graph_data import graph_data_module
 from .config.config_parsing import load_config
 from .models.Model import Model
 from .version import get_version, get_full_version_info, soft_logo
-from .models.hamgnn_transformer import HamGNNTransformer 
+from .models.hamgnn_transformer import HamGNNTransformer
 from .models.hamgnn_conv import HamGNNConvE3
 from .models.hamgnn_output import HamGNNPlusPlusOut
 from .utils.hparam import get_hparam_dict
@@ -173,26 +174,27 @@ def build_hamgnn_model(config):
         
         # Create output module for Hamiltonian prediction
         output_module = HamGNNPlusPlusOut(
-            irreps_in_node=graph_representation.irreps_node_features, 
-            irreps_in_edge=graph_representation.irreps_node_features, 
-            nao_max=output_params.nao_max, 
+            irreps_in_node=graph_representation.irreps_node_features,
+            irreps_in_edge=graph_representation.irreps_node_features,
+            nao_max=output_params.nao_max,
             ham_type=output_params.ham_type,
-            ham_only=output_params.ham_only, 
+            ham_only=output_params.ham_only,
             symmetrize=output_params.symmetrize,
             calculate_band_energy=output_params.calculate_band_energy,
             num_k=output_params.num_k,
             k_path=output_params.k_path,
-            band_num_control=output_params.band_num_control, 
-            soc_switch=output_params.soc_switch, 
+            band_num_control=output_params.band_num_control,
+            soc_switch=output_params.soc_switch,
             soc_basis=output_params.soc_basis,
-            nonlinearity_type=output_params.nonlinearity_type, 
-            add_H0=output_params.add_H0, 
-            spin_constrained=output_params.spin_constrained, 
-            collinear_spin=output_params.collinear_spin, 
-            minMagneticMoment=output_params.minMagneticMoment, 
+            nonlinearity_type=output_params.nonlinearity_type,
+            add_H0=output_params.add_H0,
+            spin_constrained=output_params.spin_constrained,
+            collinear_spin=output_params.collinear_spin,
+            minMagneticMoment=output_params.minMagneticMoment,
             add_H_nonsoc=output_params.add_H_nonsoc,
-            get_nonzero_mask_tensor=output_params.get_nonzero_mask_tensor, 
+            get_nonzero_mask_tensor=output_params.get_nonzero_mask_tensor,
             zero_point_shift=output_params.zero_point_shift,
+            uni_model_pkl_path=getattr(output_params, 'uni_model_pkl_path', None),
         )
     else:
         print(f'Property type "{property_type}" is not supported!')
@@ -235,25 +237,31 @@ def setup_trainer(config, callbacks):
     )
     
     # Configure trainer with parameters from config
+    strategy = getattr(config.setup, 'strategy', 'auto') or 'auto'
+    # When gradient checkpointing is enabled, use_reentrant=False avoids
+    # "parameter marked ready twice" error with find_unused_parameters DDP
+    use_grad_ckpt = getattr(config.representation_nets.HamGNN_pre, 'use_gradient_checkpointing', False)
+    if use_grad_ckpt:
+        print("[grad_ckpt] Gradient checkpointing enabled (use_reentrant=False)")
     trainer_params = {
-        'gpus': config.setup.num_gpus, 
+        'accelerator': 'gpu' if config.setup.num_gpus else 'cpu',
+        'devices': config.setup.num_gpus if config.setup.num_gpus else 'auto',
+        'strategy': strategy,
+        'num_nodes': getattr(config.setup, 'num_nodes', 1) or 1,
         'precision': config.setup.precision,
         'callbacks': callbacks,
-        'progress_bar_refresh_rate': 1,
         'logger': tb_logger,
         'gradient_clip_val': config.optim_params.gradient_clip_val,
         'max_epochs': config.optim_params.max_epochs,
         'default_root_dir': config.profiler_params.train_dir,
         'min_epochs': config.optim_params.min_epochs,
+        'log_every_n_steps': getattr(config.profiler_params, 'log_every_n_steps', 10),
+        'enable_progress_bar': True,
     }
-    
-    # Add checkpoint path if resuming training
-    if config.setup.resume and config.setup.checkpoint_path:
-        trainer_params['resume_from_checkpoint'] = config.setup.checkpoint_path
-    
+
     # Create the trainer with the configured parameters
     trainer = pl.Trainer(**trainer_params)
-    
+
     return trainer, tb_logger
 
 
@@ -311,10 +319,10 @@ def load_or_create_model(config, graph_representation, output_module, post_proce
     return model
 
 
-def train_model(trainer, model, data_module):
+def train_model(trainer, model, data_module, ckpt_path=None):
     """
     Train the model using the configured trainer.
-    
+
     Parameters
     ----------
     trainer : pl.Trainer
@@ -323,16 +331,18 @@ def train_model(trainer, model, data_module):
         Model to train
     data_module : graph_data_module
         Data module containing training data
-    
+    ckpt_path : str, optional
+        Path to checkpoint for resuming training (PL 2.x style)
+
     Returns
     -------
     list
         Test results after training
     """
     print("Starting training...")
-    
+
     # Train the model
-    trainer.fit(model, data_module)
+    trainer.fit(model, data_module, ckpt_path=ckpt_path)
     
     print("Training completed.")
     print("Starting evaluation...")
@@ -386,12 +396,29 @@ def train_and_evaluate(config):
     """
     # Prepare dataset
     data_module = prepare_dataset(config)
-    
+
     # Build model components
     graph_representation, output_module, post_processing_utility = build_hamgnn_model(config)
-    
+
+    # For mixed precision: un-script e3nn modules AFTER model build
+    # so they work with bf16 autocast (TorchScript ignores autocast)
+    precision = config.setup.precision
+    if isinstance(precision, str) and 'mixed' in str(precision):
+        _unscripted = 0
+        for mod in list(graph_representation.modules()) + list(output_module.modules()):
+            if hasattr(mod, '_compiled_main') and hasattr(mod, '_main'):
+                mod._compiled_main = mod._main
+                _unscripted += 1
+        if _unscripted:
+            print(f"[precision] Un-scripted {_unscripted} e3nn modules for mixed precision ({precision})")
+
     # Set precision (data type)
-    dtype = torch.float32 if config.setup.precision == 32 else torch.float64
+    # PL 2.x: precision can be '32', '64', 'bf16-mixed', '16-mixed', etc.
+    precision = config.setup.precision
+    if precision in (64, '64', '64-true'):
+        dtype = torch.float64
+    else:
+        dtype = torch.float32
     torch.set_default_dtype(dtype)
     
     # Convert model components to correct precision
@@ -403,11 +430,13 @@ def train_and_evaluate(config):
     metrics = config.losses_metrics.metrics
     
     # Setup callbacks
+    refresh_rate = getattr(config.profiler_params, 'progress_bar_refresh_rate', 10)
     callbacks = [
+        TQDMProgressBar(refresh_rate=refresh_rate),
         pl.callbacks.LearningRateMonitor(),
         pl.callbacks.EarlyStopping(
             monitor="training/total_loss",
-            patience=config.optim_params.stop_patience, 
+            patience=config.optim_params.stop_patience,
             min_delta=1e-6,
         ),
         pl.callbacks.ModelCheckpoint(
@@ -436,7 +465,8 @@ def train_and_evaluate(config):
             tb_logger.experiment.add_text(f"version/{key}", str(value), global_step=0)
         
         # Train and evaluate model
-        test_results = train_model(trainer, model, data_module)
+        ckpt_path = config.setup.checkpoint_path if config.setup.resume else None
+        test_results = train_model(trainer, model, data_module, ckpt_path=ckpt_path)
         
         # Log hyperparameters in tensorboard
         hparam_dict = get_hparam_dict(config)
@@ -470,8 +500,8 @@ def train_and_evaluate(config):
 
 def HamGNN():
     #torch.autograd.set_detect_anomaly(True)
-    pl.utilities.seed.seed_everything(666)
-    
+    pl.seed_everything(666)
+
     # Print version info on master process
     print(soft_logo)
     version_info = get_full_version_info()
@@ -488,7 +518,15 @@ def HamGNN():
     config = load_config(config_file_path=args.config)
     hostname = socket.getfqdn(socket.gethostname())
     config.setup.hostname = hostname
-    
+
+    # Enable TF32 for A800/A100 acceleration (3x faster matmul, 10-bit mantissa)
+    if getattr(config.setup, 'enable_tf32', False):
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        if hasattr(torch, 'set_float32_matmul_precision'):
+            torch.set_float32_matmul_precision('high')
+        print("[perf] TF32 enabled for matmul acceleration")
+
     # Print configuration information on master process
     pprint.pprint(config)
     
