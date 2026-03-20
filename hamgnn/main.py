@@ -30,6 +30,61 @@ from .models.hamgnn_output import HamGNNPlusPlusOut
 from .utils.hparam import get_hparam_dict
 
 
+def _normalize_num_gpus(num_gpus):
+    """
+    Normalize the GPU configuration for PyTorch Lightning.
+
+    Parameters
+    ----------
+    num_gpus : int, list, tuple, None
+        GPU configuration loaded from YAML.
+
+    Returns
+    -------
+    int, list, None
+        Normalized GPU configuration compatible with ``pl.Trainer``.
+    """
+    if num_gpus in (None, 0, '0'):
+        return None
+    if isinstance(num_gpus, (list, tuple)) and len(num_gpus) == 0:
+        return None
+    return num_gpus
+
+
+def _count_requested_gpus(num_gpus) -> int:
+    """
+    Count how many GPUs are requested by the configuration.
+
+    Parameters
+    ----------
+    num_gpus : int, list, tuple, None
+        GPU configuration loaded from YAML.
+
+    Returns
+    -------
+    int
+        Number of requested GPU devices.
+    """
+    if num_gpus is None:
+        return 0
+    if isinstance(num_gpus, int):
+        return max(num_gpus, 0)
+    if isinstance(num_gpus, (list, tuple)):
+        return len(num_gpus)
+    return 0
+
+
+def _is_primary_process() -> bool:
+    """Return ``True`` for rank-0 style processes used in distributed runs."""
+    for rank_env in ('LOCAL_RANK', 'SLURM_LOCALID'):
+        if rank_env in os.environ:
+            try:
+                return int(os.environ[rank_env]) == 0
+            except ValueError:
+                return True
+    return True
+
+
 def initialize_output_parameters(output_params):
     """
     Initialize default values for output parameters if they don't already exist.
@@ -234,9 +289,18 @@ def setup_trainer(config, callbacks):
         default_hp_metric=False
     )
     
+    num_gpus = _normalize_num_gpus(getattr(config.setup, 'num_gpus', None))
+    requested_gpu_count = _count_requested_gpus(num_gpus)
+    accelerator = getattr(config.setup, 'accelerator', None)
+
+    # Prefer process-based DDP for multi-GPU training on Slurm instead of Lightning's
+    # default ddp_spawn fallback, which is slower and more fragile for this project.
+    if not accelerator and requested_gpu_count > 1:
+        accelerator = 'ddp'
+
     # Configure trainer with parameters from config
     trainer_params = {
-        'gpus': config.setup.num_gpus, 
+        'gpus': num_gpus,
         'precision': config.setup.precision,
         'callbacks': callbacks,
         'progress_bar_refresh_rate': 1,
@@ -246,6 +310,9 @@ def setup_trainer(config, callbacks):
         'default_root_dir': config.profiler_params.train_dir,
         'min_epochs': config.optim_params.min_epochs,
     }
+
+    if accelerator:
+        trainer_params['accelerator'] = accelerator
     
     # Add checkpoint path if resuming training
     if config.setup.resume and config.setup.checkpoint_path:
@@ -473,11 +540,12 @@ def HamGNN():
     pl.utilities.seed.seed_everything(666)
     
     # Print version info on master process
-    print(soft_logo)
-    version_info = get_full_version_info()
-    print(f"Build timestamp: {version_info['timestamp']}")
-    if version_info['is_dirty']:
-        print("WARNING: This version was built with uncommitted changes")
+    if _is_primary_process():
+        print(soft_logo)
+        version_info = get_full_version_info()
+        print(f"Build timestamp: {version_info['timestamp']}")
+        if version_info['is_dirty']:
+            print("WARNING: This version was built with uncommitted changes")
     
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Hamiltonian Graph Neural Network')
@@ -490,7 +558,8 @@ def HamGNN():
     config.setup.hostname = hostname
     
     # Print configuration information on master process
-    pprint.pprint(config)
+    if _is_primary_process():
+        pprint.pprint(config)
     
     # Ignore warnings if specified  
     if config.setup.ignore_warnings:
