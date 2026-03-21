@@ -774,7 +774,7 @@ def read_abacus_input(input_file: str) -> dict:
         dict: Dictionary containing:
             - 'nelec': Total number of electrons (if specified)
             - 'nelec_delta': Change in number of electrons (if specified)
-            - 'doping_charge': Computed doping charge (nelec_delta if set, else nelec - neutral)
+            - 'doping_charge': Reserved field for downstream compatibility
     """
     result = {
         'nelec': None,
@@ -891,10 +891,20 @@ def calculate_doping_charge(input_params: dict, neutral_electrons: int) -> float
     Calculate the doping charge from INPUT parameters.
     
     Priority:
-    1. If nelec is set to 0, treat it as nelec_delta = 0
-    2. If nelec is set, calculate: doping_charge = nelec - neutral_electrons
-    3. If nelec_delta is set, use it directly
+    1. If both nelec and nelec_delta are present and nelec != 0, use
+       total_electrons = nelec + nelec_delta
+    2. If only nelec is effectively set (nelec != 0), use
+       total_electrons = nelec
+    3. If only nelec_delta is effectively set, use it directly as the doping charge
     4. Otherwise, return 0.0 (neutral system)
+
+    Notes:
+    - ABACUS may write a default `nelec_delta = 0` into `OUT.ABACUS/INPUT`
+      even when the user only specified `nelec`.
+    - ABACUS may also write a default `nelec = 0` into `OUT.ABACUS/INPUT`
+      when the user specified only `nelec_delta`.
+    - To avoid misinterpreting these defaults, `nelec == 0` is treated as
+      "not explicitly set" in this function.
     
     Parameters:
         input_params (dict): Output from read_abacus_input().
@@ -903,11 +913,17 @@ def calculate_doping_charge(input_params: dict, neutral_electrons: int) -> float
     Returns:
         float: Doping charge (positive = hole doping, negative = electron doping).
     """
-    if input_params['nelec'] is not None:
-        if np.isclose(input_params['nelec'], 0.0):
-            return 0.0
-        return float(input_params['nelec'] - neutral_electrons)
-    elif input_params['nelec_delta'] is not None:
+    nelec = input_params.get('nelec')
+    nelec_delta = input_params.get('nelec_delta')
+
+    has_effective_nelec = nelec is not None and not np.isclose(nelec, 0.0)
+    has_nelec_delta = nelec_delta is not None
+
+    if has_effective_nelec and has_nelec_delta:
+        return float(nelec + nelec_delta - neutral_electrons)
+    elif has_effective_nelec:
+        return float(nelec - neutral_electrons)
+    elif has_nelec_delta:
         return float(input_params['nelec_delta'])
     else:
         return 0.0
