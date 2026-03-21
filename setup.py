@@ -39,7 +39,7 @@ setup(
         "tqdm",
         "tensorboard",
         "natsort",
-        "numba"
+        "numba",
         "lmdb"
     ],
     license="MIT",
