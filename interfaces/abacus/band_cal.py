@@ -35,8 +35,8 @@ from utils import (
     au2ev,
     basis_def_13_abacus,
     basis_def_15_abacus,
-    basis_def_20_abacus,
     basis_def_27_abacus,
+    basis_def_40_abacus,
     kpoints_generator,
     num_val,
 )
@@ -45,6 +45,14 @@ from utils import (
 DEFAULT_ENERGY_WINDOW_EV = 1.5
 DEFAULT_COMPARE_SUBDIR = 'band_compare'
 DEFAULT_COMPARE_ALIGNMENT_MODE = 'self_vbm'
+DEFAULT_NAO_MAX = 13
+SUPPORTED_ABACUS_NAO_MAX = (13, 15, 27, 40)
+ABACUS_BASIS_DEF_BY_NAO_MAX = {
+    13: basis_def_13_abacus,
+    15: basis_def_15_abacus,
+    27: basis_def_27_abacus,
+    40: basis_def_40_abacus,
+}
 _WORKER_STATE = None
 
 
@@ -56,6 +64,20 @@ def resolve_path(base_dir, path_value):
     return os.path.abspath(os.path.join(base_dir, path_value))
 
 
+def parse_bool(value, key):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, np.integer)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {'1', 'true', 'yes', 'y', 'on'}:
+            return True
+        if normalized in {'0', 'false', 'no', 'n', 'off'}:
+            return False
+    raise ValueError(f'{key} must be a boolean value, got {value!r}')
+
+
 def load_config(config_path):
     with open(config_path, encoding='utf-8') as stream:
         config = yaml.safe_load(stream) or {}
@@ -65,17 +87,22 @@ def load_config(config_path):
     for key in ('graph_data_path', 'hamiltonian_path', 'prediction_hamiltonian_path', 'target_hamiltonian_path', 'save_dir'):
         resolved[key] = resolve_path(config_dir, resolved.get(key))
 
+    if resolved['save_dir'] is None:
+        resolved['save_dir'] = config_dir
     resolved['structure_name'] = resolved.get('structure_name') or resolved.get('strcture_name') or 'structure'
     resolved['compare_subdir'] = resolved.get('compare_subdir') or DEFAULT_COMPARE_SUBDIR
     resolved['compare_alignment_mode'] = (resolved.get('compare_alignment_mode') or DEFAULT_COMPARE_ALIGNMENT_MODE).strip().lower()
     resolved['nk'] = int(resolved.get('nk', 200))
-    resolved['nao_max'] = int(resolved.get('nao_max', 20))
-    resolved['soc_switch'] = bool(resolved.get('soc_switch', False))
-    resolved['auto_mode'] = bool(resolved.get('auto_mode', False))
+    resolved['nao_max'] = int(resolved.get('nao_max', DEFAULT_NAO_MAX))
+    resolved['soc_switch'] = parse_bool(resolved.get('soc_switch', False), 'soc_switch')
+    resolved['auto_mode'] = parse_bool(resolved.get('auto_mode', False), 'auto_mode')
     if resolved['compare_alignment_mode'] not in {'self_vbm', 'target_vbm', 'raw'}:
         raise ValueError(
             "compare_alignment_mode must be one of: 'self_vbm', 'target_vbm', 'raw'"
         )
+    if resolved['nao_max'] not in SUPPORTED_ABACUS_NAO_MAX:
+        supported = ', '.join(str(value) for value in SUPPORTED_ABACUS_NAO_MAX)
+        raise ValueError(f'nao_max={resolved["nao_max"]} is not supported for ABACUS band calculation; choose one of: {supported}')
     if resolved.get('num_workers') in (None, ''):
         resolved['num_workers'] = None
     else:
@@ -101,15 +128,13 @@ def as_numpy(value):
 
 
 def get_basis_def(nao_max):
-    if nao_max == 13:
-        return basis_def_13_abacus
-    if nao_max == 15:
-        return basis_def_15_abacus
-    if nao_max == 20:
-        return basis_def_20_abacus
-    if nao_max == 27:
-        return basis_def_27_abacus
-    raise NotImplementedError(f'Unsupported nao_max={nao_max} for ABACUS band calculation')
+    try:
+        return ABACUS_BASIS_DEF_BY_NAO_MAX[nao_max]
+    except KeyError as exc:
+        supported = ', '.join(str(value) for value in SUPPORTED_ABACUS_NAO_MAX)
+        raise NotImplementedError(
+            f'Unsupported nao_max={nao_max} for ABACUS band calculation; choose one of: {supported}'
+        ) from exc
 
 
 def build_source_paths(config):
@@ -184,6 +209,12 @@ def prepare_k_path(struct, latt, nk, auto_mode, k_path, label):
 def build_orbital_indices(species, nao_max):
     basis_definition = np.zeros((99, nao_max), dtype=np.int8)
     basis_def = get_basis_def(nao_max)
+    missing_species = sorted(set(np.asarray(species, dtype=int).tolist()) - set(basis_def))
+    if missing_species:
+        missing_labels = ', '.join(f'{Element.from_Z(atomic_number).symbol}(Z={atomic_number})' for atomic_number in missing_species)
+        raise ValueError(
+            f'ABACUS basis definition for nao_max={nao_max} is missing species: {missing_labels}'
+        )
     for atomic_number, orbital_indices in basis_def.items():
         basis_definition[atomic_number][orbital_indices] = 1
 
@@ -321,6 +352,11 @@ def compute_band_metrics(eigenvalues_ev, species):
     num_electrons = int(np.sum(num_val[species]))
     valence_index = math.ceil(num_electrons / 2) - 1
     conduction_index = valence_index + 1
+    if valence_index < 0 or conduction_index >= eigenvalues_ev.shape[0]:
+        raise ValueError(
+            f'Insufficient bands to locate VBM/CBM: electrons={num_electrons}, '
+            f'available_bands={eigenvalues_ev.shape[0]}'
+        )
     vbm = float(np.max(eigenvalues_ev[valence_index]))
     cbm = float(np.min(eigenvalues_ev[conduction_index]))
     return {
