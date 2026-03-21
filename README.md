@@ -25,6 +25,10 @@ Getting Started with HamGNN: [Online Documentation](https://hamgnn.readthedocs.i
   - [Training Commands](#training-commands)
   - [Key Configuration Item Descriptions](#key-configuration-item-descriptions)
   - [Training Monitoring](#training-monitoring)
+  - [Delta Learning](#delta-learning-transfer-learning-from-pre-trained-model)
+  - [PyTorch 2.2+ / Lightning 2.x Compatibility](#pytorch-22--lightning-2x-compatibility)
+  - [OOM-Safe Training](#oom-safe-training)
+  - [LMDB Data Format Support](#lmdb-data-format-support)
 - [6. Model Prediction Operations](#6-model-prediction-operations)
   - [Preparation Before Prediction](#preparation-before-prediction)
   - [Execute Prediction](#execute-prediction)
@@ -332,6 +336,64 @@ When training on a remote server, you can access TensorBoard through an Xshell t
 2. Set source host to localhost, port to 16006
 3. Set target host to localhost, target port to 6006
 4. Access http://localhost:16006/ in your browser to view training progress
+
+### Delta Learning (Transfer Learning from Pre-trained Model)
+
+HamGNN supports delta learning, where a pre-trained predictor provides the H0 baseline and the network learns the residual (H - H0). This significantly accelerates convergence for large-scale datasets.
+
+**Setup:**
+
+1. Decompress the pre-trained predictor file:
+   ```bash
+   gunzip predictor_from_ckpt.pkl.gz
+   ```
+2. Add `uni_model_pkl_path` to the `HamGNN_out` section of your config:
+
+```yaml
+output_nets:
+  HamGNN_out:
+    uni_model_pkl_path: /absolute/path/to/predictor_from_ckpt.pkl  # Enable delta learning
+    add_H0: true
+    # ... other parameters
+```
+
+> **Note:** The path must be absolute. Without this parameter, training runs in standard mode (no delta learning).
+
+### PyTorch 2.2+ / Lightning 2.x Compatibility
+
+HamGNN now supports PyTorch 2.2+ and PyTorch Lightning 2.x. New config options:
+
+```yaml
+setup:
+  num_gpus: 8
+  strategy: ddp_find_unused_parameters_true  # DDP strategy
+  num_nodes: 1                                # Multi-node support
+  precision: 32                               # 32, 64, bf16-mixed, 16-mixed
+  enable_tf32: true                           # TF32 acceleration for A100/A800
+
+profiler_params:
+  log_every_n_steps: 10
+  progress_bar_refresh_rat: 10
+```
+
+### OOM-Safe Training
+
+For large-scale datasets with varying structure sizes, some batches may exceed GPU memory. HamGNN automatically detects CUDA OOM errors and skips oversized batches without crashing:
+
+```
+[OOM] Skipping batch 52 (atoms=50, edges=7142)
+```
+
+### LMDB Data Format Support
+
+HamGNN supports LMDB format for efficient large-scale data loading. Both plain integer keys (`"0"`, `"1"`, ...) and prefixed keys (`"graph_0"`, `"graph_1"`, ...) are supported:
+
+```yaml
+dataset_params:
+  graph_data_path: /path/to/graph_data.lmdb
+  data_format: lmdb
+  num_workers: 1      # Recommended for LMDB (avoid lock contention)
+```
 
 ## 6. Model Prediction Operations
 After completing model training, you can use the trained model to predict Hamiltonians for new structures.

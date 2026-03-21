@@ -111,7 +111,8 @@ class HamGNNPlusPlusOut(nn.Module):
                  zero_point_shift: bool = False,
                  add_H_nonsoc: bool = False,
                  get_nonzero_mask_tensor: bool = False,
-                 calculate_sparsity: bool = True
+                 calculate_sparsity: bool = True,
+                 uni_model_pkl_path: str = None
                  ):
         
         super().__init__()
@@ -243,9 +244,22 @@ class HamGNNPlusPlusOut(nn.Module):
                 irreps_out=self.hamiltonian_irreps
             )
             self.offsite_overlap_network = self._create_hamiltonian_layer(
-                irreps_in=irreps_in_edge, 
+                irreps_in=irreps_in_edge,
                 irreps_out=self.hamiltonian_irreps
             )
+
+        # Delta learning predictor (loads a pre-trained model for H0 baseline)
+        self.UniH_predict = None
+        if uni_model_pkl_path:
+            from .UniH_predictor import load_model_predictor
+            _pred = load_model_predictor(uni_model_pkl_path)
+            _pred.non_soc_model = _pred.non_soc_model.eval()
+            for p in _pred.non_soc_model.parameters():
+                p.requires_grad_(False)  # freeze predictor weights
+            object.__setattr__(self, '_unih_predict_gpu', _pred)
+            self.UniH_predict = True  # flag only, predictor not an nn.Module
+            self._unih_predict_gpu.soc_enabled = False
+            self._unih_predict_gpu.non_soc_model.output_module.add_H0 = False
 
     def _initialize_irreducible_representations(self):
         """
@@ -842,45 +856,58 @@ class HamGNNPlusPlusOut(nn.Module):
 
     def merge_tensor_components(self, spherical_components):
         """
-        Merge spherical tensor components into a matrix using Clebsch-Gordan coefficients.
+        Merge spherical tensor components into a matrix using precomputed CG projection.
 
-        Args:
-            spherical_components (list of torch.Tensor): List of tensors representing spherical 
-                components of irreducible representations. Each tensor has shape 
-                (batch_size, component_dim).
-
-        Returns:
-            torch.Tensor: Merged matrix with shape (batch_size, nao_max * nao_max) representing
-                flattened matrix of merged components.
+        Optimized: replaces triple-nested Python loop with single matmul via
+        precomputed CG projection matrix.
         """
-        batch_size = spherical_components[0].shape[0]
-        result_matrix = torch.zeros(batch_size, self.nao_max, self.nao_max).type_as(spherical_components[0])
+        # Lazy precompute CG projection matrix on first call
+        if not hasattr(self, '_cg_proj_matrix'):
+            self._precompute_cg_projection_matrix()
 
-        component_index = 0  # Index for accessing the correct irreps
-        row_start_idx = 0
+        # Concatenate all components into single vector: (batch, D_total)
+        features = torch.cat(spherical_components, dim=-1)
+        # Single matmul: (batch, D_total) @ (D_total, nao_max^2) -> (batch, nao_max^2)
+        return torch.mm(features, self._cg_proj_matrix.to(features.device))
+
+    def _precompute_cg_projection_matrix(self):
+        """Precompute dense CG projection matrix for merge_tensor_components.
+
+        Replaces the triple-nested loop (row_orbital, col_orbital, angular_momentum)
+        with a single (D_total, nao_max^2) matrix. Each column encodes the CG
+        coefficients for mapping irrep features to a specific (i,j) position.
+        """
+        D_total = int(self.hamiltonian_irreps_dimensions.sum().item())
+        proj = torch.zeros(D_total, self.nao_max * self.nao_max)
+
+        component_offset = 0
+        row_start = 0
         for _, row_orbital in self.row:
-            row_dimension = 2 * row_orbital.l + 1  # Dimension based on angular momentum
-            col_start_idx = 0
+            row_dim = 2 * row_orbital.l + 1
+            col_start = 0
             for _, col_orbital in self.col:
-                col_dimension = 2 * col_orbital.l + 1  # Dimension based on angular momentum
+                col_dim = 2 * col_orbital.l + 1
+                for L in range(abs(row_orbital.l - col_orbital.l), row_orbital.l + col_orbital.l + 1):
+                    L_dim = 2 * L + 1
+                    cg = math.sqrt(2 * L + 1) * self.cg_calculator(
+                        row_orbital.l, col_orbital.l, L
+                    )  # shape: (row_dim, col_dim, L_dim)
 
-                # Iterate through allowed angular momentum values
-                for angular_momentum in range(abs(row_orbital.l - col_orbital.l), row_orbital.l + col_orbital.l + 1):
-                    # Compute inverse spherical tensor product             
-                    clebsch_gordan_coef = math.sqrt(2 * angular_momentum + 1) * self.cg_calculator(
-                        row_orbital.l, col_orbital.l, angular_momentum
-                    ).unsqueeze(0)
-                    tensor_product = (clebsch_gordan_coef * spherical_components[component_index].unsqueeze(-2).unsqueeze(-2)).sum(-1)
+                    # Map each m component to the matrix position
+                    for m in range(L_dim):
+                        # cg[:, :, m] is (row_dim, col_dim) — the weight for this m
+                        block = cg[:, :, m]  # (row_dim, col_dim)
+                        for ri in range(row_dim):
+                            for ci in range(col_dim):
+                                mat_idx = (row_start + ri) * self.nao_max + (col_start + ci)
+                                proj[component_offset + m, mat_idx] += block[ri, ci].item()
 
-                    # Add product to appropriate part of the result matrix
-                    submatrix = result_matrix.narrow(-2, row_start_idx, row_dimension).narrow(-1, col_start_idx, col_dimension)
-                    submatrix += tensor_product
-                    component_index += 1
+                    component_offset += L_dim
+                col_start += col_dim
+            row_start += row_dim
 
-                col_start_idx += col_dimension
-            row_start_idx += row_dimension
-
-        return result_matrix.reshape(-1, self.nao_max * self.nao_max)
+        self._cg_proj_matrix = proj
+        print(f"[perf] CG projection matrix precomputed: ({D_total}, {self.nao_max**2})")
 
     def merge_rank2_tensor_components(self, spherical_components):
         """
@@ -968,7 +995,7 @@ class HamGNNPlusPlusOut(nn.Module):
                 (batch_size, nao_max, nao_max).
         """
         # Split coupling coefficients into spherical components
-        spherical_components = torch.split(coupling_coefficients, self.J_irreps_dim.tolist(), dim=-1)
+        spherical_components = torch.split(coupling_coefficients, self.J_irreps_dimensions.tolist(), dim=-1)
 
         if self.soc_switch:  # If spin-orbit coupling is enabled
             # Use rank-2 tensor merge for spin-orbit coupling
@@ -1526,27 +1553,40 @@ class HamGNNPlusPlusOut(nn.Module):
                     -1, self.nao_max, self.nao_max, 3
                 )[None, atom_indices, :, :, :].type_as(overlap_derivatives_k)
 
-            # Add off-site terms to k-space matrices
-            for edge_idx in range(edges_per_crystal[crystal_idx]):
-                # Get local indices within this crystal
-                source_atom_idx = source_indices[edge_index_offsets[crystal_idx] + edge_idx] - atom_index_offsets[crystal_idx]
-                target_atom_idx = target_indices[edge_index_offsets[crystal_idx] + edge_idx] - atom_index_offsets[crystal_idx]
+            # Add off-site terms to k-space matrices (VECTORIZED)
+            # Instead of per-edge Python loop, use advanced indexing
+            n_edges_crystal = edges_per_crystal[crystal_idx].item()
+            edge_offset = edge_index_offsets[crystal_idx]
+            local_src = source_indices[edge_offset:edge_offset + n_edges_crystal] - atom_index_offsets[crystal_idx]
+            local_tgt = target_indices[edge_offset:edge_offset + n_edges_crystal] - atom_index_offsets[crystal_idx]
 
-                # Add contribution for each k-point with phase factor
-                hamiltonian_k[:, source_atom_idx, target_atom_idx, :, :] += (
-                    phase_factors[edge_idx, :, None, None] * 
-                    offsite_hamiltonians_by_crystal[crystal_idx].reshape(-1, self.nao_max, self.nao_max)[None, edge_idx, :, :]
-                )
+            # phase_factors: (n_edges, n_k) → broadcast with H: (n_edges, nao, nao)
+            # Result: (n_k, n_edges, nao, nao)
+            offsite_H_crystal = offsite_hamiltonians_by_crystal[crystal_idx].reshape(-1, self.nao_max, self.nao_max)
+            offsite_H_phased = phase_factors[:, :, None, None] * offsite_H_crystal[None, :, :, :].type_as(hamiltonian_k)
 
-                reference_overlap_k[:, source_atom_idx, target_atom_idx, :, :] += (
-                    phase_factors[edge_idx, :, None, None] * 
-                    reference_offsite_overlaps[crystal_idx].reshape(-1, self.nao_max, self.nao_max)[None, edge_idx, :, :]
-                )
+            ref_S_crystal = reference_offsite_overlaps[crystal_idx].reshape(-1, self.nao_max, self.nao_max)
+            ref_S_phased = phase_factors[:, :, None, None] * ref_S_crystal[None, :, :, :].type_as(reference_overlap_k)
 
-                predicted_overlap_k[:, source_atom_idx, target_atom_idx, :, :] += (
-                    phase_factors[edge_idx, :, None, None] * 
-                    predicted_offsite_overlaps[crystal_idx].reshape(-1, self.nao_max, self.nao_max)[None, edge_idx, :, :]
-                )
+            pred_S_crystal = predicted_offsite_overlaps[crystal_idx].reshape(-1, self.nao_max, self.nao_max)
+            pred_S_phased = phase_factors[:, :, None, None] * pred_S_crystal[None, :, :, :].type_as(predicted_overlap_k)
+
+            # Scatter into k-space matrices using linear index
+            # hamiltonian_k shape: (n_k, n_atoms, n_atoms, nao, nao)
+            # Linear index into (n_atoms, n_atoms) dimension
+            linear_idx = local_src * num_atoms + local_tgt  # (n_edges,)
+            for ki in range(self.num_k):
+                flat_H = hamiltonian_k[ki].reshape(num_atoms * num_atoms, self.nao_max, self.nao_max)
+                flat_H.index_add_(0, linear_idx, offsite_H_phased[ki])
+                hamiltonian_k[ki] = flat_H.reshape(num_atoms, num_atoms, self.nao_max, self.nao_max)
+
+                flat_rS = reference_overlap_k[ki].reshape(num_atoms * num_atoms, self.nao_max, self.nao_max)
+                flat_rS.index_add_(0, linear_idx, ref_S_phased[ki])
+                reference_overlap_k[ki] = flat_rS.reshape(num_atoms, num_atoms, self.nao_max, self.nao_max)
+
+                flat_pS = predicted_overlap_k[ki].reshape(num_atoms * num_atoms, self.nao_max, self.nao_max)
+                flat_pS.index_add_(0, linear_idx, pred_S_phased[ki])
+                predicted_overlap_k[ki] = flat_pS.reshape(num_atoms, num_atoms, self.nao_max, self.nao_max)
 
             # Add derivative terms if needed
             if export_reciprocal_values:
@@ -1592,19 +1632,24 @@ class HamGNNPlusPlusOut(nn.Module):
                 overlap_derivatives_k = overlap_derivatives_k.reshape(self.num_k, num_orbitals, num_orbitals, 3)
 
             # Solve generalized eigenvalue problem using Cholesky decomposition
-            cholesky_factor = torch.linalg.cholesky(reference_overlap_k)
-            cholesky_factor_conj_transpose = torch.transpose(cholesky_factor.conj(), dim0=-1, dim1=-2)
-            cholesky_inverse = torch.linalg.inv(cholesky_factor)
-            cholesky_conj_transpose_inverse = torch.linalg.inv(cholesky_factor_conj_transpose)
+            # Disable autocast for numerical stability (eigh requires float32+)
+            with torch.cuda.amp.autocast(enabled=False):
+                hamiltonian_k = hamiltonian_k.float()
+                reference_overlap_k = reference_overlap_k.float()
+                predicted_overlap_k = predicted_overlap_k.float()
+                cholesky_factor = torch.linalg.cholesky(reference_overlap_k)
+                cholesky_factor_conj_transpose = torch.transpose(cholesky_factor.conj(), dim0=-1, dim1=-2)
+                cholesky_inverse = torch.linalg.inv(cholesky_factor)
+                cholesky_conj_transpose_inverse = torch.linalg.inv(cholesky_factor_conj_transpose)
 
-            # Transform to standard eigenvalue problem
-            transformed_hamiltonian = torch.bmm(
-                torch.bmm(cholesky_inverse, hamiltonian_k),
-                cholesky_conj_transpose_inverse
-            )
+                # Transform to standard eigenvalue problem
+                transformed_hamiltonian = torch.bmm(
+                    torch.bmm(cholesky_inverse, hamiltonian_k),
+                    cholesky_conj_transpose_inverse
+                )
 
-            # Solve eigenvalue problem
-            eigenvalues, eigenvectors = torch.linalg.eigh(transformed_hamiltonian)
+                # Solve eigenvalue problem
+                eigenvalues, eigenvectors = torch.linalg.eigh(transformed_hamiltonian)
 
             # Transform eigenvectors back to original basis
             eigenvectors = torch.einsum('ijk,ika->iaj', cholesky_conj_transpose_inverse, eigenvectors)
@@ -1901,19 +1946,23 @@ class HamGNNPlusPlusOut(nn.Module):
                 overlap_derivatives_k = overlap_derivatives_k.reshape(self.num_k, num_orbitals, num_orbitals, 3)
 
             # Solve generalized eigenvalue problem using Cholesky decomposition
-            cholesky_factor = torch.linalg.cholesky(overlap_k)
-            cholesky_factor_conj_transpose = torch.transpose(cholesky_factor.conj(), dim0=-1, dim1=-2)
-            cholesky_inverse = torch.linalg.inv(cholesky_factor)
-            cholesky_conj_transpose_inverse = torch.linalg.inv(cholesky_factor_conj_transpose)
+            # Disable autocast for numerical stability (eigh requires float32+)
+            with torch.cuda.amp.autocast(enabled=False):
+                hamiltonian_k = hamiltonian_k.float()
+                overlap_k = overlap_k.float()
+                cholesky_factor = torch.linalg.cholesky(overlap_k)
+                cholesky_factor_conj_transpose = torch.transpose(cholesky_factor.conj(), dim0=-1, dim1=-2)
+                cholesky_inverse = torch.linalg.inv(cholesky_factor)
+                cholesky_conj_transpose_inverse = torch.linalg.inv(cholesky_factor_conj_transpose)
 
-            # Transform to standard eigenvalue problem
-            transformed_hamiltonian = torch.bmm(
-                torch.bmm(cholesky_inverse, hamiltonian_k),
-                cholesky_conj_transpose_inverse
-            )
+                # Transform to standard eigenvalue problem
+                transformed_hamiltonian = torch.bmm(
+                    torch.bmm(cholesky_inverse, hamiltonian_k),
+                    cholesky_conj_transpose_inverse
+                )
 
-            # Solve eigenvalue problem
-            eigenvalues, eigenvectors = torch.linalg.eigh(transformed_hamiltonian)
+                # Solve eigenvalue problem
+                eigenvalues, eigenvectors = torch.linalg.eigh(transformed_hamiltonian)
 
             # Transform eigenvectors back to original basis
             eigenvectors = torch.einsum('ijk,ika->iaj', cholesky_conj_transpose_inverse, eigenvectors)
@@ -2237,19 +2286,23 @@ class HamGNNPlusPlusOut(nn.Module):
             ], dim=-2)
 
             # Solve generalized eigenvalue problem using Cholesky decomposition
-            cholesky_factor = torch.linalg.cholesky(overlap_k_soc)
-            cholesky_factor_conj_transpose = torch.transpose(cholesky_factor.conj(), dim0=-1, dim1=-2)
-            cholesky_inverse = torch.linalg.inv(cholesky_factor)
-            cholesky_conj_transpose_inverse = torch.linalg.inv(cholesky_factor_conj_transpose)
+            # Disable autocast for numerical stability (eigh requires float32+)
+            with torch.cuda.amp.autocast(enabled=False):
+                hamiltonian_k_soc = hamiltonian_k_soc.float()
+                overlap_k_soc = overlap_k_soc.float()
+                cholesky_factor = torch.linalg.cholesky(overlap_k_soc)
+                cholesky_factor_conj_transpose = torch.transpose(cholesky_factor.conj(), dim0=-1, dim1=-2)
+                cholesky_inverse = torch.linalg.inv(cholesky_factor)
+                cholesky_conj_transpose_inverse = torch.linalg.inv(cholesky_factor_conj_transpose)
 
-            # Transform to standard eigenvalue problem
-            transformed_hamiltonian = torch.bmm(
-                torch.bmm(cholesky_inverse, hamiltonian_k_soc),
-                cholesky_conj_transpose_inverse
-            )
+                # Transform to standard eigenvalue problem
+                transformed_hamiltonian = torch.bmm(
+                    torch.bmm(cholesky_inverse, hamiltonian_k_soc),
+                    cholesky_conj_transpose_inverse
+                )
 
-            # Solve eigenvalue problem
-            eigenvalues, eigenvectors = torch.linalg.eigh(transformed_hamiltonian)
+                # Solve eigenvalue problem
+                eigenvalues, eigenvectors = torch.linalg.eigh(transformed_hamiltonian)
 
             # Transform eigenvectors back to original basis
             eigenvectors = torch.bmm(cholesky_conj_transpose_inverse, eigenvectors)
@@ -2521,7 +2574,7 @@ class HamGNNPlusPlusOut(nn.Module):
                 - cell_index_map: Dictionary mapping cell shift tuples to indices
                 - z: Atomic numbers, used to determine number of atoms
             inverse_edge_indices (torch.Tensor, optional): Tensor mapping each edge to its
-                inverse edge index (i��j maps to j��i). Required for building the target lookup.
+                inverse edge index (i->j maps to j->i). Required for building the target lookup.
 
         Returns:
             tuple:
@@ -2531,49 +2584,34 @@ class HamGNNPlusPlusOut(nn.Module):
                   shift combination, contains indices of edges where that atom is the target
                   in the specified cell shift.
         """
-        # Extract necessary data
+        # Vectorized: sort+split instead of per-atom torch.where loops
         source_nodes, target_nodes = data.edge_index
-        unique_cell_shifts = data.unique_cell_shift
         cell_shift_indices = data.cell_shift_indices
-        cell_index_map = data.cell_index_map
-
-        # Get dimensions
         num_atoms = len(data.z)
-        num_cell_shifts = len(unique_cell_shifts)
+        num_cell_shifts = len(data.unique_cell_shift)
 
-        # Build mapping from each atom to edges where it's the source
-        # This finds all edges that originate from each atom
-        source_edge_indices = [torch.where(source_nodes == atom_idx)[0] for atom_idx in range(num_atoms)]
+        # Group edges by source atom using sort+split
+        sorted_src_order = torch.argsort(source_nodes)
+        src_counts = torch.zeros(num_atoms, dtype=torch.long, device=source_nodes.device)
+        src_counts.scatter_add_(0, source_nodes, torch.ones_like(source_nodes))
+        source_edge_indices = list(torch.split(sorted_src_order, src_counts.tolist()))
 
-        # Initialize the nested structure for target edge lookup
-        # This will map each (atom, cell_shift) pair to a list of edge indices
-        target_edge_indices = [[[] for _ in range(num_cell_shifts)] for _ in range(num_atoms)]
+        # Build target lookup: (atom, cell_shift) -> inverse edge indices
+        target_edge_indices = [[torch.tensor([], dtype=torch.long).type_as(source_nodes)
+                                for _ in range(num_cell_shifts)] for _ in range(num_atoms)]
 
-        # Populate target edge lookup structure
-        for atom_idx in range(num_atoms):
-            # Get the inverse edges for edges where this atom is the source
-            # These are edges where this atom is the target
-            inverse_edges = inverse_edge_indices[source_edge_indices[atom_idx]]
-
-            # Get cell shift indices for these inverse edges
-            cell_shifts_of_inverse_edges = cell_shift_indices[inverse_edges]
-
-            # Group inverse edges by their cell shift
-            for edge_idx, cell_shift_idx in zip(inverse_edges, cell_shifts_of_inverse_edges):
-                target_edge_indices[atom_idx][cell_shift_idx.item()].append(edge_idx)
-
-            # Convert lists to tensors for efficiency
-            for cell_shift_idx in range(num_cell_shifts):
-                if target_edge_indices[atom_idx][cell_shift_idx]:
-                    # If edges exist for this cell shift, stack them into a tensor
-                    target_edge_indices[atom_idx][cell_shift_idx] = torch.stack(
-                        target_edge_indices[atom_idx][cell_shift_idx]
-                    ).type_as(source_nodes)
-                else:
-                    # Otherwise create an empty tensor of the correct type
-                    target_edge_indices[atom_idx][cell_shift_idx] = torch.tensor(
-                        [], dtype=torch.long
-                    ).type_as(source_nodes)
+        if inverse_edge_indices is not None:
+            all_inverse = inverse_edge_indices[sorted_src_order]
+            all_cell_shifts = cell_shift_indices[all_inverse]
+            combined_key = source_nodes[sorted_src_order] * num_cell_shifts + all_cell_shifts
+            key_order = torch.argsort(combined_key)
+            sorted_inverse = all_inverse[key_order]
+            unique_keys, counts = torch.unique_consecutive(combined_key[key_order], return_counts=True)
+            groups = torch.split(sorted_inverse, counts.tolist())
+            for key, group in zip(unique_keys.tolist(), groups):
+                atom_idx = int(key) // num_cell_shifts
+                cell_idx = int(key) % num_cell_shifts
+                target_edge_indices[atom_idx][cell_idx] = group
 
         return source_edge_indices, target_edge_indices
 
@@ -2950,6 +2988,54 @@ class HamGNNPlusPlusOut(nn.Module):
         """
         # Validate that all elements in the data are present in basis_def
         self.validate_elements_in_basis_def(data)
+
+        # Delta learning: use predictor to get H0 baseline from pre-trained model
+        if self.UniH_predict is not None:
+            with torch.no_grad():
+                _device = data.z.device
+                # Save ALL original data attributes (predictor modifies data in-place)
+                _saved = {k: v for k, v in data}
+                try:
+                    # Try GPU predictor first (fast)
+                    self._unih_predict_gpu.non_soc_model.to(_device)
+                    with torch.cuda.amp.autocast(enabled=False):
+                        pred_H = self._unih_predict_gpu.non_soc_model(data)['hamiltonian'].clone()
+                except RuntimeError as e:
+                    if 'out of memory' in str(e):
+                        # GPU OOM: fall back to CPU predictor for this batch
+                        torch.cuda.empty_cache()
+                        self._unih_predict_gpu.non_soc_model.cpu()
+                        from torch_geometric.data import Data as _Data
+                        cpu_data = _Data()
+                        for key, val in _saved.items():
+                            cpu_data[key] = val.detach().cpu() if isinstance(val, torch.Tensor) else val
+                        pred_H = self._unih_predict_gpu.non_soc_model(cpu_data)['hamiltonian'].to(_device)
+                        del cpu_data
+                    else:
+                        raise
+                # Restore original data attributes (predictor may have modified/added keys)
+                _keys_after = set(k for k, _ in data)
+                for k in (_keys_after - set(_saved.keys())):
+                    delattr(data, k)
+                for k, v in _saved.items():
+                    data[k] = v
+                del _saved
+                # Offload predictor back to CPU to free GPU memory
+                self._unih_predict_gpu.non_soc_model.cpu()
+                torch.cuda.empty_cache()
+            if self.spin_constrained:
+                pred_H = torch.stack([pred_H, pred_H], dim=1)
+            pred_Hon = pred_H[:len(data.z)]
+            pred_Hoff = pred_H[len(data.z):]
+            if hasattr(data, 'Hon0'):
+                data.Hon0 = pred_Hon + data.Hon0
+            else:
+                data.Hon0 = pred_Hon
+            if hasattr(data, 'Hoff0'):
+                data.Hoff0 = pred_Hoff + data.Hoff0
+            else:
+                data.Hoff0 = pred_Hoff
+            self.add_H0 = True
         
         # Data format compatibility handling
         if 'H0_u' in data:

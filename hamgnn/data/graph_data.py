@@ -32,9 +32,16 @@ class LMDBGraphDataset(Dataset):
         self.preloaded_data = {}
         
         # Open LMDB environment to read metadata
-        env = lmdb.open(lmdb_path, readonly=True, lock=False)
+        _subdir = os.path.isdir(lmdb_path)
+        env = lmdb.open(lmdb_path, readonly=True, lock=False, subdir=_subdir)
         with env.begin() as txn:
-            self.total_length = int(txn.get('num_graphs'.encode()).decode())
+            num_graphs_bytes = txn.get('num_graphs'.encode())
+            if num_graphs_bytes is not None:
+                self.total_length = int(num_graphs_bytes.decode())
+            else:
+                # Count entries (all keys are integer indices)
+                self.total_length = txn.stat()['entries']
+        env.close()
         
         # Set indices
         self.indices = indices if indices is not None else list(range(self.total_length))
@@ -71,12 +78,15 @@ class LMDBGraphDataset(Dataset):
         else:
             # Lazy load LMDB environment
             if self.env is None:
-                self.env = lmdb.open(self.lmdb_path, readonly=True, lock=False, 
-                                     readahead=False, meminit=False)
+                self.env = lmdb.open(self.lmdb_path, readonly=True, lock=False,
+                                     readahead=False, meminit=False,
+                                     subdir=os.path.isdir(self.lmdb_path))
             
-            # Load from LMDB
+            # Load from LMDB (support both plain integer keys and graph_N keys)
             with self.env.begin() as txn:
-                data_bytes = txn.get(f'graph_{real_idx}'.encode())
+                data_bytes = txn.get(f'{real_idx}'.encode())
+                if data_bytes is None:
+                    data_bytes = txn.get(f'graph_{real_idx}'.encode())
                 if data_bytes is None:
                     raise IndexError(f"Index {real_idx} out of bounds for LMDB dataset")
                 data = pickle.loads(data_bytes)
@@ -241,9 +251,14 @@ class graph_data_module(pl.LightningDataModule):
             # Verify the LMDB database
             if self.data_format == 'lmdb':
                 try:
-                    env = lmdb.open(self.dataset_input, readonly=True, lock=False)
+                    _subdir = os.path.isdir(self.dataset_input)
+                    env = lmdb.open(self.dataset_input, readonly=True, lock=False, subdir=_subdir)
                     with env.begin() as txn:
-                        num_graphs = int(txn.get('num_graphs'.encode()).decode())
+                        num_graphs_bytes = txn.get('num_graphs'.encode())
+                        if num_graphs_bytes is not None:
+                            num_graphs = int(num_graphs_bytes.decode())
+                        else:
+                            num_graphs = txn.stat()['entries']
                         print(f"Found {num_graphs} graphs in the LMDB database")
                     env.close()
                 except Exception as e:
@@ -267,9 +282,14 @@ class graph_data_module(pl.LightningDataModule):
         """Get the length of the dataset"""
         if isinstance(self.dataset_input, str):
             if self.data_format == 'lmdb':
-                env = lmdb.open(self.dataset_input, readonly=True, lock=False)
+                _subdir = os.path.isdir(self.dataset_input)
+                env = lmdb.open(self.dataset_input, readonly=True, lock=False, subdir=_subdir)
                 with env.begin() as txn:
-                    length = int(txn.get('num_graphs'.encode()).decode())
+                    num_graphs_bytes = txn.get('num_graphs'.encode())
+                    if num_graphs_bytes is not None:
+                        length = int(num_graphs_bytes.decode())
+                    else:
+                        length = txn.stat()['entries']
                 env.close()
                 return length
             elif self.data_format == 'npz':
