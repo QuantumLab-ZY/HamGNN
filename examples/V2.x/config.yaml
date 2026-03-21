@@ -98,6 +98,8 @@ profiler_params:
 representation_nets:
   # Network parameters usually do not need to be changed.
   HamGNN_pre:
+  #set legacy_edge_update to true to use the old checkpoint file, which is trained with the old edge update scheme. If you want to use the new edge update scheme, please set legacy_edge_update to false and retrain the model.
+    legacy_edge_update: false
     cutoff: 26.0
     cutoff_func: cos
     edge_sh_normalization: component
