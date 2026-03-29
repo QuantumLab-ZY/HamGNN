@@ -124,12 +124,14 @@ def load_model_predictor(model_filepath: str, device: Optional[str] = None):
 
 
 def _patch_legacy_attributes(predictor) -> None:
-    """Patch modules that lack attributes added in newer HamGNN (e.g. when using older installed egg)."""
+    """Patch modules that lack attributes added in newer HamGNN/PyTorch releases."""
     models = [predictor.non_soc_model] + \
         ([predictor.soc_model] if getattr(predictor, 'soc_model', None) else [])
     for model in models:
         for _, module in model.named_modules():
             cls_name = type(module).__name__
+            if isinstance(module, torch.nn.ParameterList) and not hasattr(module, '_size'):
+                module._size = len(module._parameters)
             if cls_name == 'MessagePackBlock' and not hasattr(module, 'lite_mode'):
                 module.lite_mode = False
             if cls_name == 'PairInteractionBlock' and not hasattr(module, 'legacy_edge_update'):
