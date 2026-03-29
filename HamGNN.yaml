@@ -37,13 +37,13 @@ dependencies:
   - numba
   - pytorch-lightning=1.5.10
   - nequip
-  - e3nn
+  - e3nn=0.5.0
   - ase
   - pymatgen
   - numpy
   - scipy
   - scikit-learn
-  - sympy
+  - sympy=1.13.1
   - pyyaml
   - tqdm
   - easydict
@@ -67,5 +67,5 @@ dependencies:
     - torch-ema
     - torch-dftd
     - opt_einsum_fx
-    - pillow==9.3.0    
     - tensorboard
+    - lmdb
