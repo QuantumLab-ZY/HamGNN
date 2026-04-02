@@ -1,9 +1,10 @@
-'''
-Author: Changwei Zhang 
-Date: 2023-05-18 17:07:53 
-Last Modified by:   Changwei Zhang 
-Last Modified time: 2023-05-18 17:07:53 
-'''
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Parsers for SIESTA FDF inputs and HSX sparse Hamiltonian / overlap storage.
+
+Loads CSR-style matrix dumps and metadata for HamGNN graph and label generation.
+"""
 
 import numpy as np
 from numba import njit

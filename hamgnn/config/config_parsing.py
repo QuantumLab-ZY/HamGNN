@@ -1,11 +1,13 @@
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Default configuration templates and YAML merge loader for HamGNN.
+
+Defines ``config_default`` and nested section dicts, and provides :func:`load_config`
+to merge user YAML with defaults into :class:`easydict.EasyDict`, including parsing
+of loss/metric function specs.
 """
-/*
- * @Author: Yang Zhong 
- * @Date: 2021-10-29 15:03:46 
- * @Last Modified by: Yang Zhong
- * @Last Modified time: 2021-10-29 16:45:04
- */
-"""
+
 import yaml
 import argparse
 import copy

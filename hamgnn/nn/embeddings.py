@@ -1,3 +1,12 @@
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Radial and pair embeddings for edges and nodes in equivariant HamGNN stacks.
+
+Includes radial-basis edge encodings, one-hot and spherical-harmonic style embedders,
+and pair-interaction feature blocks used with NequIP-style :class:`GraphModuleMixin`.
+"""
+
 from typing import Callable, Dict, List, Optional, Tuple
 
 import torch

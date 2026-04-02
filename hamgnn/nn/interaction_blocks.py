@@ -1,3 +1,12 @@
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Pair and correlation interaction blocks for updating node and edge irreps.
+
+Provides :class:`PairInteractionBlock`, :class:`CorrProductBlock`, residual wrappers,
+and MACE-compatible equivariant product pathways.
+"""
+
 from typing import Callable, Dict, List, Optional, Tuple
 
 import torch

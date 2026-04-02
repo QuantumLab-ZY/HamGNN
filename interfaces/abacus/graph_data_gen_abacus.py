@@ -1,11 +1,12 @@
-'''
-Descripttion: 
-version: 
-Author: Yang Zhong
-Date: 2024-01-16 13:00:43
-Last Modified by:   Yang Zhong
-Last Modified time: 2025-02-6 10:34:01 
-'''
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Batch generation of training graphs and labels from ABACUS SCF / sparse outputs.
+
+Reads STRU and Hamiltonian data, writes LMDB shards with PyG :class:`~torch_geometric.data.Data`
+for HamGNN training or inference prep.
+"""
+
 import os
 import pickle
 import shutil

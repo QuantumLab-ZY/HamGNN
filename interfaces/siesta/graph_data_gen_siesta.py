@@ -1,11 +1,10 @@
-'''
-Descripttion: The scripts used to generate the input file graph_data.npz for HamNet.
-version: 0.1
-Author: Yang Zhong & Changwei Zhang
-Date: 2023-05-18 17:08:30 
-Last Modified by:   Changwei Zhang 
-Last Modified time: 2023-05-18 17:08:30 
-'''
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Build training graphs from SIESTA/HONPAS DFT folders (``graph_data.npz`` workflow).
+
+Reads ``HSX``/FDF via :mod:`read_siesta` and writes PyG-compatible graph tensors.
+"""
 
 import numpy as np
 import os

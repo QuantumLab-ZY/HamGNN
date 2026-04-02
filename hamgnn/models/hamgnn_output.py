@@ -1,3 +1,11 @@
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Hamiltonian and band-structure output layers, tensor products, and k-space utilities.
+
+Implements equivariant output heads (e.g. :class:`HamLayer`), structure handling
+via pymatgen, and scattering-based reductions for graph batches.
+"""
 
 import copy
 import math

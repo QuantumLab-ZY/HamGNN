@@ -1,11 +1,11 @@
-'''
-Descripttion: 
-version: 
-Author: Yang Zhong
-Date: 2024-08-24 14:22:19
-LastEditors: Yang Zhong
-LastEditTime: 2024-08-24 21:05:41
-'''
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Graph construction from atomic coordinates for ABACUS-linked HamGNN datasets.
+
+Defines radius tables, ASE neighbor lists, edge indexing (including inverse edges),
+and helpers to build PyTorch Geometric-style graphs aligned with DFT basis layouts.
+"""
 
 from __future__ import annotations
 

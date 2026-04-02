@@ -1,3 +1,12 @@
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Optimized ``e3nn`` tensor products and linear layers with external radial weights.
+
+Implements memory-tuned tensor products, KAN-backed pathways, and helpers shared by
+convolution and message-passing modules.
+"""
+
 from typing import Callable, Dict, List, Optional, Tuple
 
 import torch

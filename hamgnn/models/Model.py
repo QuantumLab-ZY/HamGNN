@@ -1,11 +1,11 @@
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""PyTorch Lightning training module wiring representation and output networks.
+
+Defines :class:`Model` with optimizers, losses, metrics, and distributed training hooks.
 """
-/*
- * @Author: Yang Zhong 
- * @Date: 2021-10-09 13:46:53 
- * @Last Modified by: Yang Zhong
- * @Last Modified time: 2021-10-29 21:09:02
- */
-"""
+
 import os
 import numpy as np
 import pandas as pd

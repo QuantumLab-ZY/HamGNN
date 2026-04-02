@@ -1,11 +1,11 @@
-'''
-Descripttion: The scripts used to generate the input file graph_data.npz for HamGNN.
-version: 0.1
-Author: Yang Zhong
-Date: 2022-11-24 19:07:54
-LastEditors: Yang Zhong
-LastEditTime: 2023-12-18 16:13:22
-'''
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Generate ``graph_data.npz`` / PyG-ready bundles from OpenMX postprocessed outputs.
+
+Reads overlap and Hamiltonian exports via the OpenMX toolchain and writes training graphs
+for HamGNN (config-driven via YAML).
+"""
 
 import json
 import numpy as np

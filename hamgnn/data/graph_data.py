@@ -1,11 +1,12 @@
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Graph datasets, LMDB storage, and PyTorch Lightning data interfaces for HamGNN.
+
+Provides :class:`LMDBGraphDataset`, graph collation, train/val/test splits, and
+loaders built on PyTorch Geometric :class:`~torch_geometric.data.Data`.
 """
-/*
- * @Author: Yang Zhong 
- * @Date: 2021-10-07 20:44:01 
- * @Last Modified by: Yang Zhong
- * @Last Modified time: 2021-10-29 16:24:33
- */
-"""
+
 import pytorch_lightning as pl
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader

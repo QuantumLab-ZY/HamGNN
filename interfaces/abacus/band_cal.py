@@ -1,11 +1,11 @@
-'''
-Descripttion: The script to calculat bands from the results of HamGNN
-version: 2.0
-Author: Yang Zhong
-Date: 2022-12-20 14:08:52
-LastEditors: Wenhai Lu
-LastEditTime: 2026-03-18 16:29:28
-'''
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Band-structure pipeline from HamGNN predictions for the ABACUS interface.
+
+Diagonalizes effective Hamiltonians along high-symmetry k-paths, applies
+orthogonalization/corrections, and exports band plots and related data.
+"""
 
 import os
 

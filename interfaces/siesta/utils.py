@@ -1,11 +1,10 @@
-'''
-Descripttion: 
-version: 
-Author: Yang Zhong
-Date: 2023-01-16 13:00:43
-LastEditors: Yang Zhong
-LastEditTime: 2023-01-16 14:53:37
-'''
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Shared utilities for the SIESTA/HONPAS interface: k-paths, units, and structure helpers.
+
+Used by graph generation and SIESTA input builders alongside :mod:`read_siesta`.
+"""
 
 from ase import Atoms
 import numpy as np

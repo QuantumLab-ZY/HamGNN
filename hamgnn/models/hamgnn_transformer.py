@@ -1,3 +1,11 @@
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Transformer-style E3-equivariant representation (:class:`HamGNNTransformer`) for HamGNN.
+
+Uses attention blocks alongside pair interactions and spherical edge attributes.
+"""
+
 import torch
 from e3nn import o3
 from easydict import EasyDict

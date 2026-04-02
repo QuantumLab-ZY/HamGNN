@@ -1,3 +1,12 @@
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Equivariant graph attention blocks and edge softmax aggregation for HamGNN.
+
+Implements attention over message-passing features with ``e3nn`` irreps, including
+:class:`AttentionAggregationV2` and related modules.
+"""
+
 import math
 from typing import Callable, Dict, List, Optional, Tuple
 

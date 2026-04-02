@@ -1,3 +1,12 @@
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""E3-equivariant convolution block (:class:`ConvBlockE3`) with tensor products and skips.
+
+Wraps message packing, radial networks, and optional KAN / gate nonlinearities for
+graph convolution on atomic data.
+"""
+
 from typing import Callable, Dict, List, Optional, Tuple
 
 import torch

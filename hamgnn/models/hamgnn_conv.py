@@ -1,3 +1,12 @@
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""E3-equivariant message-passing backbone (:class:`HamGNNConvE3`) for HamGNN.
+
+Stacks embedding, interaction, and atomwise blocks with NequIP-compatible
+atomic data and radial/spherical encodings.
+"""
+
 import torch
 from e3nn import o3
 from easydict import EasyDict
