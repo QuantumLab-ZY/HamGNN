@@ -1,11 +1,10 @@
-'''
-Descripttion: 
-version: 
-Author: Yang Zhong & ChangWei Zhang
-Date: 2023-01-16 13:00:43
-Last Modified by:   Yang Zhong
-Last Modified time: 2023-05-19 10:34:01 
-'''
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Shared utilities for the ABACUS interface: k-paths, units, STRU helpers, and I/O.
+
+Provides :class:`kpoints_generator` and small helpers used by band and graph pipelines.
+"""
 
 from ase import Atoms
 import numpy as np

@@ -1,9 +1,10 @@
-'''
-Author: Changwei Zhang 
-Date: 2023-05-23 22:38:22 
-Last Modified by:   Changwei Zhang 
-Last Modified time: 2023-05-23 22:38:22 
-'''
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Convert pymatgen/ASE structures to SIESTA ``.fdf`` input blocks and calculation presets.
+
+Embeds default PAO and k-point templates for the HONPAS/SIESTA HamGNN pipeline.
+"""
 
 from pymatgen.core.structure import Structure
 from pymatgen.core.periodic_table import Element

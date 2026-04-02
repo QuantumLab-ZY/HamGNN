@@ -1,11 +1,10 @@
-'''
-Descripttion: Script for converting poscar to openmx input file
-version: 0.1
-Author: Yang Zhong
-Date: 2022-11-24 19:03:36
-LastEditors: Yang Zhong
-LastEditTime: 2023-07-18 03:24:04
-'''
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Convert POSCAR/CIF structures to OpenMX input decks using shared PAO/pseudopotential tables.
+
+Entry point is YAML-configured; delegates formatting to :mod:`interfaces.openmx.utils`.
+"""
 
 from pymatgen.core.structure import Structure
 import glob

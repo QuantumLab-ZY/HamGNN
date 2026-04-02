@@ -1,3 +1,12 @@
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Message packing and equivariant linear/tensor pathways between node and edge features.
+
+Defines :class:`MessagePackBlock` and related building blocks for radially weighted
+tensor products in HamGNN layers.
+"""
+
 from typing import Callable, Dict, List, Optional, Tuple
 
 import torch

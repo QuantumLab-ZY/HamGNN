@@ -1,3 +1,12 @@
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Helpers to split and merge E3 irreps across equivariant attention heads.
+
+Provides :class:`VectorToAttentionHeads` and :class:`AttentionHeadsToVector` for
+multi-head layouts compatible with ``e3nn`` irreps.
+"""
+
 import torch
 from e3nn import o3
 from e3nn.util.jit import compile_mode

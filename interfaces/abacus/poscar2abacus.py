@@ -1,9 +1,10 @@
-'''
-Author: Changwei Zhang 
-Date: 2023-05-20 15:32:19 
-Last Modified by:   Changwei Zhang 
-Last Modified time: 2023-05-20 15:32:19 
-'''
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Convert POSCAR / pymatgen structures into ABACUS STRU and input snippets.
+
+Maps pseudopotentials and orbital templates for ONCV PBE setups used in the workflow.
+"""
 
 import glob
 from pymatgen.core.structure import Structure

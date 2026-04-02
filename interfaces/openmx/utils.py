@@ -1,11 +1,10 @@
-'''
-Descripttion: 
-version: 
-Author: Yang Zhong
-Date: 2023-01-16 13:00:43
-LastEditors: Yang Zhong
-LastEditTime: 2023-12-30 11:28:31
-'''
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Shared utilities for the OpenMX interface: structures, k-paths, PAO metadata, and I/O.
+
+Helpers to emit OpenMX input decks from ASE/pymatgen and to support graph and band pipelines.
+"""
 
 from ase import Atoms
 import numpy as np

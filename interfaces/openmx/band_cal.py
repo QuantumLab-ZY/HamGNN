@@ -1,11 +1,10 @@
-'''
-Descripttion: The script to calculat bands from the results of HamGNN
-version: 1.0
-Author: Yang Zhong
-Date: 2022-12-20 14:08:52
-LastEditors: Yang Zhong
-LastEditTime: 2024-08-06 10:53:04
-'''
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Band-structure calculation from HamGNN outputs using OpenMX-style Hamiltonian data.
+
+Loads YAML config, builds k-paths with pymatgen, and diagonalizes effective Hamiltonians.
+"""
 
 import numpy as np
 from scipy.linalg import eigh

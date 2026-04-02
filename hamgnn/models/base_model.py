@@ -1,11 +1,13 @@
-'''
-Descripttion: 
-version: 
-Author: Yang Zhong
-Date: 2024-08-24 14:22:19
-LastEditors: Yang Zhong
-LastEditTime: 2024-11-28 22:14:26
-'''
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Base neural-network module and graph construction utilities for HamGNN.
+
+Provides :class:`BaseModel` (abstract ``forward``; batch graph generation from
+structures), atomic-radius tables aligned with DFT codes (OpenMX, ABACUS),
+ASE-based neighbor lists with periodic boundary conditions, and helpers to align
+recomputed edges with pre-existing edge data via column matching.
+"""
 
 from __future__ import annotations
 

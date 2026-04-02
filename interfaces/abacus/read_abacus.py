@@ -1,11 +1,12 @@
-'''
-Descripttion: 
-version: 
-Author: ChangWei Zhang & Yang Zhong
-Date: 2023-01-16 13:00:43
-Last Modified by:   Yang Zhong
-Last Modified time: 2025-02-6 10:34:01 
-'''
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""Parsers for ABACUS inputs, STRU, and sparse Hamiltonian / overlap CSR exports.
+
+Loads SCF metadata, orbital indexing, and matrix elements for graph-data generation
+and downstream HamGNN targets.
+"""
+
 import numpy as np
 from copy import deepcopy
 import json

@@ -1,11 +1,8 @@
-"""
-/*
- * @Author: Yang Zhong 
- * @Date: 2021-10-12 23:42:11 
- * @Last Modified by: Yang Zhong
- * @Last Modified time: 2021-11-07 19:15:27
- */
- """
+# Copyright (c) 2021-2026 HamGNN Team
+# SPDX-License-Identifier: GPL-3.0-only
+
+"""CLI entry point: load configuration and run training or inference."""
+
 import os
 import socket
 import argparse
