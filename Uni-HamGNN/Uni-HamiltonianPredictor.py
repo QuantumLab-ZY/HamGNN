@@ -1,11 +1,8 @@
 import os
-import shutil
 import sys
 import numpy as np
 import torch
-import pytorch_lightning as pl
 from easydict import EasyDict
-from ase.units import Bohr
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 import yaml
@@ -14,7 +11,6 @@ import pickle
 from typing import Tuple, List, Optional
 import yaml
 import argparse
-import hamgnn
 from hamgnn.models.hamgnn_conv import HamGNNConvE3
 from hamgnn.models.hamgnn_output import HamGNNPlusPlusOut
 from hamgnn.main import Model
@@ -366,7 +362,7 @@ def predict_and_save_hamiltonian(
     predictor = load_model_predictor(model_pkl_path, device=device)
     _patch_legacy_attributes(predictor)
 
-    if soc_data_dir is None:
+    if soc_data_dir == '':
         print("Warning: soc_data_dir is None. Forcing soc_enabled to False.")
         predictor.soc_enabled = False
 
