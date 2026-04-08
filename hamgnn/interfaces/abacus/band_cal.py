@@ -30,7 +30,7 @@ from pymatgen.core.structure import Structure
 from pymatgen.symmetry.kpath import KPathSeek
 from scipy.linalg import cholesky, eigh, solve_triangular
 
-from utils import (
+from .utils import (
     au2ang,
     au2ev,
     basis_def_13_abacus,

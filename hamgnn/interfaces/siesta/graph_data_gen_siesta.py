@@ -15,7 +15,7 @@ from tqdm import tqdm
 import multiprocessing
 from pymatgen.core.periodic_table import Element
 from read_siesta import FDF, HSX
-from utils import *
+from .utils import *
 
 ################################ Input parameters begin ####################
 nao_max = 13

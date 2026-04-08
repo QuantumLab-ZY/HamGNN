@@ -18,9 +18,10 @@ import natsort
 from tqdm import tqdm
 import re
 from pymatgen.core.periodic_table import Element
-from interfaces.openmx.utils import *
 import argparse
 import yaml
+
+from .utils import *
 
 def main():
     parser = argparse.ArgumentParser(description='graph data generation')

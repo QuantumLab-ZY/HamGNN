@@ -12,10 +12,10 @@ from pymatgen.core.structure import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
 import os
 import natsort
-from interfaces.openmx.utils import *
 import argparse
 import yaml
 
+from .utils import *
 
 def main():
     parser = argparse.ArgumentParser(description='openmx dat file generation')
