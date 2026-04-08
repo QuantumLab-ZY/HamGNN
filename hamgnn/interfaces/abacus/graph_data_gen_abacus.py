@@ -20,7 +20,7 @@ from functools import lru_cache
 import argparse
 from read_abacus import STRU, ABACUSHS, read_abacus_input, get_neutral_electrons, calculate_doping_charge
 from build_graph_from_coordinates import build_graph, compute_graph_difference, find_inverse_edge_index
-from utils import *
+from .utils import *
 
 ################################ Input Parameters ##############################
 # Maximum number of atomic orbitals (basis set size)

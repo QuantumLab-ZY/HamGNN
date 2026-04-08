@@ -25,9 +25,10 @@ setup(
     entry_points={
         "console_scripts": [
             "HamGNN2.0 = hamgnn.main:HamGNN",
-            "band_cal = interfaces.openmx.band_cal:main",
-            "graph_data_gen = interfaces.openmx.graph_data_gen:main",
-            "poscar2openmx = interfaces.openmx.poscar2openmx:main"
+            "band_cal = hamgnn.interfaces.openmx.band_cal:main",
+            "graph_data_gen = hamgnn.interfaces.openmx.graph_data_gen:main",
+            "poscar2openmx = hamgnn.interfaces.openmx.poscar2openmx:main",
+            "npz_to_lmdb = hamgnn.tools.npz_to_lmdb:main"
         ]
     },
     install_requires=[
