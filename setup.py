@@ -25,9 +25,9 @@ setup(
     entry_points={
         "console_scripts": [
             "HamGNN2.0 = hamgnn.main:HamGNN",
-            "band_cal = interfaces.openmx.band_cal:main",
-            "graph_data_gen = interfaces.openmx.graph_data_gen:main",
-            "poscar2openmx = interfaces.openmx.poscar2openmx:main"
+            "band_cal = DFT_interfaces.openmx.band_cal:main",
+            "graph_data_gen = DFT_interfaces.openmx.graph_data_gen:main",
+            "poscar2openmx = DFT_interfaces.openmx.poscar2openmx:main"
         ]
     },
     install_requires=[

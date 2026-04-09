@@ -18,7 +18,7 @@ import natsort
 from tqdm import tqdm
 import re
 from pymatgen.core.periodic_table import Element
-from interfaces.openmx.utils import *
+from DFT_interfaces.openmx.utils import *
 import argparse
 import yaml
 

@@ -3,7 +3,7 @@
 
 """Convert POSCAR/CIF structures to OpenMX input decks using shared PAO/pseudopotential tables.
 
-Entry point is YAML-configured; delegates formatting to :mod:`interfaces.openmx.utils`.
+Entry point is YAML-configured; delegates formatting to :mod:`DFT_interfaces.openmx.utils`.
 """
 
 from pymatgen.core.structure import Structure
@@ -12,7 +12,7 @@ from pymatgen.core.structure import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
 import os
 import natsort
-from interfaces.openmx.utils import *
+from DFT_interfaces.openmx.utils import *
 import argparse
 import yaml
 
