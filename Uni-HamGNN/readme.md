@@ -272,7 +272,7 @@ soc_switch: True # True for SOC, False for non-SOC Hamiltonian
 
 ### Running Predictions
 
-1. Download the pre-trained network weights from [Zenodo](https://zenodo.org/records/15568557)
+1. Download the pre-trained network weights from [Zenodo](https://zenodo.org/records/17239078)
 
 2. Configure `Input.yaml`:
    ```yaml
