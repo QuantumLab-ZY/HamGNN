@@ -132,4 +132,3 @@ setup:
   precision: 32
   property: hamiltonian
   stage: fit # fit: training; test: inference
-  use_gradient_checkpointing: False # Enable gradient checkpointing to reduce memory usage
