@@ -76,6 +76,7 @@ The HamGNN framework recommends Python 3.9 and depends on the following key Pyth
 - `tqdm`
 - `scipy == 1.7.3`
 - `yaml`
+- `lmdb` (**required for HamGNN v2.1+**, used for LMDB dataset format support)
 
 ### Third-party DFT Tool Support
 #### OpenMX
@@ -104,7 +105,13 @@ After modifying the `makefile`, execute `make` to generate the executable progra
 ### Step One: Install Conda Environment
 To avoid library version conflicts, it is recommended to use one of the following two methods:
 
-#### Method 1: Use Pre-built Environment (Recommended)
+> **⚠️ Note for HamGNN v2.1+ Users:** Starting from v2.1, HamGNN requires the `lmdb` library for LMDB dataset format support (enables faster I/O for large datasets). If you are using **Method 1** (pre-built environment), you must install `lmdb` manually after activating the environment:
+> ```bash
+> pip install lmdb
+> ```
+> If you use **Method 2** (YAML configuration file), `lmdb` will be installed automatically.
+
+#### Method 1: Use Pre-built Environment
 1. Download the pre-built HamGNN Conda environment (`ML.tar.gz`) from [Zenodo](https://zenodo.org/records/11064223)
 2. Extract it to the `envs` folder in your Conda installation directory:
    ```bash
@@ -310,14 +317,15 @@ Below are descriptions of key configuration items in `config.yaml`:
    output_nets:
      output_module: HamGNN_out
      HamGNN_out:
+       ham_only: true  # true: Only Hamiltonian H; false: fit both H and S
        ham_type: openmx  # Type of Hamiltonian to fit: openmx or abacus
        nao_max: 19  # Maximum atomic orbital number (14/19/26 for openmx)
        add_H0: true  # Whether to add non-self-consistent Hamiltonian
        symmetrize: true  # Whether to apply Hermitian constraints to Hamiltonian
        calculate_band_energy: false  # Whether to calculate bands (set to true for secondary training)
+       num_k: 5  # Number of k-points used for band calculation
        #soc_switch: false  # Whether to fit SOC Hamiltonian
        # Parameters used in secondary training
-       #num_k: 4  # Number of k-points used for band calculation
        #band_num_control: 8  # Number of orbitals considered in band calculation
        #k_path: null # Generate random k-points
    ```
@@ -456,34 +464,49 @@ This section provides detailed explanations of the parameter modules and paramet
 ### setup (Basic Settings)
 | Parameter | Type | Description | Default/Recommended Value |
 |-----|-----|------|-------------|
-| `GNN_Net` | string | Type of GNN network to use | `HamGNN_pre` for normal Hamiltonian fitting, `HamGNN_pre_charge` for charged defect Hamiltonian fitting |
+| `GNN_Net` | string | Type of GNN network to use | `HamGNN_pre` (or `HamGNNpre`) for normal Hamiltonian fitting, `HamGNN_pre_charge` for charged defect Hamiltonian fitting, `HamGNNTransformer` for transformer-based model |
 | `accelerator` | null or string | Accelerator type | `null` |
 | `ignore_warnings` | boolean | Whether to ignore warnings | `true` |
-| `checkpoint_path` | string | Checkpoint path for resuming training or for testing | No default value, must be set manually |
+| `checkpoint_path` | string | Checkpoint path for resuming training or for testing | `'./'` (no default checkpoint) |
 | `load_from_checkpoint` | boolean | Whether to load model parameters from checkpoint | `false` (for new training), `true` (when loading pre-trained model) |
 | `resume` | boolean | Whether to continue training from last interruption | `false` (for new training), `true` (to continue training) |
-| `num_gpus` | null, integer, or list | Number or ID of GPUs to use | `null` (CPU), `[0]` (use first GPU) |
+| `num_gpus` | null, integer, or list | Number or ID of GPUs to use | `1` (first GPU), `null` for CPU |
 | `precision` | integer | Computation precision | `32` (32-bit precision), optional `64` (64-bit precision) |
-| `property` | string | Type of physical quantity output by the network | `Hamiltonian` (Hamiltonian) |
+| `property` | string | Type of physical quantity output by the network | `hamiltonian` |
 | `stage` | string | Execution stage | `fit` (training), `test` (testing/prediction) |
+| `hostname` | string | Host identifier (auto-detected) | Auto-detected system hostname |
+| `job_id` | string | Job identifier for tracking | Auto-generated (e.g., `time_2025`) |
+
+### profiler_params (Profiler Parameters)
+| Parameter | Type | Description | Default/Recommended Value |
+|-----|-----|------|-------------|
+| `train_dir` | string | Training output directory (tensorboard logs, checkpoints) | `'./'` (current directory) |
+| `progress_bar_refresh_rat` | integer | Progress bar refresh rate | `1` |
 
 ### dataset_params (Dataset Parameters)
 | Parameter | Type | Description | Default/Recommended Value |
 |-----|-----|------|-------------|
 | `batch_size` | integer | Number of samples processed per batch | `1` (typically kept at 1) |
-| `test_ratio` | float | Proportion of test set in the entire dataset | `0.1` (10%) |
-| `train_ratio` | float | Proportion of training set in the entire dataset | `0.8` (80%) |
-| `val_ratio` | float | Proportion of validation set in the entire dataset | `0.1` (10%) |
+| `test_ratio` | float | Proportion of test set in the entire dataset | `0.2` (20%) |
+| `train_ratio` | float | Proportion of training set in the entire dataset | `0.6` (60%) |
+| `val_ratio` | float | Proportion of validation set in the entire dataset | `0.2` (20%) |
+| `split_file` | string or null | Path to save/load pre-defined dataset split indices | `None` (auto-split based on ratios) |
 | `graph_data_path` | string | Directory of processed compressed graph data files | No default value, must be set manually |
+| `num_workers` | integer | Number of parallel DataLoader worker processes | `4` |
+| `preload` | integer | Number of graphs to preload into memory on startup | `0` (load on demand) |
+| `data_format` | string | Input data format: `'auto'`, `'lmdb'` (LMDB format), or `'npz'` (NPZ format) | `'auto'` (auto-detect based on file extension) |
+| `test_mode` | boolean | Use entire dataset as test set (skip train/val split) | `false` |
+
+> **Note on `data_format`**: For large-scale datasets, using LMDB format (`data_format: lmdb`) with `npz_to_lmdb.py` conversion provides significantly faster I/O compared to NPZ format.
 
 ### losses_metrics (Loss Functions and Evaluation Metrics)
 | Parameter | Type | Description | Default/Recommended Value |
 |-----|-----|------|-------------|
 | `losses` | list | List of loss function definitions | Must include at least Hamiltonian loss |
 | `losses[].loss_weight` | float | Loss function weight | `27.211` (Hamiltonian), `0.27211` (band energy) |
-| `losses[].metric` | string | Loss calculation method | `mae` (mean absolute error), optional `mse` (mean squared error) or `rmse` (root mean squared error) |
-| `losses[].prediction` | string | Prediction output | `Hamiltonian` or `band_energy` |
-| `losses[].target` | string | Target data | `hamiltonian` or `band_energy` |
+| `losses[].metric` | string | Loss calculation method | `mae` (mean absolute error), optional `mse` (mean squared error), `rmse` (root mean squared error), `cosine_similarity`, `sum_zero`, or `euclidean_loss` |
+| `losses[].prediction` | string | Prediction output | `hamiltonian`, `band_energy`, or other task-specific targets |
+| `losses[].target` | string | Target data | `hamiltonian`, `band_energy`, `band_gap`, `overlap`, `peak`, `hamiltonian_imag`, or `wavefunction` |
 | `metrics` | list | List of evaluation metric definitions | Usually the same as losses |
 
 ### optim_params (Optimizer Parameters)
@@ -491,34 +514,47 @@ This section provides detailed explanations of the parameter modules and paramet
 |-----|-----|------|-------------|
 | `lr` | float | Learning rate | `0.01` (primary training), `0.0001` (secondary training) |
 | `lr_decay` | float | Learning rate decay factor | `0.5` |
-| `lr_patience` | integer | Number of epochs to wait before triggering learning rate decay | `4` |
+| `lr_patience` | integer | Number of epochs to wait before triggering learning rate decay | `5` |
 | `gradient_clip_val` | float | Gradient clipping value | `0.0` (no clipping) |
 | `max_epochs` | integer | Maximum number of training epochs | `3000` |
-| `min_epochs` | integer | Minimum number of training epochs | `30` |
-| `stop_patience` | integer | Number of epochs to wait for early stopping | `10` |
+| `min_epochs` | integer | Minimum number of training epochs before early stopping can trigger | `100` |
+| `stop_patience` | integer | Number of epochs to wait for early stopping | `30` |
 
 ### output_nets.HamGNN_out (Output Network Parameters)
 | Parameter | Type | Description | Default/Recommended Value |
 |-----|-----|------|-------------|
-| `ham_type` | string | Type of Hamiltonian to fit | `openmx` (OpenMX Hamiltonian), `abacus` (ABACUS Hamiltonian) |
+| `ham_type` | string | Type of Hamiltonian to fit | `openmx` (OpenMX Hamiltonian), `abacus` (ABACUS Hamiltonian), `siesta` (SIESTA/HONPAS), or `pasp` |
 | `nao_max` | integer | Maximum number of atomic orbitals | `14` (short-period elements), `19` (common elements), `26` (all elements supported by OpenMX); for ABACUS, `27` or `40` are options |
 | `add_H0` | boolean | Whether to add predicted H_scf to H_nonscf | `true` |
+| `add_H_nonsoc` | boolean | Add non-SOC Hamiltonian (for SOC-coupled systems) | `false` |
 | `symmetrize` | boolean | Whether to apply Hermitian constraints to Hamiltonian | `true` |
 | `calculate_band_energy` | boolean | Whether to calculate bands for band training | `false` (primary training), `true` (secondary training) |
-| `num_k` | integer | Number of k-points used for band calculation | `4` |
+| `num_k` | integer | Number of k-points used for band calculation | `5` |
 | `band_num_control` | integer, dictionary, or null | Controls the number of orbitals considered in band calculation | `8` (VBM±8 bands), `dict` (specifies basis number for each atom type), `null` (all bands) |
+| `k_path` | list, string, or null | k-space path for band structure calculation; `auto` = auto-generate based on crystal symmetry | `null` (generate random k-points) |
 | `soc_switch` | boolean | Whether to fit SOC Hamiltonian | `false` |
-| `nonlinearity_type` | string | Type of non-linear activation function | `gate` |
+| `soc_basis` | string | SOC basis type | `'so3'` (SO(3)), `'su2'` (SU(2)) |
+| `nonlinearity_type` | string | Type of non-linear activation function | `gate` (gated nonlinearity) or `norm` (norm-based) |
 | `zero_point_shift` | boolean | Whether to apply zero-point potential correction to Hamiltonian matrix | `true` |
 | `spin_constrained` | boolean | Whether to constrain spin | `false` |
 | `collinear_spin` | boolean | Whether it is collinear spin | `false` |
 | `minMagneticMoment` | float | Minimum magnetic moment | `0.5` |
+| `ham_only` | boolean | When `true`, only compute Hamiltonian H; when `false`, fit both H and overlap S | `true` |
+| `include_triplet` | boolean | Include triplet interaction terms in output | `false` |
+| `export_reciprocal_values` | boolean | Export reciprocal space values during forward pass | `false` |
+| `use_learned_weight` | boolean | Use learned weight factors in the output | `true` |
+| `get_nonzero_mask_tensor` | boolean | Compute nonzero element mask tensor for sparse Hamiltonian | `false` |
+| `return_forces` | boolean | Compute atomic forces during forward pass | `false` |
+| `create_graph` | boolean | Create computational graph for backprop (required for force derivatives) | `false` |
+| `calculate_sparsity` | boolean | Calculate sparsity ratio for loss correction | `true` |
 
 ### representation_nets.HamGNN_pre (Representation Network Parameters)
 | Parameter | Type | Description | Default/Recommended Value |
 |-----|-----|------|-------------|
 | `cutoff` | float | Cutoff radius for interatomic distances | `26.0` |
 | `cutoff_func` | string | Type of distance cutoff function | `cos` (cosine function), optional `pol` (polynomial function) |
+| `radius_type` | string | Atomic radius table source | `'openmx'` (OpenMX radii) or `'abacus'` (ABACUS radii) |
+| `radius_scale` | float | Radius scaling factor | `1.01` |
 | `edge_sh_normalization` | string | Normalization method for edge spherical harmonics | `component` |
 | `edge_sh_normalize` | boolean | Whether to normalize edge spherical harmonics | `true` |
 | `irreps_edge_sh` | string | Spherical harmonic representation of edges | `0e + 1o + 2e + 3o + 4e + 5o` |
@@ -526,15 +562,19 @@ This section provides detailed explanations of the parameter modules and paramet
 | `num_layers` | integer | Number of interaction or orbital convolution layers | `3` |
 | `num_radial` | integer | Number of Bessel bases | `64` |
 | `num_types` | integer | Maximum number of atom types | `96` |
-| `rbf_func` | string | Type of radial basis function | `bessel` |
+| `rbf_func` | string | Type of radial basis function | `bessel` (also supports `gaussian`, `exp-gaussian`, `exp-bernstein`, `bernstein`) |
 | `set_features` | boolean | Whether to set features | `true` |
 | `radial_MLP` | list | Hidden layer sizes of the radial multilayer perceptron | `[64, 64]` |
 | `use_corr_prod` | boolean | Whether to use correlation product | `false` |
 | `correlation` | integer | Correlation parameter | `2` |
 | `num_hidden_features` | integer | Number of hidden features | `16` |
-| `use_kan` | boolean | Whether to use KAN activation function | `false` |
-| `radius_scale` | float | Radius scaling factor | `1.01` |
-| `build_internal_graph` | boolean | Whether to build internal graph | `false` |
+| `use_kan` | boolean | Whether to use KAN (Kolmogorov-Arnold Network) activation function | `false` |
+| `build_internal_graph` | boolean | Whether to build internal neighbor graph | `false` |
+| `legacy_edge_update` | boolean | Legacy edge update behavior (for old checkpoint compatibility only) | `false` |
+| `lite_mode` | boolean | Minimal parameter mode for faster inference (reduces parameter count) | `false` |
+| `apply_charge_doping` | boolean | Enable charge doping atom embedding for charged defect systems | `false` |
+| `num_charge_attr_feas` | integer | Number of charge attribution Gaussian features (only used if `apply_charge_doping=True`) | `8` |
+| `use_gradient_checkpointing` | boolean | Enable gradient checkpointing to reduce memory usage during training | `false` |
 
 ### Parameter Adjustment Recommendations
 1. **Initial Configuration**:
