@@ -119,6 +119,7 @@ representation_nets:
     use_kan: False
     radius_scale: 1.01
     build_internal_graph: False
+    use_gradient_checkpointing: False
 
 setup:
   GNN_Net: HamGNNpre
@@ -131,3 +132,4 @@ setup:
   precision: 32
   property: hamiltonian
   stage: fit # fit: training; test: inference
+  use_gradient_checkpointing: False # Enable gradient checkpointing to reduce memory usage
