@@ -15,6 +15,7 @@ import torch.nn as nn
 import numpy as np
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.plugins.training_type import DDPPlugin
 import pprint
 
 from .data.graph_data import graph_data_module
@@ -308,13 +309,17 @@ def setup_trainer(config, callbacks):
         'min_epochs': config.optim_params.min_epochs,
     }
 
-    if accelerator:
-        trainer_params['accelerator'] = accelerator
-    
+    if accelerator == 'ddp':
+        # Resolve DDP + gradient checkpointing incompatibility on multi-GPU runs.
+        # https://pytorch.org/docs/stable/notes/ddp.html#ddp-internal
+        trainer_params['strategy'] = DDPPlugin(static_graph=True)
+    elif accelerator:
+        trainer_params['strategy'] = accelerator
+
     # Add checkpoint path if resuming training
     if config.setup.resume and config.setup.checkpoint_path:
         trainer_params['resume_from_checkpoint'] = config.setup.checkpoint_path
-    
+
     # Create the trainer with the configured parameters
     trainer = pl.Trainer(**trainer_params)
     
