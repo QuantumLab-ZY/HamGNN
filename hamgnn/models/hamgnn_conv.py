@@ -72,7 +72,7 @@ class LayerCheckpointModule(torch.nn.Module):
         edge = edge_feats.clone()
 
         work = {
-            **graph,
+            **graph.to_dict(),
             AtomicDataDict.NODE_FEATURES_KEY: node,
             AtomicDataDict.EDGE_FEATURES_KEY: edge,
         }
