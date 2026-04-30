@@ -34,6 +34,7 @@ config_default_setup['job_id'] = 'time_2025'
 config_default_setup['precision'] = 32
 config_default_setup['property'] = 'hamiltonian'
 config_default_setup['stage'] = 'fit'
+config_default_setup['use_gradient_checkpointing'] = False
 config_default['setup'] = config_default_setup
 
 """The parameters for profiler"""
@@ -64,6 +65,7 @@ config_default_representation_nets['HamGNN_pre']['num_hidden_features'] = 16
 config_default_representation_nets['HamGNN_pre']['use_kan'] = False
 config_default_representation_nets['HamGNN_pre']['radius_scale'] = 1.01
 config_default_representation_nets['HamGNN_pre']['build_internal_graph'] = False
+config_default_representation_nets['HamGNN_pre']['use_gradient_checkpointing'] = False
 config_default['representation_nets'] = config_default_representation_nets
 
 """The parameters for output_nets"""

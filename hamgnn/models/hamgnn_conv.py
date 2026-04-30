@@ -8,8 +8,10 @@ atomic data and radial/spherical encodings.
 """
 
 import torch
+from torch.utils.checkpoint import checkpoint
 from e3nn import o3
 from easydict import EasyDict
+from typing import Optional, Dict
 
 from .base_model import BaseModel
 
@@ -35,6 +37,54 @@ from ..utils.cutoff_functions import CosineCutoff, cuttoff_envelope
 from ..utils.math_utils import upgrade_tensor_precision
 
 
+class LayerCheckpointModule(torch.nn.Module):
+    """Wraps per-layer blocks for gradient checkpointing with safe tensor cloning.
+
+    All three blocks (ConvBlockE3, CorrProductBlock, PairInteractionBlock) mutate
+    the graph dict in-place (e.g., data[NODE_FEATURES_KEY] = output_features).
+    This causes incorrect gradients when wrapped naively with checkpoint() because
+    checkpoint saves tensor storage and in-place ops corrupt the saved values.
+
+    Solution: Clone input tensors before creating a working dict, so checkpointed
+    backward pass reconstructs from clean copies.
+    """
+    def __init__(
+        self,
+        conv: torch.nn.Module,
+        corr: Optional[torch.nn.Module],
+        pair: torch.nn.Module,
+        use_corr_prod: bool,
+    ):
+        super().__init__()
+        self.conv = conv
+        self.corr = corr
+        self.pair = pair
+        self.use_corr_prod = use_corr_prod
+
+    def forward(
+        self,
+        node_feats: torch.Tensor,
+        edge_feats: torch.Tensor,
+        graph: Dict[str, torch.Tensor],
+    ):
+        # CRITICAL: Clone to avoid corrupting checkpoint-saved tensor storage
+        node = node_feats.clone()
+        edge = edge_feats.clone()
+
+        work = {
+            **graph,
+            AtomicDataDict.NODE_FEATURES_KEY: node,
+            AtomicDataDict.EDGE_FEATURES_KEY: edge,
+        }
+
+        self.conv(work)
+        if self.use_corr_prod and self.corr is not None:
+            self.corr(work)
+        self.pair(work)
+
+        return work[AtomicDataDict.NODE_FEATURES_KEY], work[AtomicDataDict.EDGE_FEATURES_KEY]
+
+
 class HamGNNConvE3(BaseModel):
     def __init__(self, config):
         if 'radius_scale' not in config.HamGNN_pre:
@@ -56,6 +106,8 @@ class HamGNNConvE3(BaseModel):
             self.use_corr_prod = False
         else:
             self.use_corr_prod = config.HamGNN_pre.use_corr_prod
+
+        self.use_gradient_checkpointing = getattr(config.HamGNN_pre, 'use_gradient_checkpointing', False)
 
         # Legacy edge update
         self.legacy_edge_update = getattr(
@@ -181,6 +233,18 @@ class HamGNNConvE3(BaseModel):
                                                     lite_mode=self.lite_mode)
             self.pair_interactions.append(pair_interaction)
 
+        # Gradient checkpointing layer wrappers
+        if self.use_gradient_checkpointing:
+            self.layer_checkpoints = torch.nn.ModuleList()
+            for i in range(self.num_layers):
+                layer_chkpt = LayerCheckpointModule(
+                    conv=self.convolutions[i],
+                    corr=self.corr_products[i] if self.use_corr_prod else None,
+                    pair=self.pair_interactions[i],
+                    use_corr_prod=self.use_corr_prod,
+                )
+                self.layer_checkpoints.append(layer_chkpt)
+
     def forward(self, data):
         if torch.get_default_dtype() == torch.float64:
             upgrade_tensor_precision(data)
@@ -197,10 +261,18 @@ class HamGNNConvE3(BaseModel):
         self.chemical_embedding(graph)
         # Orbital convolution
         for i in range(self.num_layers):
-            self.convolutions[i](graph)
-            if self.use_corr_prod:
-                self.corr_products[i](graph)
-            self.pair_interactions[i](graph)
+            if self.use_gradient_checkpointing:
+                node_feats = graph[AtomicDataDict.NODE_FEATURES_KEY]
+                edge_feats = graph[AtomicDataDict.EDGE_FEATURES_KEY]
+                new_node, new_edge = checkpoint(  # pyright: ignore[reportGeneralTypeIssues]
+                    self.layer_checkpoints[i], node_feats, edge_feats, graph, use_reentrant=True)
+                graph[AtomicDataDict.NODE_FEATURES_KEY] = new_node
+                graph[AtomicDataDict.EDGE_FEATURES_KEY] = new_edge
+            else:
+                self.convolutions[i](graph)
+                if self.use_corr_prod:
+                    self.corr_products[i](graph)
+                self.pair_interactions[i](graph)
 
         graph_representation = EasyDict()
         graph_representation['node_attr'] = graph[AtomicDataDict.NODE_FEATURES_KEY]
