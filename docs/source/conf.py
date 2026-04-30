@@ -74,7 +74,7 @@ html_sourcelink_suffix = ''
 html_context = {
     "display_github": True,
     "github_user": "bud-primordium",
-    "github_repo": "HamGNN_2_1_temp",
+    "github_repo": "HamGNN",
     "github_version": "main",
     "conf_py_path": "/docs/",
 }

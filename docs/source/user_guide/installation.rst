@@ -17,6 +17,7 @@ HamGNN framework recommends using Python 3.9 and depends on the following key Py
 - ``tqdm``
 - ``scipy == 1.7.3``
 - ``yaml``
+- ``lmdb`` (**required for HamGNN v2.1+**, used for LMDB dataset format support)
 
 Third-party DFT Tool Support
 ============================
@@ -49,7 +50,7 @@ To install ``openmx_postprocess``:
 
 1. First, install the `GSL <https://www.gnu.org/software/gsl/>`_ library.
 2. Modify the ``makefile`` in the ``openmx_postprocess`` directory:
-   
+
    - Set ``GSL_lib`` to the path of the GSL library.
    - Set ``GSL_include`` to the include path of GSL.
    - Set ``MKLROOT`` to the Intel MKL path.
@@ -81,14 +82,24 @@ Method 1: Using Pre-built Environment (Recommended)
 
       conda activate ML
 
+   .. note::
+      **For HamGNN v2.1+ Users:** Starting from v2.1, HamGNN requires the ``lmdb`` library for LMDB dataset format support (enables faster I/O for large datasets). The pre-built environment from Zenodo may not include it. Install it manually after activating:
+
+      .. code-block:: bash
+
+         pip install lmdb
+
 Method 2: Create Environment Using Configuration File
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 1. Create an environment using the YAML configuration file provided by HamGNN:
 
    .. code-block:: bash
 
-      conda env create -f ./HamGNN.yml
+      conda env create -f ./HamGNN.yaml
+
+   .. note::
+      ``lmdb`` will be installed automatically when using Method 2.
 
 2. Install additional PyTorch Geometric dependencies (versions must match PyTorch):
 
@@ -112,7 +123,7 @@ Step Two: Source Installation of HamGNN
 
    .. code-block:: bash
 
-      cd hamgnn
+      cd HamGNN
       python setup.py install
 
 3. Verify successful installation:

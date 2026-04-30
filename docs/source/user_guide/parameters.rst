@@ -18,7 +18,7 @@ setup (Basic Settings)
    * - ``GNN_Net``
      - String
      - Type of GNN network used
-     - ``HamGNN_pre`` for normal Hamiltonian fitting, ``HamGNN_pre_charge`` for charged defect Hamiltonian fitting
+     - ``HamGNN_pre`` (or ``HamGNNpre``) for normal Hamiltonian fitting, ``HamGNN_pre_charge`` for charged defect Hamiltonian fitting, ``HamGNNTransformer`` for transformer-based model
    * - ``accelerator``
      - null or String
      - Accelerator type
@@ -30,7 +30,7 @@ setup (Basic Settings)
    * - ``checkpoint_path``
      - String
      - Checkpoint path for resuming training or path used during testing
-     - No default value, must be manually set
+     - ``'./'`` (no default checkpoint)
    * - ``load_from_checkpoint``
      - Boolean
      - Whether to load model parameters from checkpoint
@@ -42,7 +42,7 @@ setup (Basic Settings)
    * - ``num_gpus``
      - null, Integer, or List
      - Number or ID of GPUs to use
-     - ``null`` (CPU), ``[0]`` (use first GPU)
+     - ``1`` (first GPU), ``null`` for CPU
    * - ``precision``
      - Integer
      - Computation precision
@@ -50,11 +50,39 @@ setup (Basic Settings)
    * - ``property``
      - String
      - Type of physical quantity output by the network
-     - ``Hamiltonian`` (Hamiltonian)
+     - ``hamiltonian``
    * - ``stage``
      - String
      - Execution stage
      - ``fit`` (training), ``test`` (testing/prediction)
+   * - ``hostname``
+     - String
+     - Host identifier (auto-detected)
+     - Auto-detected system hostname
+   * - ``job_id``
+     - String
+     - Job identifier for tracking
+     - Auto-generated (e.g., ``time_2025``)
+
+profiler_params (Profiler Parameters)
+--------------------------------------
+
+.. list-table::
+   :widths: 20 15 50 15
+   :header-rows: 1
+
+   * - Parameter
+     - Type
+     - Description
+     - Default/Recommended Value
+   * - ``train_dir``
+     - String
+     - Training output directory (tensorboard logs, checkpoints)
+     - ``'./'`` (current directory)
+   * - ``progress_bar_refresh_rat``
+     - Integer
+     - Progress bar refresh rate
+     - ``1``
 
 dataset_params (Dataset Parameters)
 -----------------------------------
@@ -74,19 +102,42 @@ dataset_params (Dataset Parameters)
    * - ``test_ratio``
      - Float
      - Proportion of test set in the entire dataset
-     - ``0.1`` (10%)
+     - ``0.2`` (20%)
    * - ``train_ratio``
      - Float
      - Proportion of training set in the entire dataset
-     - ``0.8`` (80%)
+     - ``0.6`` (60%)
    * - ``val_ratio``
      - Float
      - Proportion of validation set in the entire dataset
-     - ``0.1`` (10%)
+     - ``0.2`` (20%)
+   * - ``split_file``
+     - String or null
+     - Path to save/load pre-defined dataset split indices
+     - ``None`` (auto-split based on ratios)
    * - ``graph_data_path``
      - String
      - Directory of processed compressed graph data files
      - No default value, must be manually set
+   * - ``num_workers``
+     - Integer
+     - Number of parallel DataLoader worker processes
+     - ``4``
+   * - ``preload``
+     - Integer
+     - Number of graphs to preload into memory on startup
+     - ``0`` (load on demand)
+   * - ``data_format``
+     - String
+     - Input data format: ``'auto'``, ``'lmdb'`` (LMDB format), or ``'npz'`` (NPZ format)
+     - ``'auto'`` (auto-detect based on file extension)
+   * - ``test_mode``
+     - Boolean
+     - Use entire dataset as test set (skip train/val split)
+     - ``false``
+
+.. note::
+   For large-scale datasets, using LMDB format (``data_format: lmdb``) with ``npz_to_lmdb.py`` conversion provides significantly faster I/O compared to NPZ format.
 
 losses_metrics (Loss Functions and Evaluation Metrics)
 ------------------------------------------------------
@@ -110,15 +161,15 @@ losses_metrics (Loss Functions and Evaluation Metrics)
    * - ``losses[].metric``
      - String
      - Loss calculation method
-     - ``mae`` (mean absolute error), optional ``mse`` (mean squared error) or ``rmse`` (root mean squared error)
+     - ``mae`` (mean absolute error), optional ``mse`` (mean squared error), ``rmse`` (root mean squared error), ``cosine_similarity``, ``sum_zero``, or ``euclidean_loss``
    * - ``losses[].prediction``
      - String
      - Prediction output
-     - ``Hamiltonian`` or ``band_energy``
+     - ``hamiltonian``, ``band_energy``, or other task-specific targets
    * - ``losses[].target``
      - String
      - Target data
-     - ``hamiltonian`` or ``band_energy``
+     - ``hamiltonian``, ``band_energy``, ``band_gap``, ``overlap``, ``peak``, ``hamiltonian_imag``, or ``wavefunction``
    * - ``metrics``
      - List
      - List of evaluation metric definitions
@@ -146,7 +197,7 @@ optim_params (Optimizer Parameters)
    * - ``lr_patience``
      - Integer
      - Number of epochs to tolerate before triggering learning rate decay
-     - ``4``
+     - ``5``
    * - ``gradient_clip_val``
      - Float
      - Gradient clipping value
@@ -157,12 +208,12 @@ optim_params (Optimizer Parameters)
      - ``3000``
    * - ``min_epochs``
      - Integer
-     - Minimum number of training epochs
-     - ``30``
+     - Minimum number of training epochs before early stopping can trigger
+     - ``100``
    * - ``stop_patience``
      - Integer
      - Number of epochs to tolerate for early stopping
-     - ``10``
+     - ``30``
 
 output_nets.HamGNN_out (Output Network Parameters)
 --------------------------------------------------
@@ -178,7 +229,7 @@ output_nets.HamGNN_out (Output Network Parameters)
    * - ``ham_type``
      - String
      - Type of Hamiltonian to fit
-     - ``openmx`` (OpenMX Hamiltonian), ``abacus`` (ABACUS Hamiltonian)
+     - ``openmx`` (OpenMX), ``abacus`` (ABACUS), ``siesta`` (SIESTA/HONPAS), or ``pasp``
    * - ``nao_max``
      - Integer
      - Maximum number of orbitals per atom
@@ -187,6 +238,10 @@ output_nets.HamGNN_out (Output Network Parameters)
      - Boolean
      - Whether to add H_nonscf to predicted H_scf
      - ``true``
+   * - ``add_H_nonsoc``
+     - Boolean
+     - Add non-SOC Hamiltonian (for SOC-coupled systems)
+     - ``false``
    * - ``symmetrize``
      - Boolean
      - Whether to apply Hermitian constraints to Hamiltonian
@@ -198,19 +253,27 @@ output_nets.HamGNN_out (Output Network Parameters)
    * - ``num_k``
      - Integer
      - Number of k-points used for band calculation
-     - ``4``
+     - ``5``
    * - ``band_num_control``
      - Integer, Dictionary, or null
      - Control the number of orbitals considered in band calculation
      - ``8`` (VBM±8 bands), ``dict`` (specify number of bases for each atom type), ``null`` (all bands)
+   * - ``k_path``
+     - List, String, or null
+     - k-space path for band structure calculation; ``auto`` = auto-generate based on crystal symmetry
+     - ``null`` (generate random k-points)
    * - ``soc_switch``
      - Boolean
      - Whether to fit SOC Hamiltonian
      - ``false``
+   * - ``soc_basis``
+     - String
+     - SOC basis type
+     - ``'so3'`` (SO(3)), ``'su2'`` (SU(2))
    * - ``nonlinearity_type``
      - String
      - Type of non-linear activation function
-     - ``gate``
+     - ``gate`` (gated nonlinearity) or ``norm`` (norm-based)
    * - ``zero_point_shift``
      - Boolean
      - Whether to apply zero-point potential correction to Hamiltonian matrix
@@ -227,6 +290,38 @@ output_nets.HamGNN_out (Output Network Parameters)
      - Float
      - Minimum magnetic moment
      - ``0.5``
+   * - ``ham_only``
+     - Boolean
+     - When ``true``, only compute Hamiltonian H; when ``false``, fit both H and overlap S
+     - ``true``
+   * - ``include_triplet``
+     - Boolean
+     - Include triplet interaction terms in output
+     - ``false``
+   * - ``export_reciprocal_values``
+     - Boolean
+     - Export reciprocal space values during forward pass
+     - ``false``
+   * - ``use_learned_weight``
+     - Boolean
+     - Use learned weight factors in the output
+     - ``true``
+   * - ``get_nonzero_mask_tensor``
+     - Boolean
+     - Compute nonzero element mask tensor for sparse Hamiltonian
+     - ``false``
+   * - ``return_forces``
+     - Boolean
+     - Compute atomic forces during forward pass
+     - ``false``
+   * - ``create_graph``
+     - Boolean
+     - Create computational graph for backprop (required for force derivatives)
+     - ``false``
+   * - ``calculate_sparsity``
+     - Boolean
+     - Calculate sparsity ratio for loss correction
+     - ``true``
 
 representation_nets.HamGNN_pre (Representation Network Parameters)
 -------------------------------------------------------------------
@@ -247,6 +342,14 @@ representation_nets.HamGNN_pre (Representation Network Parameters)
      - String
      - Type of distance cutoff function
      - ``cos`` (cosine function), optional ``pol`` (polynomial function)
+   * - ``radius_type``
+     - String
+     - Atomic radius table source
+     - ``'openmx'`` (OpenMX radii) or ``'abacus'`` (ABACUS radii)
+   * - ``radius_scale``
+     - Float
+     - Radius scaling factor
+     - ``1.01``
    * - ``edge_sh_normalization``
      - String
      - Edge spherical harmonic normalization method
@@ -278,7 +381,7 @@ representation_nets.HamGNN_pre (Representation Network Parameters)
    * - ``rbf_func``
      - String
      - Type of radial basis function
-     - ``bessel``
+     - ``bessel`` (also supports ``gaussian``, ``exp-gaussian``, ``exp-bernstein``, ``bernstein``)
    * - ``set_features``
      - Boolean
      - Whether to set features
@@ -301,49 +404,65 @@ representation_nets.HamGNN_pre (Representation Network Parameters)
      - ``16``
    * - ``use_kan``
      - Boolean
-     - Whether to use KAN activation function
+     - Whether to use KAN (Kolmogorov-Arnold Network) activation function
      - ``false``
-   * - ``radius_scale``
-     - Float
-     - Radius scaling factor
-     - ``1.01``
    * - ``build_internal_graph``
      - Boolean
-     - Whether to build internal graph
+     - Whether to build internal neighbor graph
+     - ``false``
+   * - ``legacy_edge_update``
+     - Boolean
+     - Legacy edge update behavior (for old checkpoint compatibility only)
+     - ``false``
+   * - ``lite_mode``
+     - Boolean
+     - Minimal parameter mode for faster inference (reduces parameter count)
+     - ``false``
+   * - ``apply_charge_doping``
+     - Boolean
+     - Enable charge doping atom embedding for charged defect systems
+     - ``false``
+   * - ``num_charge_attr_feas``
+     - Integer
+     - Number of charge attribution Gaussian features (only used if ``apply_charge_doping=True``)
+     - ``8``
+   * - ``use_gradient_checkpointing``
+     - Boolean
+     - Enable gradient checkpointing to reduce memory usage during training
      - ``false``
 
 Parameter Adjustment Recommendations
 ------------------------------------
 
 1. **Initial Configuration**:
-   
+
    - When using for the first time, it's recommended to first use default parameters for primary training, and then adjust based on results
 
 2. **Learning Rate Adjustment**:
-   
+
    - For primary training, set initial learning rate to ``0.01``
    - For secondary training, set initial learning rate to ``0.0001``
    - If training is unstable, lower the learning rate; if convergence is too slow, increase the learning rate appropriately
 
 3. **Network Depth Adjustment**:
-   
+
    - For simple systems, ``num_layers=3`` is usually sufficient
    - For complex systems, try increasing ``num_layers`` to 4-5
 
 4. **Orbital Number Adjustment**:
-   
+
    - ``nao_max`` needs to be selected based on the maximum number of atomic orbitals in the system
    - Use 14 for short-period elements (such as C, Si, O, etc.)
    - Use 19 for most common elements
    - Use 26 for all elements supported by OpenMX
 
 5. **Cutoff Radius Adjustment**:
-   
+
    - The default value of ``cutoff`` 26.0 is suitable for most systems; too small a ``cutoff`` sometimes has poor effects
    - Note that the ``cutoff`` here only controls the decay factor of atomic interactions, without affecting the structure of the graph, i.e., not changing the number of edges
 
 6. **Loss Function Weight Adjustment**:
-   
+
    - In secondary training, the loss function weight for ``band_energy`` is typically set to 0.001~0.01 times that of ``hamiltonian``
    - If band fitting effect is poor, the weight of ``band_energy`` can be increased appropriately, but should not be too large to avoid affecting the prediction accuracy of the Hamiltonian
 

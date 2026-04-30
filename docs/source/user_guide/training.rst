@@ -8,13 +8,13 @@ Training Mode Classification
 ============================
 
 1. **Primary Training**:
-   
+
    - Only uses Hamiltonian loss function to train the model
    - Trains until Hamiltonian error reaches approximately 10^-5 Hartree
    - Secondary training may not be necessary if accuracy already meets requirements
 
 2. **Secondary Training** (Optional):
-   
+
    - Based on primary training, adds band energy loss function
    - Uses a smaller learning rate to fine-tune the model
    - Improves model performance in band structure prediction
@@ -56,9 +56,9 @@ Here's an introduction to key configuration items in ``config.yaml``:
 
       dataset_params:
         batch_size: 1  # Number of samples processed per batch
-        test_ratio: 0.1  # Test set ratio
-        train_ratio: 0.8  # Training set ratio
-        val_ratio: 0.1  # Validation set ratio
+        test_ratio: 0.2  # Test set ratio
+        train_ratio: 0.6  # Training set ratio
+        val_ratio: 0.2  # Validation set ratio
         graph_data_path: './Examples/pentadiamond/'  # Path to graph_data.npz file
 
 2. **losses_metrics**:
@@ -92,11 +92,11 @@ Here's an introduction to key configuration items in ``config.yaml``:
       optim_params:
         lr: 0.01  # Learning rate (recommend 0.01 for primary training, 0.0001 for secondary training)
         lr_decay: 0.5  # Learning rate decay rate
-        lr_patience: 4  # Number of epochs to wait before adjusting learning rate
+        lr_patience: 5  # Number of epochs to wait before adjusting learning rate
         gradient_clip_val: 0.0  # Gradient clipping value
         max_epochs: 3000  # Maximum number of training epochs
-        min_epochs: 30  # Minimum number of training epochs
-        stop_patience: 10  # Number of epochs to wait for early stopping
+        min_epochs: 100  # Minimum number of training epochs
+        stop_patience: 30  # Number of epochs to wait for early stopping
 
 4. **setup**:
 
@@ -111,7 +111,7 @@ Here's an introduction to key configuration items in ``config.yaml``:
         resume: false  # Whether to continue training from interruption
         num_gpus: [0]  # GPU device numbers to use, null indicates using CPU
         precision: 32  # Computation precision (32 or 64 bit)
-        property: Hamiltonian  # Type of physical quantity output
+        property: hamiltonian  # Type of physical quantity output
         stage: fit  # Stage: fit (training) or test (testing)
 
 5. **output_nets**:
@@ -121,6 +121,7 @@ Here's an introduction to key configuration items in ``config.yaml``:
       output_nets:
         output_module: HamGNN_out
         HamGNN_out:
+          ham_only: true  # true: Only Hamiltonian H; false: fit both H and S
           ham_type: openmx  # Type of Hamiltonian to fit: openmx or abacus
           nao_max: 19  # Maximum number of atomic orbitals (14/19/26 for openmx)
           add_H0: true  # Whether to add non-self-consistent Hamiltonian
@@ -128,7 +129,7 @@ Here's an introduction to key configuration items in ``config.yaml``:
           calculate_band_energy: false  # Whether to calculate bands (set to true for secondary training)
           #soc_switch: false  # Whether to fit SOC Hamiltonian
           # The following parameters are used in secondary training
-          #num_k: 4  # Number of k-points used for band calculation
+          #num_k: 5  # Number of k-points used for band calculation
           #band_num_control: 8  # Number of orbitals considered in band calculation
           #k_path: null # Generate random k-points
 
