@@ -103,30 +103,10 @@ After modifying the `makefile`, execute `make` to generate the executable progra
 
 ## 3. HamGNN Installation Steps
 ### Step One: Install Conda Environment
-To avoid library version conflicts, it is recommended to use one of the following two methods:
-
-> **⚠️ Note for HamGNN v2.1+ Users:** Starting from v2.1, HamGNN requires the `lmdb` library for LMDB dataset format support (enables faster I/O for large datasets). If you are using **Method 1** (pre-built environment), you must install `lmdb` manually after activating the environment:
-> ```bash
-> pip install lmdb
-> ```
-> If you use **Method 2** (YAML configuration file), `lmdb` will be installed automatically.
-
-#### Method 1: Use Pre-built Environment
-1. Download the pre-built HamGNN Conda environment (`ML.tar.gz`) from [Zenodo](https://zenodo.org/records/11064223)
-2. Extract it to the `envs` folder in your Conda installation directory:
-   ```bash
-   tar -xzvf ML.tar.gz -C $HOME/miniconda3/envs/
-   ```
-3. Activate the environment:
-   ```bash
-   conda activate ML
-   ```
-
-#### Method 2: Create Environment Using Configuration File
-1. Create an environment using the YAML configuration file provided by HamGNN:
-   ```bash
-   conda env create -f ./HamGNN.yaml
-   ```
+To avoid library version conflicts, create an environment using the YAML configuration file provided by HamGNN:
+```bash
+conda env create -f ./HamGNN.yaml
+```
 
 ### Step Two: Install HamGNN from Source
 1. Clone the HamGNN repository:
