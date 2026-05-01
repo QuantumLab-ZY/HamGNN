@@ -236,7 +236,7 @@ HamGNN training typically consists of two phases: primary training (Hamiltonian 
 
 ### Training Commands
 ```bash
-HamGNN --config config.yaml > log.out 2>&1
+HamGNN2.0 --config config.yaml > log.out 2>&1
 ```
 For cluster environments, job scheduling systems (such as SLURM) can be used to submit training tasks. Example script:
 ```bash
@@ -251,7 +251,7 @@ For cluster environments, job scheduling systems (such as SLURM) can be used to 
 #SBATCH --gres=gpu:1
 export OMP_NUM_THREADS=8
 source /path/to/your/miniconda3/bin/activate your_env_name
-HamGNN --config ./config.yaml > log1.out 2>&1
+HamGNN2.0 --config ./config.yaml > log1.out 2>&1
 ```
 
 ### Key Configuration Item Descriptions
@@ -271,7 +271,7 @@ Below are descriptions of key configuration items in `config.yaml`:
      losses:  # Loss function definition
      - loss_weight: 27.211  # Hamiltonian loss weight
        metric: mae  # Mean absolute error
-       prediction: Hamiltonian
+       prediction: hamiltonian
        target: hamiltonian
      # Uncomment for secondary training
      #- loss_weight: 0.27211  # Band energy loss weight (typically 0.001~0.01 of Hamiltonian weight)
@@ -364,7 +364,7 @@ After completing model training, you can use the trained model to predict Hamilt
 
 ### Execute Prediction
 ```bash
-HamGNN --config config.yaml > predict.log 2>&1
+HamGNN2.0 --config config.yaml > predict.log 2>&1
 ```
 For large systems or batch predictions, it is recommended to use a job scheduling system to submit tasks:
 ```bash
@@ -377,7 +377,7 @@ For large systems or batch predictions, it is recommended to use a job schedulin
 #SBATCH --exclusive
 export OMP_NUM_THREADS=64
 source /path/to/your/miniconda3/bin/activate your_env_name
-HamGNN --config ./config.yaml > predict.log 2>&1
+HamGNN2.0 --config ./config.yaml > predict.log 2>&1
 ```
 
 ### Output Results
