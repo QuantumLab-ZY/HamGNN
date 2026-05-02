@@ -8,6 +8,10 @@
 #include <unistd.h>
 #include <ctype.h>
 
+#ifdef USE_MPI
+#include <mpi.h>
+#endif
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -969,8 +973,247 @@ static void compute_wavefunction(const System *sys, const Wavefunction *wfn,
     *out_abs = psi_abs;
 }
 
-// ============================================================
-// Cube file writer
+/* ============================================================
+ * MPI+OpenMP: Wavefunction computation with 1D slab decomposition
+ * ============================================================ */
+
+typedef struct {
+    int x_start;    /* global x start (inclusive) */
+    int x_end;      /* global x end (exclusive) */
+    int local_nx;   /* number of x planes this rank handles */
+} SlabInfo;
+
+static void compute_slab_info(const System *sys, int rank, int world_size, SlabInfo *info) {
+    int total_Nx = sys->Ngrid1 + 1;
+    int slice_Nx = (total_Nx + world_size - 1) / world_size; /* ceil division */
+    info->x_start = rank * slice_Nx;
+    info->x_end = (info->x_start + slice_Nx > total_Nx) ? total_Nx : info->x_start + slice_Nx;
+    info->local_nx = (info->x_end > info->x_start) ? info->x_end - info->x_start : 0;
+}
+
+static void compute_wavefunction_mpi(const System *sys, const Wavefunction *wfn,
+                                     int rank, int world_size,
+                                     double **out_real, double **out_imag, double **out_abs)
+{
+    SlabInfo slab;
+    compute_slab_info(sys, rank, world_size, &slab);
+
+    int total_Nx = sys->Ngrid1 + 1;
+    int ny = sys->Ngrid2 + 1;
+    int nz = sys->Ngrid3 + 1;
+    size_t local_total = (size_t)slab.local_nx * ny * nz;
+
+    *out_real = NULL;
+    *out_imag = NULL;
+    *out_abs = NULL;
+
+    if (slab.local_nx <= 0) return;
+
+    double *local_psi_r = (double *)calloc(local_total, sizeof(double));
+    double *local_psi_i = (double *)calloc(local_total, sizeof(double));
+    double *local_psi_abs = (double *)calloc(local_total, sizeof(double));
+
+    if (!local_psi_r || !local_psi_i || !local_psi_abs) {
+        free(local_psi_r); free(local_psi_i); free(local_psi_abs);
+        return;
+    }
+
+    /* Precompute step vectors */
+    double step_x[4], step_y[4], step_z[4];
+    for (int c = 1; c <= 3; c++) {
+        step_x[c] = sys->tv[c][1] / sys->Ngrid1;
+        step_y[c] = sys->tv[c][2] / sys->Ngrid2;
+        step_z[c] = sys->tv[c][3] / sys->Ngrid3;
+    }
+
+    /* Build orbital map (same logic as existing compute_wavefunction) */
+    int norbs = count_norbs_total(sys);
+    OrbitalInfo *orb_map = (OrbitalInfo *)malloc(norbs * sizeof(OrbitalInfo));
+    if (!orb_map) {
+        free(local_psi_r); free(local_psi_i); free(local_psi_abs);
+        return;
+    }
+    int o = 0;
+    for (int a = 0; a < sys->atom_count; a++) {
+        int sp = sys->atoms[a].species_idx;
+        const SpeciesPAO *sps = &sys->species[sp];
+        const int *z = sys->atoms[a].zeta;
+        int Lmax = sps->Lmax;
+        for (int L = 0; L <= Lmax; L++) {
+            int m_count;
+            if (L == 0) m_count = 1;
+            else if (L == 1) m_count = 3;
+            else if (L == 2) m_count = 5;
+            else if (L == 3) m_count = 7;
+            else m_count = 2 * L + 1;
+            int nzeta = (L <= MAX_L && z[L] > 0) ? z[L] : 0;
+            if (nzeta == 0) continue;
+            for (int mul = 0; mul < nzeta; mul++) {
+                for (int M = 0; M < m_count; M++) {
+                    orb_map[o].atom_idx = a;
+                    orb_map[o].L = L;
+                    orb_map[o].Mul = mul;
+                    orb_map[o].M = M;
+                    o++;
+                }
+            }
+        }
+    }
+
+    #pragma omp parallel for collapse(2) schedule(static)
+    for (int li = 0; li < slab.local_nx; li++) {
+        for (int j = 0; j < ny; j++) {
+            for (int k = 0; k < nz; k++) {
+                int i = slab.x_start + li;
+                double gx = i * step_x[1] + j * step_x[2] + k * step_x[3];
+                double gy = i * step_y[1] + j * step_y[2] + k * step_y[3];
+                double gz = i * step_z[1] + j * step_z[2] + k * step_z[3];
+
+                double psi_r = 0.0, psi_i = 0.0;
+                for (int o = 0; o < norbs; o++) {
+                    double bv = eval_basis(sys, orb_map[o].atom_idx,
+                                           orb_map[o].L, orb_map[o].Mul,
+                                           orb_map[o].M, gx, gy, gz);
+                    psi_r += creal(wfn->coeffs[o]) * bv;
+                    psi_i += cimag(wfn->coeffs[o]) * bv;
+                }
+                size_t idx = (size_t)li * ny * nz + j * nz + k;
+                local_psi_r[idx] = psi_r;
+                local_psi_i[idx] = psi_i;
+                local_psi_abs[idx] = psi_r * psi_r + psi_i * psi_i;
+            }
+        }
+    }
+
+    if (rank == 0)
+        fprintf(stderr, "Compute grid: all %d/%d rows\n", total_Nx, total_Nx);
+
+    free(orb_map);
+    *out_real = local_psi_r;
+    *out_imag = local_psi_i;
+    *out_abs = local_psi_abs;
+}
+
+/* ============================================================
+ * MPI: Broadcast system data from rank 0 to all ranks
+ * ============================================================ */
+
+#ifdef USE_MPI
+static void broadcast_system_scalars(System *sys, int rank) {
+    MPI_Bcast(&sys->Ngrid1, 3, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&sys->atom_count, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&sys->species_count, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&sys->tv[0][0], 16, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(sys->atoms, sys->atom_count * sizeof(Atom), MPI_BYTE, 0, MPI_COMM_WORLD);
+}
+#endif
+
+#ifdef USE_MPI
+static void broadcast_species_metadata(System *sys, int rank) {
+    for (int s = 0; s < sys->species_count; s++) {
+        MPI_Bcast(&sys->species[s].Lmax, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(&sys->species[s].Mul, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(&sys->species[s].Mesh, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(sys->species[s].name, MAX_NAME_LEN, MPI_CHAR, 0, MPI_COMM_WORLD);
+        MPI_Bcast(sys->species[s].basis_name, MAX_NAME_LEN, MPI_CHAR, 0, MPI_COMM_WORLD);
+        MPI_Bcast(sys->species[s].elem_name, MAX_NAME_LEN, MPI_CHAR, 0, MPI_COMM_WORLD);
+    }
+}
+#endif
+
+#ifdef USE_MPI
+static void broadcast_system_arrays(System *sys, Wavefunction *wfn, int rank) {
+    for (int s = 0; s < sys->species_count; s++) {
+        MPI_Bcast(sys->species[s].RV, sys->species[s].Mesh, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        for (int l = 0; l <= sys->species[s].Lmax; l++)
+            for (int m = 0; m < sys->species[s].Mul; m++)
+                MPI_Bcast(sys->species[s].RWF[l][m], sys->species[s].Mesh, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    }
+
+    int total_norbs = 0;
+    for (int a = 0; a < sys->atom_count; a++) total_norbs += sys->atoms[a].norbs;
+    MPI_Bcast(wfn->coeffs, total_norbs * 2, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+}
+#endif
+
+#ifdef USE_MPI
+static void allocate_species_on_nonzero_ranks(System *sys, Wavefunction *wfn, int rank) {
+    if (rank == 0) return;
+    for (int s = 0; s < sys->species_count; s++) {
+        SpeciesPAO *sp = &sys->species[s];
+        sp->RV = (double *)calloc(sp->Mesh, sizeof(double));
+        sp->RWF = (double ***)calloc(sp->Lmax + 1, sizeof(double **));
+        for (int l = 0; l <= sp->Lmax; l++) {
+            sp->RWF[l] = (double **)calloc(sp->Mul, sizeof(double *));
+            for (int m = 0; m < sp->Mul; m++)
+                sp->RWF[l][m] = (double *)calloc(sp->Mesh, sizeof(double));
+        }
+    }
+    wfn->coeffs = (double _Complex *)calloc(count_norbs_total(sys), sizeof(double _Complex));
+}
+#endif
+
+/* ============================================================
+ * MPI: Gather local slices to rank 0
+ * ============================================================ */
+
+#ifdef USE_MPI
+static void gather_to_master(const System *sys,
+                             double *local_r, double *local_i, double *local_abs,
+                             int rank, int world_size,
+                             double **out_r, double **out_i, double **out_abs)
+{
+    int total_Nx = sys->Ngrid1 + 1;
+    int Ny = sys->Ngrid2 + 1;
+    int Nz = sys->Ngrid3 + 1;
+    int slice_Nx = (total_Nx + world_size - 1) / world_size;
+
+    int *counts = (int *)malloc(world_size * sizeof(int));
+    int *displs = (int *)malloc(world_size * sizeof(int));
+    int disp = 0;
+    for (int r = 0; r < world_size; r++) {
+        int r_start = r * slice_Nx;
+        int r_end = (r_start + slice_Nx > total_Nx) ? total_Nx : r_start + slice_Nx;
+        int r_nx = (r_end > r_start) ? r_end - r_start : 0;
+        counts[r] = r_nx * Ny * Nz;
+        displs[r] = disp;
+        disp += counts[r];
+    }
+
+    size_t total = (size_t)total_Nx * Ny * Nz;
+    double *global_r = NULL, *global_i = NULL, *global_abs = NULL;
+    if (rank == 0) {
+        global_r = (double *)calloc(total, sizeof(double));
+        global_i = (double *)calloc(total, sizeof(double));
+        global_abs = (double *)calloc(total, sizeof(double));
+    }
+
+    int local_count = local_r ? (disp - displs[rank]) : 0;
+    SlabInfo s;
+    compute_slab_info(sys, rank, world_size, &s);
+    local_count = s.local_nx * Ny * Nz;
+
+    MPI_Gatherv(local_r, local_count, MPI_DOUBLE,
+                global_r, counts, displs, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(local_i, local_count, MPI_DOUBLE,
+                global_i, counts, displs, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(local_abs, local_count, MPI_DOUBLE,
+                global_abs, counts, displs, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    if (rank != 0) {
+        free(local_r); free(local_i); free(local_abs);
+        *out_r = NULL; *out_i = NULL; *out_abs = NULL;
+    }
+
+    if (rank == 0) {
+        *out_r = global_r;
+        *out_i = global_i;
+        *out_abs = global_abs;
+    }
+
+    free(counts); free(displs);
+}
+#endif
 // ============================================================
 
 static int species_name_to_Z(const char *name) {
@@ -1955,46 +2198,95 @@ int main(void) {
 static void print_usage(const char *prog) {
     fprintf(stderr, "Usage: %s <openmx.dat> <wfn.bin> [output.cube]\n", prog);
     fprintf(stderr, "  DFT_DATA path is read from DATA.PATH in openmx.dat\n");
+    fprintf(stderr, "\nCompilations:\n");
+    fprintf(stderr, "  Serial:      gcc -O2 -o wfn2cube wfn2cube.c -lm\n");
+    fprintf(stderr, "  MPI+OpenMP:  mpicc -O2 -DUSE_MPI -fopenmp -o wfn2cube_mpi wfn2cube.c -lm\n");
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 3) {
-        print_usage(argv[0]);
+#ifdef USE_MPI
+    int rank = 0, world_size = 1;
+    if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
+        fprintf(stderr, "Error: MPI initialization failed\n");
         return 1;
+    }
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+#else
+    int rank = 0, world_size = 1;
+#endif
+
+    int ret = 0;
+
+    System sys;
+    memset(&sys, 0, sizeof(sys));
+
+    Wavefunction wfn;
+    memset(&wfn, 0, sizeof(wfn));
+
+    double *psi_real = NULL, *psi_imag = NULL, *psi_abs = NULL;
+
+    if (argc < 3) {
+        if (rank == 0) print_usage(argv[0]);
+        ret = 1;
+        goto cleanup;
     }
 
     const char *dat_path = argv[1];
     const char *wfn_path = argv[2];
     const char *out_path = argc > 3 ? argv[3] : "wfn.cube";
 
-    System sys;
-    memset(&sys, 0, sizeof(sys));
-
-    fprintf(stderr, "[1/4] Parsing %s ...\n", dat_path);
-    if (parse_dat(dat_path, &sys) != 0) {
-        free_system(&sys);
-        return 1;
+    if (rank == 0)
+        fprintf(stderr, "[1/4] Parsing %s ...\n", dat_path);
+    if (rank == 0 && parse_dat(dat_path, &sys) != 0) {
+        ret = 1;
+    }
+#ifdef USE_MPI
+    if (world_size > 1)
+        MPI_Bcast(&ret, 1, MPI_INT, 0, MPI_COMM_WORLD);
+#endif
+    if (ret != 0) {
+        goto cleanup;
     }
 
-    fprintf(stderr, "[2/4] Loading %s ...\n", wfn_path);
-    Wavefunction wfn;
-    memset(&wfn, 0, sizeof(wfn));
-    if (load_wavefunction(wfn_path, &sys, &wfn) != 0) {
-        free_wavefunction(&wfn);
-        free_system(&sys);
-        return 1;
+    if (rank == 0)
+        fprintf(stderr, "[2/4] Loading %s ...\n", wfn_path);
+    if (rank == 0 && load_wavefunction(wfn_path, &sys, &wfn) != 0) {
+        ret = 1;
+    }
+#ifdef USE_MPI
+    if (world_size > 1)
+        MPI_Bcast(&ret, 1, MPI_INT, 0, MPI_COMM_WORLD);
+#endif
+    if (ret != 0) {
+        goto cleanup;
     }
 
-    fprintf(stderr, "[3/4] Computing wavefunction (real, imag, density)...\n");
-    double *psi_real = NULL, *psi_imag = NULL, *psi_abs = NULL;
-    compute_wavefunction(&sys, &wfn, &psi_real, &psi_imag, &psi_abs);
-    free_wavefunction(&wfn);
+#ifdef USE_MPI
+    if (world_size > 1) {
+        /* Phase 1: broadcast scalar counts and atom array */
+        broadcast_system_scalars(&sys, rank);
+
+        /* Phase 2: broadcast species metadata so non-zero ranks know Mesh/Lmax/Mul */
+        broadcast_species_metadata(&sys, rank);
+
+        /* Phase 3: non-zero ranks allocate buffers with correct sizes */
+        allocate_species_on_nonzero_ranks(&sys, &wfn, rank);
+
+        /* Phase 4: broadcast actual RV/RWF/coeffs data */
+        broadcast_system_arrays(&sys, &wfn, rank);
+        if (rank == 0)
+            fprintf(stderr, "Data broadcast complete\n");
+    }
+#endif
+
+    if (rank == 0)
+        fprintf(stderr, "[3/4] Computing wavefunction (real, imag, density)...\n");
+    compute_wavefunction_mpi(&sys, &wfn, rank, world_size, &psi_real, &psi_imag, &psi_abs);
     if (!psi_real || !psi_imag || !psi_abs) {
-        free(psi_real); free(psi_imag); free(psi_abs);
-        free_system(&sys);
-        return 1;
+        ret = 1;
+        goto cleanup;
     }
-
 
     char base_path[2048];
     strncpy(base_path, out_path, sizeof(base_path) - 1);
@@ -2010,34 +2302,35 @@ int main(int argc, char *argv[]) {
     snprintf(path_imag, sizeof(path_imag), "%s_imag.cube", base_path);
     snprintf(path_abs, sizeof(path_abs), "%s_abs.cube", base_path);
 
-    fprintf(stderr, "[4/4] Writing %s ...\n", path_real);
-    if (write_cube(path_real, &sys, psi_real, "Wavefunction real part Re[psi]") != 0) {
-        free(psi_real); free(psi_imag); free(psi_abs);
-        free_system(&sys);
-        return 1;
+#ifdef USE_MPI
+    if (world_size > 1) {
+        gather_to_master(&sys, psi_real, psi_imag, psi_abs,
+                         rank, world_size, &psi_real, &psi_imag, &psi_abs);
+        if (rank == 0)
+            fprintf(stderr, "Data gathered to rank 0\n");
+    }
+#endif
+
+    if (rank == 0) {
+        fprintf(stderr, "[4/4] Writing cube files ...\n");
+        if (write_cube(path_real, &sys, psi_real, "Wavefunction real part Re[psi]") != 0 ||
+            write_cube(path_imag, &sys, psi_imag, "Wavefunction imaginary part Im[psi]") != 0 ||
+            write_cube(path_abs, &sys, psi_abs, "Wavefunction probability density |psi|^2") != 0) {
+            ret = 1;
+        }
+        fprintf(stderr, "Done. Wrote 3 cube files: %s, %s, %s\n", path_real, path_imag, path_abs);
     }
 
-    fprintf(stderr, "[4/4] Writing %s ...\n", path_imag);
-    if (write_cube(path_imag, &sys, psi_imag, "Wavefunction imaginary part Im[psi]") != 0) {
-        free(psi_real); free(psi_imag); free(psi_abs);
-        free_system(&sys);
-        return 1;
-    }
-
-    fprintf(stderr, "[4/4] Writing %s ...\n", path_abs);
-    if (write_cube(path_abs, &sys, psi_abs, "Wavefunction probability density |psi|^2") != 0) {
-        free(psi_real); free(psi_imag); free(psi_abs);
-        free_system(&sys);
-        return 1;
-    }
-
-    free(psi_real);
-    free(psi_imag);
-    free(psi_abs);
+cleanup:
+    if (psi_real) free(psi_real);
+    if (psi_imag) free(psi_imag);
+    if (psi_abs) free(psi_abs);
+    free_wavefunction(&wfn);
     free_system(&sys);
-
-    fprintf(stderr, "Done. Wrote 3 cube files: %s, %s, %s\n", path_real, path_imag, path_abs);
-    return 0;
+#ifdef USE_MPI
+    MPI_Finalize();
+#endif
+    return ret;
 }
 
 #endif
