@@ -151,8 +151,8 @@ class Model(pl.LightningModule):
             loss_fn = loss_dict["metric"]
             
             if "target" in loss_dict:
-                prediction = predictions[loss_dict["prediction"]]
-                target = batch[loss_dict["target"]]
+                prediction = predictions[loss_dict["prediction"].lower()]
+                target = batch[loss_dict["target"].lower()]
                 component_loss = loss_fn(prediction, target)
                 
                 # Apply sparsity correction if available and applicable
@@ -161,7 +161,7 @@ class Model(pl.LightningModule):
                     sparsity_ratio = predictions['sparsity_ratio']
                     component_loss = component_loss * sparsity_ratio
             else:
-                component_loss = loss_fn(predictions[loss_dict["prediction"]])
+                component_loss = loss_fn(predictions[loss_dict["prediction"].lower()])
                 
             # Weight and add the loss component
             total_loss += loss_dict["loss_weight"] * component_loss
@@ -244,8 +244,8 @@ class Model(pl.LightningModule):
         outputs_pred, outputs_target = {}, {}
         for loss_dict in self.losses:
             if "target" in loss_dict:
-                outputs_pred[loss_dict["prediction"]] = predictions[loss_dict["prediction"]].detach().cpu().numpy()  
-                outputs_target[loss_dict["target"]] = batch[loss_dict["target"]].detach().cpu().numpy()
+                outputs_pred[loss_dict["prediction"]] = predictions[loss_dict["prediction"].lower()].detach().cpu().numpy()
+                outputs_target[loss_dict["target"]] = batch[loss_dict["target"].lower()].detach().cpu().numpy()
                 
         return {'pred': outputs_pred, 'target': outputs_target}
 
@@ -312,8 +312,8 @@ class Model(pl.LightningModule):
         outputs_pred, outputs_target = {}, {}
         for loss_dict in self.losses:
             if "target" in loss_dict:
-                outputs_pred[loss_dict["prediction"]] = predictions[loss_dict["prediction"]].detach().cpu().numpy()  
-                outputs_target[loss_dict["target"]] = batch[loss_dict["target"]].detach().cpu().numpy()
+                outputs_pred[loss_dict["prediction"]] = predictions[loss_dict["prediction"].lower()].detach().cpu().numpy()  
+                outputs_target[loss_dict["target"]] = batch[loss_dict["target"].lower()].detach().cpu().numpy()
                 
         return {
             'pred': outputs_pred, 
@@ -394,11 +394,11 @@ class Model(pl.LightningModule):
             metric_fn = metric_dict["metric"]
             
             if "target" in metric_dict:
-                prediction = predictions[metric_dict["prediction"]]
-                target = batch[metric_dict["target"]]
+                prediction = predictions[metric_dict["prediction"].lower()]
+                target = batch[metric_dict["target"].lower()]
                 metric_value = metric_fn(prediction, target).detach().item()
             else:
-                metric_value = metric_fn(predictions[metric_dict["prediction"]]).detach().item()
+                metric_value = metric_fn(predictions[metric_dict["prediction"].lower()]).detach().item()
                 
             # Get metric name
             metric_name = getattr(metric_fn, "name", type(metric_fn).__name__.split(".")[-1])
