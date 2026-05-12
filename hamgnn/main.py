@@ -15,7 +15,13 @@ import torch.nn as nn
 import numpy as np
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.plugins.training_type import DDPPlugin
+try:
+    from pytorch_lightning.plugins.training_type import DDPPlugin  # PL 1.x
+except ModuleNotFoundError:
+    try:
+        from pytorch_lightning.strategies import DDPStrategy as DDPPlugin  # PL 2.x
+    except ModuleNotFoundError:
+        DDPPlugin = None
 import pprint
 
 from .data.graph_data import graph_data_module
