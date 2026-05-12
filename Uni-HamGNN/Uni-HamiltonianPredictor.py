@@ -132,6 +132,9 @@ def _patch_legacy_attributes(predictor) -> None:
                 module.lite_mode = False
             if cls_name == 'PairInteractionBlock' and not hasattr(module, 'legacy_edge_update'):
                 module.legacy_edge_update = True
+            # Older pickled checkpoints (e.g. uni-hamgnn_2_1.pkl on Zenodo) predate this attribute.
+            if cls_name == 'HamGNNConvE3' and not hasattr(module, 'use_gradient_checkpointing'):
+                module.use_gradient_checkpointing = False
 
 
 class HamiltonianPredictor:

@@ -1184,7 +1184,7 @@ static inline double ****Allocate4D_double(int size_1, int size_2, int size_3, i
   return buffer;
 }
 
-static void Print_CubeCData_MO(FILE *fp, dcomplex *data, char *op)
+void Print_CubeCData_MO(FILE *fp, dcomplex *data, char *op)
 {
   int i1, i2, i3;
   int GN;
@@ -1235,7 +1235,7 @@ static void Print_CubeCData_MO(FILE *fp, dcomplex *data, char *op)
   }
 }
 
-static void Print_CubeTitle(FILE *fp, int EigenValue_flag, double EigenValue)
+void Print_CubeTitle(FILE *fp, int EigenValue_flag, double EigenValue)
 {
   int ct_AN;
   int spe;
