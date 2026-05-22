@@ -365,6 +365,7 @@ def compute_band_metrics(eigenvalues_ev, species):
         'cbm': cbm,
         'gap': cbm - vbm,
         'valence_index': valence_index,
+        'valence_band_number': valence_index + 1,
     }
 
 
@@ -388,6 +389,49 @@ def resolve_compare_shifts(metrics, compare_alignment_mode):
     if compare_alignment_mode == 'raw':
         return 0.0, 0.0, 'raw'
     raise ValueError(f'Unsupported compare_alignment_mode={compare_alignment_mode}')
+
+
+def build_single_alignment_note(metrics):
+    return f'Aligned to VBM band #{metrics["valence_band_number"]}'
+
+
+def build_compare_alignment_note(metrics, reference_mode):
+    target_band = metrics['target']['valence_band_number']
+    prediction_band = metrics['prediction']['valence_band_number']
+
+    if reference_mode == 'self_vbm':
+        return (
+            f'Aligned to own VBM: '
+            f'target band #{target_band}, prediction band #{prediction_band}'
+        )
+    if reference_mode == 'target_vbm':
+        return (
+            f'Aligned to target VBM band #{target_band}; '
+            f'prediction own VBM band #{prediction_band}'
+        )
+    if reference_mode == 'raw':
+        return 'Raw energies: no band alignment'
+    raise ValueError(f'Unsupported reference_mode={reference_mode}')
+
+
+def add_alignment_note(ax, alignment_note):
+    if not alignment_note:
+        return
+    ax.text(
+        0.02,
+        0.98,
+        alignment_note,
+        transform=ax.transAxes,
+        ha='left',
+        va='top',
+        fontsize=9,
+        bbox={
+            'boxstyle': 'round,pad=0.25',
+            'facecolor': 'white',
+            'edgecolor': '0.6',
+            'alpha': 0.85,
+        },
+    )
 
 
 def write_band_data(path, eigenvalues, k_dist, klabels, k_node, node_index, source_name, reference_mode, energy_shift, vbm, gap):
@@ -417,7 +461,7 @@ def write_band_data(path, eigenvalues, k_dist, klabels, k_node, node_index, sour
             text_file.write('\n')
 
 
-def plot_single_band(output_path, k_dist, k_node, label, eigenvalues, title, ylim):
+def plot_single_band(output_path, k_dist, k_node, label, eigenvalues, title, ylim, alignment_note=None):
     fig, ax = plt.subplots()
     ax.set_xlim(k_node[0], k_node[-1])
     ax.set_xticks(k_node)
@@ -433,12 +477,13 @@ def plot_single_band(output_path, k_dist, k_node, label, eigenvalues, title, yli
     ax.set_xlabel('Path in k-space')
     ax.set_ylabel('Band energy (eV)')
     ax.set_ylim(*ylim)
+    add_alignment_note(ax, alignment_note)
     fig.tight_layout()
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
 
 
-def plot_compare_band(output_path, k_dist, k_node, label, target_eigen, prediction_eigen, ylim):
+def plot_compare_band(output_path, k_dist, k_node, label, target_eigen, prediction_eigen, ylim, alignment_note=None):
     fig, ax = plt.subplots()
     ax.set_xlim(k_node[0], k_node[-1])
     ax.set_xticks(k_node)
@@ -462,6 +507,7 @@ def plot_compare_band(output_path, k_dist, k_node, label, target_eigen, predicti
     ax.set_xlabel('Path in k-space')
     ax.set_ylabel('Band energy (eV)')
     ax.set_ylim(*ylim)
+    add_alignment_note(ax, alignment_note)
     if target_labeled or prediction_labeled:
         ax.legend(loc='upper right')
     fig.tight_layout()
@@ -534,6 +580,7 @@ def build_structure_sources(structure_groups, source_splits, structure_index, na
 
 
 def report_metrics(source_name, metrics, applied_shift):
+    print(f'[{source_name}] vbm band = {metrics["valence_band_number"]}')
     print(f'[{source_name}] own_vbm = {metrics["vbm"]:.6f} eV')
     print(f'[{source_name}] band gap = {metrics["gap"]:.6f} eV')
     print(f'[{source_name}] applied energy shift = {applied_shift:.6f} eV')
@@ -607,6 +654,7 @@ def main():
                 metrics,
                 config['compare_alignment_mode'],
             )
+            alignment_note = build_compare_alignment_note(metrics, reference_mode)
 
             shifted['target'] = shift_bands(metrics['target']['raw'], target_shift)
             shifted['prediction'] = shift_bands(metrics['prediction']['raw'], prediction_shift)
@@ -648,10 +696,12 @@ def main():
                 shifted['target'],
                 shifted['prediction'],
                 plot_ylim,
+                alignment_note=alignment_note,
             )
         else:
             source_name = next(iter(metrics.keys()))
             reference_shift = metrics[source_name]['vbm']
+            alignment_note = build_single_alignment_note(metrics[source_name])
             shifted[source_name] = shift_bands(metrics[source_name]['raw'], reference_shift)
             report_metrics(source_name, metrics[source_name], reference_shift)
 
@@ -676,6 +726,7 @@ def main():
                 shifted[source_name],
                 'Band structure',
                 plot_ylim,
+                alignment_note=alignment_note,
             )
 
 

@@ -62,6 +62,30 @@ SCF_OUTPUT_DIRS = []
 INPUT_FILE_PATHS = []
 _THREADPOOL_LIMITS = None
 
+
+def _parse_abacus_scf_log(log_content: str, scf_log_path: str) -> tuple[float, int]:
+    """Parse ABACUS SCF log content and return (energy, max_scf_iterations).
+
+    Raises:
+        ValueError: If the expected total energy or ELEC iteration marker is missing.
+    """
+    energy_matches = pattern_eng_abacus.findall(log_content)
+    if not energy_matches:
+        unconverged_hint = ""
+        if "convergence has not been achieved" in log_content:
+            unconverged_hint = " (log indicates SCF did not converge)"
+        raise ValueError(
+            f"missing total energy marker 'final etot is' in {scf_log_path}{unconverged_hint}"
+        )
+
+    iteration_matches = pattern_md_abacus.findall(log_content)
+    if not iteration_matches:
+        raise ValueError(f"missing SCF iteration marker 'ELEC=' in {scf_log_path}")
+
+    energy = float(energy_matches[0])
+    max_scf_iterations = int(iteration_matches[-1])
+    return energy, max_scf_iterations
+
 # Command line argument parsing
 def parse_args():
     parser = argparse.ArgumentParser(description='Generate graph data from ABACUS SCF calculations')
@@ -552,15 +576,21 @@ def generate_graph(task: tuple) -> tuple:
         try:
             with open(scf_log_path, 'r') as f:
                 log_content = f.read().strip()
-                energy = float(pattern_eng_abacus.findall(log_content)[0])
-                max_scf_iterations = int(pattern_md_abacus.findall(log_content)[-1])
+                energy, max_scf_iterations = _parse_abacus_scf_log(log_content, scf_log_path)
         except Exception as e:
-            print(f"Error reading SCF log file: {e}. Skipping...")
+            print(
+                f"Error reading SCF log file for scf_path={scf_path}, "
+                f"scf_log_path={scf_log_path}: {type(e).__name__}: {e}. Skipping..."
+            )
             return idx, False, None, None
 
     # Check SCF convergence
     if max_scf_iterations >= MAX_SCF_SKIP:
-        print("Error: SCF did not converge. Skipping...")
+        print(
+            f"Error: SCF did not converge for scf_path={scf_path}, "
+            f"scf_log_path={scf_log_path}: max_scf_iterations={max_scf_iterations} "
+            f">= MAX_SCF_SKIP={MAX_SCF_SKIP}. Skipping..."
+        )
         return idx, False, None, None
 
     # Read crystal structure parameters
@@ -582,7 +612,11 @@ def generate_graph(task: tuple) -> tuple:
         doping_charge_tensor = torch.tensor([doping_charge], dtype=torch.float32)
         
     except Exception as e:
-        print(f"Error reading structure from SCF log or calculating doping charge: {e}. Skipping...")
+        print(
+            f"Error reading structure from SCF log or calculating doping charge for "
+            f"scf_path={scf_path}, scf_log_path={scf_log_path}: "
+            f"{type(e).__name__}: {e}. Skipping..."
+        )
         return idx, False, None, None
 
     # Read hopping and overlap parameters
@@ -617,7 +651,10 @@ def generate_graph(task: tuple) -> tuple:
             h_sparse.close()
         s_sparse.close()
     except Exception as e:
-        print(f"Error reading Hamiltonian or overlap matrices: {e}. Skipping...")
+        print(
+            f"Error reading Hamiltonian or overlap matrices for scf_path={scf_path}: "
+            f"{type(e).__name__}: {e}. Skipping..."
+        )
         return idx, False, None, None
 
     # Prepare Hamiltonian and overlap matrices
@@ -627,7 +664,10 @@ def generate_graph(task: tuple) -> tuple:
         else:
             H, H0, S = generate_hamiltonian_and_overlap(graph_h0, graph_h, graph_s, atomic_numbers, BASIS_DEF, NAO_MAX, use_soc=SOC_ENABLED)
     except Exception as e:
-        print(f"Error preparing Hamiltonian or overlap matrices: {e}. Skipping...")
+        print(
+            f"Error preparing Hamiltonian or overlap matrices for scf_path={scf_path}: "
+            f"{type(e).__name__}: {e}. Skipping..."
+        )
         return idx, False, None, None
 
     # Create a graph data object
