@@ -1,0 +1,12 @@
+workflow: pack-graph-data
+inputs:
+  patterns:
+    - ./openmx_outputs/*/out
+outputs:
+  directory: ./graph_data/collinear
+runtime:
+  dry_run: true
+  skip_errors: true
+graph_data:
+  read_openmx: /path/to/DFT_DATA19/read_openmx
+  nao_max: 19

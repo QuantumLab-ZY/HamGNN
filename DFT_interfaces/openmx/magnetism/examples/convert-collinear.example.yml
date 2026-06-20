@@ -1,0 +1,25 @@
+workflow: convert-collinear
+inputs:
+  patterns:
+    - ./structures/*.vasp
+outputs:
+  directory: ./openmx_outputs/collinear
+runtime:
+  dry_run: true
+  skip_errors: false
+convert_collinear:
+  template: |
+    System.Name example
+    DATA.PATH /path/to/DFT_DATA19
+    scf.XcType GGA-PBE
+    scf.SpinPolarization On
+    scf.EigenvalueSolver Band
+    scf.Kgrid 3 3 3
+species:
+  overrides:
+    Fe:
+      spin: [8.0, 6.0]
+      spin_constraint: on
+atom_spins:
+  1: [8.0, 6.0]
+  2: [6.0, 8.0]

@@ -1,0 +1,26 @@
+workflow: convert-noncollinear
+inputs:
+  patterns:
+    - ./structures/*.xsf
+outputs:
+  directory: ./openmx_outputs/noncollinear
+runtime:
+  dry_run: false
+  skip_errors: false
+convert_noncollinear:
+  template: |
+    System.Name example
+    DATA.PATH /path/to/DFT_DATA19
+    scf.XcType GGA-PBE
+    scf.SpinPolarization NC
+    scf.EigenvalueSolver Band
+    scf.Kgrid 3 3 3
+  nonmagnetic_threshold: 0.01
+species:
+  overrides:
+    Fe:
+      spin: [8.0, 8.0]
+      spin_constraint: on
+atom_spins:
+  1: [8.0, 6.0]
+  2: [6.0, 8.0]
