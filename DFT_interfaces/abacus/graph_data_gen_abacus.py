@@ -8,6 +8,7 @@ for HamGNN training or inference prep.
 """
 
 import os
+import json
 import pickle
 import shutil
 import lmdb
@@ -46,6 +47,7 @@ DEFAULT_NUM_PROCESSES = 0
 DEFAULT_WORKER_THREADS = 1
 DEFAULT_POOL_CHUNKSIZE = 0
 DEFAULT_LMDB_COMMIT_INTERVAL = 64
+DEFAULT_IF_HAMNET = False
 LMDB_OUTPUT_FILENAME = 'graph_data.lmdb'
 NPZ_OUTPUT_FILENAME = 'graph_data.npz'
 LMDB_INITIAL_MAP_SIZE = 64 * 1024 ** 3
@@ -58,9 +60,34 @@ NUM_PROCESSES = DEFAULT_NUM_PROCESSES
 WORKER_THREADS = DEFAULT_WORKER_THREADS
 POOL_CHUNKSIZE = DEFAULT_POOL_CHUNKSIZE
 LMDB_COMMIT_INTERVAL = DEFAULT_LMDB_COMMIT_INTERVAL
+IF_HAMNET = DEFAULT_IF_HAMNET
 SCF_OUTPUT_DIRS = []
 INPUT_FILE_PATHS = []
 _THREADPOOL_LIMITS = None
+
+
+def _parse_abacus_scf_log(log_content: str, scf_log_path: str) -> tuple[float, int]:
+    """Parse ABACUS SCF log content and return (energy, max_scf_iterations).
+
+    Raises:
+        ValueError: If the expected total energy or ELEC iteration marker is missing.
+    """
+    energy_matches = pattern_eng_abacus.findall(log_content)
+    if not energy_matches:
+        unconverged_hint = ""
+        if "convergence has not been achieved" in log_content:
+            unconverged_hint = " (log indicates SCF did not converge)"
+        raise ValueError(
+            f"missing total energy marker 'final etot is' in {scf_log_path}{unconverged_hint}"
+        )
+
+    iteration_matches = pattern_md_abacus.findall(log_content)
+    if not iteration_matches:
+        raise ValueError(f"missing SCF iteration marker 'ELEC=' in {scf_log_path}")
+
+    energy = float(energy_matches[0])
+    max_scf_iterations = int(iteration_matches[-1])
+    return energy, max_scf_iterations
 
 # Command line argument parsing
 def parse_args():
@@ -79,6 +106,9 @@ def parse_args():
                        help='Tasks submitted to each worker per batch. Use 0 (default) to choose automatically.')
     parser.add_argument('--lmdb-commit-interval', type=int, default=DEFAULT_LMDB_COMMIT_INTERVAL,
                        help='Number of graphs buffered before each LMDB write transaction.')
+    parser.add_argument('--if-hamnet', '--if_hamnet', dest='if_hamnet', action='store_true',
+                       default=DEFAULT_IF_HAMNET,
+                       help='Add HamNet metadata fields (nao_max, ham_type, units) to each graph and LMDB metadata_json.')
     return parser.parse_args()
 
 
@@ -93,6 +123,7 @@ def build_runtime_config(parsed_args):
         'worker_threads': parsed_args.worker_threads,
         'chunksize': parsed_args.chunksize,
         'lmdb_commit_interval': parsed_args.lmdb_commit_interval,
+        'if_hamnet': parsed_args.if_hamnet,
         'scf_output_dirs': scf_output_dirs,
         'input_file_paths': [os.path.join(d, 'INPUT') for d in scf_output_dirs],
     }
@@ -100,7 +131,7 @@ def build_runtime_config(parsed_args):
 
 def configure_runtime(runtime_config):
     global DATA_DIRS, GRAPH_DATA_FOLDER, OUTPUT_FORMAT
-    global NUM_PROCESSES, WORKER_THREADS, POOL_CHUNKSIZE, LMDB_COMMIT_INTERVAL
+    global NUM_PROCESSES, WORKER_THREADS, POOL_CHUNKSIZE, LMDB_COMMIT_INTERVAL, IF_HAMNET
     global SCF_OUTPUT_DIRS, INPUT_FILE_PATHS
 
     DATA_DIRS = runtime_config['data_dirs']
@@ -110,8 +141,25 @@ def configure_runtime(runtime_config):
     WORKER_THREADS = runtime_config['worker_threads']
     POOL_CHUNKSIZE = runtime_config['chunksize']
     LMDB_COMMIT_INTERVAL = runtime_config['lmdb_commit_interval']
+    IF_HAMNET = runtime_config['if_hamnet']
     SCF_OUTPUT_DIRS = runtime_config['scf_output_dirs']
     INPUT_FILE_PATHS = runtime_config['input_file_paths']
+
+
+def get_hamnet_metadata() -> dict:
+    return {
+        'ham_type': 'abacus',
+        'nao_max': int(NAO_MAX),
+        'units': {'energy': 'Hartree', 'length': 'Bohr'},
+    }
+
+
+def annotate_graph_for_hamnet(graph: Data) -> Data:
+    metadata = get_hamnet_metadata()
+    graph.nao_max = metadata['nao_max']
+    graph.ham_type = metadata['ham_type']
+    graph.units = metadata['units']
+    return graph
 
 
 def get_available_cpu_count() -> int:
@@ -208,9 +256,12 @@ class LMDBGraphWriter:
         payload = pickle.dumps(graph, protocol=pickle.HIGHEST_PROTOCOL)
         self.write_payload(payload)
 
-    def finalize(self) -> None:
+    def finalize(self, metadata: dict = None) -> None:
         self.flush()
-        self._put_items([(b'num_graphs', str(self.count).encode())])
+        items = [(b'num_graphs', str(self.count).encode())]
+        if metadata is not None:
+            items.append((b'metadata_json', json.dumps(metadata, sort_keys=True).encode()))
+        self._put_items(items)
         self.env.sync()
 
     def close(self) -> None:
@@ -552,15 +603,21 @@ def generate_graph(task: tuple) -> tuple:
         try:
             with open(scf_log_path, 'r') as f:
                 log_content = f.read().strip()
-                energy = float(pattern_eng_abacus.findall(log_content)[0])
-                max_scf_iterations = int(pattern_md_abacus.findall(log_content)[-1])
+                energy, max_scf_iterations = _parse_abacus_scf_log(log_content, scf_log_path)
         except Exception as e:
-            print(f"Error reading SCF log file: {e}. Skipping...")
+            print(
+                f"Error reading SCF log file for scf_path={scf_path}, "
+                f"scf_log_path={scf_log_path}: {type(e).__name__}: {e}. Skipping..."
+            )
             return idx, False, None, None
 
     # Check SCF convergence
     if max_scf_iterations >= MAX_SCF_SKIP:
-        print("Error: SCF did not converge. Skipping...")
+        print(
+            f"Error: SCF did not converge for scf_path={scf_path}, "
+            f"scf_log_path={scf_log_path}: max_scf_iterations={max_scf_iterations} "
+            f">= MAX_SCF_SKIP={MAX_SCF_SKIP}. Skipping..."
+        )
         return idx, False, None, None
 
     # Read crystal structure parameters
@@ -582,7 +639,11 @@ def generate_graph(task: tuple) -> tuple:
         doping_charge_tensor = torch.tensor([doping_charge], dtype=torch.float32)
         
     except Exception as e:
-        print(f"Error reading structure from SCF log or calculating doping charge: {e}. Skipping...")
+        print(
+            f"Error reading structure from SCF log or calculating doping charge for "
+            f"scf_path={scf_path}, scf_log_path={scf_log_path}: "
+            f"{type(e).__name__}: {e}. Skipping..."
+        )
         return idx, False, None, None
 
     # Read hopping and overlap parameters
@@ -617,7 +678,10 @@ def generate_graph(task: tuple) -> tuple:
             h_sparse.close()
         s_sparse.close()
     except Exception as e:
-        print(f"Error reading Hamiltonian or overlap matrices: {e}. Skipping...")
+        print(
+            f"Error reading Hamiltonian or overlap matrices for scf_path={scf_path}: "
+            f"{type(e).__name__}: {e}. Skipping..."
+        )
         return idx, False, None, None
 
     # Prepare Hamiltonian and overlap matrices
@@ -627,7 +691,10 @@ def generate_graph(task: tuple) -> tuple:
         else:
             H, H0, S = generate_hamiltonian_and_overlap(graph_h0, graph_h, graph_s, atomic_numbers, BASIS_DEF, NAO_MAX, use_soc=SOC_ENABLED)
     except Exception as e:
-        print(f"Error preparing Hamiltonian or overlap matrices: {e}. Skipping...")
+        print(
+            f"Error preparing Hamiltonian or overlap matrices for scf_path={scf_path}: "
+            f"{type(e).__name__}: {e}. Skipping..."
+        )
         return idx, False, None, None
 
     # Create a graph data object
@@ -674,6 +741,9 @@ def generate_graph(task: tuple) -> tuple:
                     Son = torch.FloatTensor(S[:pos.shape[0],:]),
                     Soff = torch.FloatTensor(S[pos.shape[0]:,:]),
                     doping_charge=doping_charge_tensor)
+
+    if IF_HAMNET:
+        graph = annotate_graph_for_hamnet(graph)
 
     if OUTPUT_FORMAT == 'lmdb':
         return idx, True, None, pickle.dumps(graph, protocol=pickle.HIGHEST_PROTOCOL)
@@ -745,7 +815,7 @@ def main():
             print(f'Saved {saved_graphs} graphs to {graph_data_path}')
 
         if lmdb_writer is not None:
-            lmdb_writer.finalize()
+            lmdb_writer.finalize(get_hamnet_metadata() if IF_HAMNET else None)
             print(f'Saved {lmdb_writer.count} graphs to {lmdb_path}')
     finally:
         if lmdb_writer is not None:
