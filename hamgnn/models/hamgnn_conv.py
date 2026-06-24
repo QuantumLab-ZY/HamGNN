@@ -65,14 +65,14 @@ class LayerCheckpointModule(torch.nn.Module):
         self,
         node_feats: torch.Tensor,
         edge_feats: torch.Tensor,
-        graph: Dict[str, torch.Tensor],
+        graph_dict: Dict[str, torch.Tensor],
     ):
         # CRITICAL: Clone to avoid corrupting checkpoint-saved tensor storage
         node = node_feats.clone()
         edge = edge_feats.clone()
 
         work = {
-            **graph.to_dict(),
+            **graph_dict,
             AtomicDataDict.NODE_FEATURES_KEY: node,
             AtomicDataDict.EDGE_FEATURES_KEY: edge,
         }
@@ -264,8 +264,9 @@ class HamGNNConvE3(BaseModel):
             if self.use_gradient_checkpointing:
                 node_feats = graph[AtomicDataDict.NODE_FEATURES_KEY]
                 edge_feats = graph[AtomicDataDict.EDGE_FEATURES_KEY]
+                graph_snapshot = graph.to_dict()
                 new_node, new_edge = checkpoint(  # pyright: ignore[reportGeneralTypeIssues]
-                    self.layer_checkpoints[i], node_feats, edge_feats, graph, use_reentrant=True)
+                    self.layer_checkpoints[i], node_feats, edge_feats, graph_snapshot, use_reentrant=True)
                 graph[AtomicDataDict.NODE_FEATURES_KEY] = new_node
                 graph[AtomicDataDict.EDGE_FEATURES_KEY] = new_edge
             else:
