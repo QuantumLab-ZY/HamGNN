@@ -310,7 +310,6 @@ basis_def_19 = {
     51: np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18], dtype=int),
 }
 
-
 def _build_basis_def_26():
     s1 = [0]
     s2 = [1]
@@ -400,6 +399,5 @@ def _build_basis_def_26():
         82: np.array(s1 + s2 + s3 + p1 + p2 + d1 + d2 + f1, dtype=int),
         83: np.array(s1 + s2 + s3 + p1 + p2 + d1 + d2 + f1, dtype=int),
     }
-
 
 basis_def_26 = _build_basis_def_26()

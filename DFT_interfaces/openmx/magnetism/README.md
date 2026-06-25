@@ -1,6 +1,6 @@
 # Purpose
 
-This package provides the magnetism-oriented OpenMX CLI surface for collinear and non-collinear input generation, planning conversions, and graph-data packaging. XSF spin generation and graph-data packaging remain dry-run oriented unless noted below.
+This package provides the magnetism-oriented OpenMX CLI surface for collinear and non-collinear input generation, XSF spin generation, and graph-data packaging.
 
 # Dependencies
 
@@ -11,7 +11,7 @@ This package provides the magnetism-oriented OpenMX CLI surface for collinear an
 
 # Workflow overview
 
-The CLI exposes four workflows: `convert-collinear`, `convert-noncollinear`, `make-xsf-spin`, and `pack-graph-data`. All four accept a YAML config with shared `inputs.patterns`, `outputs.directory`, and optional runtime overrides, plus a workflow-specific section for command-specific settings. `convert-collinear` and `convert-noncollinear` write OpenMX `.dat` files when `runtime.dry_run` is false. The other commands only print planned work when `--dry-run` is set.
+The CLI exposes four workflows: `convert-collinear`, `convert-noncollinear`, `make-xsf-spin`, and `pack-graph-data`. All four accept a YAML config with shared `inputs.patterns`, `outputs.directory`, and optional runtime overrides, plus a workflow-specific section for command-specific settings. `convert-collinear`, `convert-noncollinear`, and `make-xsf-spin` write files when `runtime.dry_run` is false. `pack-graph-data` remains a packaging command that reads existing OpenMX outputs and writes `graph_data.npz`.
 
 # `convert-collinear` usage
 
@@ -80,9 +80,13 @@ atom_spins:
 
 Example: [examples/make-xsf-spin.example.yml](examples/make-xsf-spin.example.yml)
 
+Explicit magnetic vectors are also supported via [examples/make-xsf-spin-vectors.example.yml](examples/make-xsf-spin-vectors.example.yml).
+
 ```bash
 python -m DFT_interfaces.openmx.magnetism.cli make-xsf-spin --config DFT_interfaces/openmx/magnetism/examples/make-xsf-spin.example.yml --dry-run
 ```
+
+Set `runtime.dry_run: false` to write `.xsf` files with magnetic-vector columns in `PRIMCOORD` rows.
 
 # `pack-graph-data` usage
 
@@ -122,6 +126,9 @@ graph_data:
 - `convert_collinear.template`: OpenMX header and calculation settings prepended before generated species, coordinates, and lattice blocks.
 - `convert_noncollinear.template`: OpenMX header and calculation settings prepended before generated species, coordinates, spin angles, and lattice blocks.
 - `convert_noncollinear.nonmagnetic_threshold`: vector-norm threshold below which XSF spin vectors are treated as nonmagnetic and assigned zero angles.
+- `make_xsf_spin.base_direction`: 3-vector used to generate magnetic vectors for every atom before masking.
+- `make_xsf_spin.mask`: optional per-atom scalar mask applied to `base_direction`.
+- `make_xsf_spin.vectors`: optional explicit `N x 3` magnetic vectors used instead of `base_direction`/`mask`.
 - `species.overrides`: optional per-element PAO, PBE, spin, spin constraint, and basis overrides.
 - `atom_spins`: optional 1-based per-atom `[spin_up, spin_down]` overrides for `convert-collinear` and `convert-noncollinear`.
 - `graph_data.read_openmx`: path to the `read_openmx` executable or its containing directory.

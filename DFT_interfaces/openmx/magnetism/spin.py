@@ -65,6 +65,21 @@ def spin_to_spherical(spin, nonmagnetic_threshold=0.01):
 
 
 def generate_spin_vectors(atom_count, config):
+    if config.get("vectors") is not None:
+        if "base_direction" in config or "mask" in config:
+            raise ConfigError("make_xsf_spin 'vectors' cannot be combined with 'base_direction' or 'mask'.")
+        vectors = np.asarray(config["vectors"], dtype=float)
+        if vectors.ndim != 2 or vectors.shape != (atom_count, 3):
+            raise ConfigError(
+                f"Explicit spin vectors must have shape ({atom_count}, 3); got shape {vectors.shape}."
+            )
+        if not np.all(np.isfinite(vectors)):
+            raise ConfigError("Explicit spin vectors must contain only finite values.")
+        return vectors
+
+    if "base_direction" not in config:
+        raise ConfigError("make_xsf_spin must define either 'vectors' or 'base_direction'.")
+
     base_direction = np.asarray(config["base_direction"], dtype=float)
     if base_direction.ndim != 1 or base_direction.shape != (3,):
         raise ConfigError(

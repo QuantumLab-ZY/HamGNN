@@ -1,0 +1,13 @@
+workflow: make-xsf-spin
+inputs:
+  patterns:
+    - ./structures/*.vasp
+outputs:
+  directory: ./xsf_outputs/spin
+runtime:
+  dry_run: true
+  skip_errors: false
+make_xsf_spin:
+  vectors:
+    - [0.0, 0.0, 1.0]
+    - [0.0, 0.0, -1.0]

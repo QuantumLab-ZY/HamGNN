@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -26,10 +27,11 @@ from DFT_interfaces.openmx.magnetism.io_utils import (
 )
 from DFT_interfaces.openmx.magnetism.openmx_input import (
     build_collinear_dat_text,
+    build_xsf_text,
     build_noncollinear_dat_text,
     write_text,
 )
-from DFT_interfaces.openmx.magnetism.spin import read_xsf_spin, spin_to_spherical
+from DFT_interfaces.openmx.magnetism.spin import generate_spin_vectors, read_xsf_spin, spin_to_spherical
 
 
 def add_common_options(parser):
@@ -46,7 +48,12 @@ def add_common_options(parser):
         default=None,
         help="Validate config and print planned work.",
     )
-    parser.add_argument("--skip-errors", action="store_true", help="Continue after per-file errors.")
+    parser.add_argument(
+        "--skip-errors",
+        action="store_true",
+        default=None,
+        help="Continue after per-file errors.",
+    )
 
 
 def build_parser():
@@ -199,6 +206,157 @@ def _print_dry_run(command_name, plans):
         print(f"  output: {output_path}")
 
 
+def _resolve_nao_max(config, default=26):
+    graph_data = config.get("graph_data", {})
+    if graph_data and not isinstance(graph_data, dict):
+        raise ConfigError("Config section 'graph_data' must be a mapping.")
+
+    try:
+        return int(graph_data.get("nao_max", default))
+    except (TypeError, ValueError) as exc:
+        raise ConfigError("graph_data.nao_max must be an integer.") from exc
+
+
+def _print_skip_summary(command_name, plans, skipped):
+    if not skipped:
+        return
+    print(
+        f"{command_name}: processed {len(plans) - len(skipped)}/{len(plans)} file(s); skipped {len(skipped)}.",
+        file=sys.stderr,
+    )
+    for input_path, error in skipped:
+        print(f"  {input_path}: {error}", file=sys.stderr)
+
+
+def _is_batch_error(error):
+    return isinstance(error, (ConfigError, OSError, ValueError, TypeError, IndexError, KeyError))
+
+
+def _resolve_workers(config):
+    workers = config.get("runtime", {}).get("workers", 1)
+    if workers is None:
+        return 1
+    workers = int(workers)
+    return max(workers, 1)
+
+
+def _run_batch(plans, worker_count, runner):
+    if worker_count <= 1 or len(plans) <= 1:
+        return [runner(item) for item in plans]
+
+    results = [None] * len(plans)
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        future_map = {executor.submit(runner, item): index for index, item in enumerate(plans)}
+        for future in as_completed(future_map):
+            index = future_map[future]
+            results[index] = future.result()
+    return results
+
+
+def _run_batch_with_skip_errors(command_name, plans, worker_count, runner, *, skip_errors):
+    skipped = []
+    results = [None] * len(plans)
+
+    def wrapped(item):
+        try:
+            return runner(item)
+        except Exception as exc:  # noqa: BLE001 - converted into user-facing batch diagnostics.
+            if not skip_errors or not _is_batch_error(exc):
+                raise
+            return exc
+
+    batch_results = _run_batch(plans, worker_count, wrapped)
+    for index, result in enumerate(batch_results):
+        if isinstance(result, Exception):
+            skipped.append((plans[index][0], result))
+        else:
+            results[index] = result
+
+    _print_skip_summary(command_name, plans, skipped)
+    return results, skipped
+
+
+def _run_preflight_batch(command_name, plans, worker_count, preflight, *, skip_errors, empty_message):
+    def runner(item):
+        preflight(item)
+        return item
+
+    results, _ = _run_batch_with_skip_errors(
+        command_name,
+        plans,
+        worker_count,
+        runner,
+        skip_errors=skip_errors,
+    )
+    valid_plans = [plan for plan, result in zip(plans, results) if result is not None]
+    if not valid_plans:
+        raise ConfigError(empty_message)
+    return valid_plans
+
+
+def _load_structure(path):
+    try:
+        structure = Structure.from_file(path)
+    except Exception as exc:  # noqa: BLE001 - parsed into ConfigError for uniform CLI diagnostics.
+        raise ConfigError(f"Cannot read structure file '{path}': {exc}") from exc
+    return AseAtomsAdaptor.get_atoms(structure)
+
+
+def _validate_species_settings(atoms, species_config, nao_max):
+    symbols = atoms.get_chemical_symbols()
+    species_settings = resolve_species_settings(symbols, species_config, nao_max=nao_max)
+    return symbols, species_settings
+
+
+def _preflight_convert_collinear(input_path, config):
+    atoms = _load_structure(input_path)
+    species_config = config.get("species", {})
+    _validate_species_settings(atoms, species_config, 26)
+    return atoms
+
+
+def _preflight_convert_noncollinear(input_path, config):
+    atoms = read_ase(input_path)
+    _, spin_vectors = read_xsf_spin(input_path)
+    if len(spin_vectors) != len(atoms):
+        raise ConfigError(
+            f"Spin vector count {len(spin_vectors)} does not match atom count {len(atoms)} for '{input_path}'."
+        )
+    noncollinear_config = config.get("convert_noncollinear", {})
+    threshold = float(noncollinear_config.get("nonmagnetic_threshold", 0.01))
+    spin_to_spherical(spin_vectors, nonmagnetic_threshold=threshold)
+    species_config = config.get("species", {})
+    _validate_species_settings(atoms, species_config, 26)
+    return atoms
+
+
+def _preflight_make_xsf_spin(input_path, config):
+    atoms = _load_structure(input_path)
+    workflow = config.get("make_xsf_spin", {})
+    if not isinstance(workflow, dict):
+        raise ConfigError("Config section 'make_xsf_spin' must be a mapping.")
+    species_config = config.get("species", {})
+    _validate_species_settings(atoms, species_config, 26)
+    magnetic_vectors = generate_spin_vectors(len(atoms), workflow)
+    build_xsf_text(atoms, magnetic_vectors)
+    return atoms
+
+
+def _preflight_pack_graph_root(root, config, mode, read_openmx, nao_max):
+    dat_file = _select_best_file(root, ".dat", root.name)
+    std_file = _select_best_file(root, ".std", root.name)
+    scfout_file = _select_best_file(root, ".scfout", root.name, exclude_names={"overlap.scfout"})
+    if not dat_file.exists() or not std_file.exists() or not scfout_file.exists():
+        raise ConfigError(f"Missing required graph files in '{root}'.")
+
+    dat_text = dat_file.read_text(encoding="utf-8")
+    std_text = std_file.read_text(encoding="utf-8")
+    species, _, _, _ = _parse_dat_text(dat_text)
+    resolve_species_settings(species, config.get("species"), nao_max=nao_max)
+    _ = std_text
+    return root
+
+
 def _config_dry_run_enabled(config):
     return bool(config.get("runtime", {}).get("dry_run"))
 
@@ -251,21 +409,42 @@ def command_convert_collinear(args):
     """Run POSCAR/CIF to collinear OpenMX .dat conversion."""
     config = _load_merged_config(args)
     plans = _planned_paths(config, ".dat")
+    workers = _resolve_workers(config)
+    skip_errors = bool(config.get("runtime", {}).get("skip_errors"))
     if _config_dry_run_enabled(config):
-        _print_dry_run("convert-collinear", plans)
+        valid_plans = _run_preflight_batch(
+            "convert-collinear",
+            plans,
+            workers,
+            lambda item: _preflight_convert_collinear(item[0], config),
+            skip_errors=skip_errors,
+            empty_message="No valid collinear inputs could be converted.",
+        )
+        _print_dry_run("convert-collinear", valid_plans)
         return 0
 
     ensure_output_dir(config["outputs"]["directory"])
     template = _collinear_template(config)
     species_config = config.get("species", {})
-    for input_path, output_path in plans:
-        structure = Structure.from_file(input_path)
-        atoms = AseAtomsAdaptor.get_atoms(structure)
+
+    def runner(item):
+        input_path, output_path = item
+        atoms = _load_structure(input_path)
         symbols = atoms.get_chemical_symbols()
         species_settings = resolve_species_settings(symbols, species_config)
         atom_settings = _atom_settings(symbols, species_settings, config.get("atom_spins"))
         text = build_collinear_dat_text(atoms, template, species_settings, atom_settings=atom_settings)
-        write_text(output_path, text, overwrite=True)
+        return write_text(output_path, text, overwrite=True)
+
+    results, _ = _run_batch_with_skip_errors(
+        "convert-collinear",
+        plans,
+        workers,
+        runner,
+        skip_errors=skip_errors,
+    )
+    if not any(result is not None for result in results):
+        raise ConfigError("No valid collinear inputs could be converted.")
     return 0
 
 
@@ -273,8 +452,18 @@ def command_convert_noncollinear(args):
     """Run XSF spin to non-collinear OpenMX .dat conversion."""
     config = _load_merged_config(args)
     plans = _planned_paths(config, ".dat")
+    workers = _resolve_workers(config)
+    skip_errors = bool(config.get("runtime", {}).get("skip_errors"))
     if _config_dry_run_enabled(config):
-        _print_dry_run("convert-noncollinear", plans)
+        valid_plans = _run_preflight_batch(
+            "convert-noncollinear",
+            plans,
+            workers,
+            lambda item: _preflight_convert_noncollinear(item[0], config),
+            skip_errors=skip_errors,
+            empty_message="No valid non-collinear inputs could be converted.",
+        )
+        _print_dry_run("convert-noncollinear", valid_plans)
         return 0
 
     ensure_output_dir(config["outputs"]["directory"])
@@ -282,7 +471,9 @@ def command_convert_noncollinear(args):
     species_config = config.get("species", {})
     noncollinear_config = config.get("convert_noncollinear", {})
     threshold = float(noncollinear_config.get("nonmagnetic_threshold", 0.01))
-    for input_path, output_path in plans:
+
+    def runner(item):
+        input_path, output_path = item
         atoms = read_ase(input_path)
         _, spin_vectors = read_xsf_spin(input_path)
         symbols = atoms.get_chemical_symbols()
@@ -301,7 +492,17 @@ def command_convert_noncollinear(args):
             phi=phi,
             atom_settings=atom_settings,
         )
-        write_text(output_path, text, overwrite=True)
+        return write_text(output_path, text, overwrite=True)
+
+    results, _ = _run_batch_with_skip_errors(
+        "convert-noncollinear",
+        plans,
+        workers,
+        runner,
+        skip_errors=skip_errors,
+    )
+    if not any(result is not None for result in results):
+        raise ConfigError("No valid non-collinear inputs could be converted.")
     return 0
 
 
@@ -309,10 +510,45 @@ def command_make_xsf_spin(args):
     """Run POSCAR/CIF to XSF-with-spin conversion."""
     config = _load_merged_config(args)
     plans = _planned_paths(config, ".xsf")
+    workers = _resolve_workers(config)
+    skip_errors = bool(config.get("runtime", {}).get("skip_errors"))
     if _config_dry_run_enabled(config):
-        _print_dry_run("make-xsf-spin", plans)
+        valid_plans = _run_preflight_batch(
+            "make-xsf-spin",
+            plans,
+            workers,
+            lambda item: _preflight_make_xsf_spin(item[0], config),
+            skip_errors=skip_errors,
+            empty_message="No valid XSF inputs could be converted.",
+        )
+        _print_dry_run("make-xsf-spin", valid_plans)
         return 0
-    raise ConfigError("Only --dry-run is implemented for make-xsf-spin in Task 7.")
+
+    ensure_output_dir(config["outputs"]["directory"])
+    species_config = config.get("species", {})
+    workflow = config.get("make_xsf_spin", {})
+    if not isinstance(workflow, dict):
+        raise ConfigError("Config section 'make_xsf_spin' must be a mapping.")
+
+    def runner(item):
+        input_path, output_path = item
+        atoms = _load_structure(input_path)
+        symbols = atoms.get_chemical_symbols()
+        resolve_species_settings(symbols, species_config)
+        magnetic_vectors = generate_spin_vectors(len(symbols), workflow)
+        text = build_xsf_text(atoms, magnetic_vectors)
+        return write_text(output_path, text, overwrite=True)
+
+    results, _ = _run_batch_with_skip_errors(
+        "make-xsf-spin",
+        plans,
+        workers,
+        runner,
+        skip_errors=skip_errors,
+    )
+    if not any(result is not None for result in results):
+        raise ConfigError("No valid XSF inputs could be converted.")
+    return 0
 
 
 def command_pack_graph_data(args):
@@ -326,26 +562,42 @@ def command_pack_graph_data(args):
         raise ConfigError("Config must define outputs.directory.")
 
     roots = _pack_input_roots(patterns)
+    skip_errors = bool(config.get("runtime", {}).get("skip_errors"))
+    workers = _resolve_workers(config)
     if _config_dry_run_enabled(config):
+        read_openmx = resolve_read_openmx(config.get("graph_data", {}).get("read_openmx"))
+        nao_max = _resolve_nao_max(config)
         output_path = Path(output_dir) / "graph_data.npz"
         plans = [(root, output_path) for root in roots]
-        _print_dry_run(f"pack-graph-data ({args.mode})", plans)
+        valid_plans = _run_preflight_batch(
+            "pack-graph-data",
+            plans,
+            workers,
+            lambda item: _preflight_pack_graph_root(item[0], config, args.mode, read_openmx, nao_max),
+            skip_errors=skip_errors,
+            empty_message="No valid graph data could be packaged.",
+        )
+        _print_dry_run(f"pack-graph-data ({args.mode})", valid_plans)
         return 0
 
     read_openmx = resolve_read_openmx(config.get("graph_data", {}).get("read_openmx"))
-    nao_max = int(config.get("graph_data", {}).get("nao_max"))
-    skip_errors = bool(config.get("runtime", {}).get("skip_errors"))
+    nao_max = _resolve_nao_max(config)
     output_dir_path = ensure_output_dir(output_dir)
     output_path = output_dir_path / "graph_data.npz"
 
-    graphs = {}
-    for index, root in enumerate(roots):
-        try:
-            graphs[index] = _pack_graph_for_root(root, config, args.mode, read_openmx, nao_max)
-        except ConfigError as exc:
-            if not skip_errors:
-                raise
-            print(f"Skipping {root}: {exc}", file=sys.stderr)
+    def runner(item):
+        root, _ = item
+        return _pack_graph_for_root(root, config, args.mode, read_openmx, nao_max)
+
+    plans = [(root, output_path) for root in roots]
+    results, _ = _run_batch_with_skip_errors(
+        "pack-graph-data",
+        plans,
+        workers,
+        runner,
+        skip_errors=skip_errors,
+    )
+    graphs = {index: graph for index, graph in enumerate(results) if graph is not None}
 
     if not graphs:
         raise ConfigError("No valid graph data could be packaged.")
