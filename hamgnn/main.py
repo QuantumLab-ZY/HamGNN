@@ -545,7 +545,7 @@ def train_and_evaluate(config):
 
 def HamGNN():
     #torch.autograd.set_detect_anomaly(True)
-    pl.utilities.seed.seed_everything(666)
+    pl.seed_everything(666)
     
     # Print version info on master process
     if _is_primary_process():
