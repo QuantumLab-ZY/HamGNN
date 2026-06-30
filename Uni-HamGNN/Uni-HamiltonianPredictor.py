@@ -365,7 +365,7 @@ def predict_and_save_hamiltonian(
     predictor = load_model_predictor(model_pkl_path, device=device)
     _patch_legacy_attributes(predictor)
 
-    if soc_data_dir == '':
+    if soc_data_dir in [None, '']:
         print("Warning: soc_data_dir is None. Forcing soc_enabled to False.")
         predictor.soc_enabled = False
 
