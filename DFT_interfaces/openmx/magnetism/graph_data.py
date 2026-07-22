@@ -26,6 +26,13 @@ PATTERN_UNIT_DECLARATION = r"^\s*{key}\s+(\S+)(?:\s+#.*)?$"
 PATTERN_COOR = re.compile(
     r"\s+\d+\s+(\w+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+\-?\d+\.?\d+\s+\-?\d+\.?\d+"
 )
+PATTERN_MULLIKEN_HEADER = re.compile(r"^\s*Mulliken populations\s*$", re.MULTILINE)
+PATTERN_COL_ATOM_LINE = re.compile(
+    r"^\s+(\d+)\s+\w+\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.eE+\-]+)\s*$"
+)
+PATTERN_NC_ATOM_LINE = re.compile(
+    r"^\s+(\d+)\s+\w+\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s*$"
+)
 
 
 def basis_mask(nao_max, source_basis, target_basis):
@@ -62,6 +69,71 @@ def parse_energy(std_text):
 
 def should_skip_scf(max_scf, threshold):
     return int(max_scf) > int(threshold)
+
+
+def parse_mulliken_spins(out_text: str, num_atoms: int, mode: str = "collinear"):
+    if mode not in ("collinear", "non_collinear"):
+        raise ConfigError(f"Unsupported mode '{mode}' for Mulliken parsing.")
+
+    mulliken_match = PATTERN_MULLIKEN_HEADER.search(out_text)
+    if not mulliken_match:
+        raise ConfigError("Could not find 'Mulliken populations' section in .out file.")
+
+    lines = out_text[mulliken_match.end():].split('\n')
+    summary_header_idx = None
+    for i, line in enumerate(lines):
+        if "Up spin" in line and "Down spin" in line:
+            summary_header_idx = i
+            break
+        if mode == "non_collinear" and re.match(r"^\s+Up\s+Down\s+Sum\s+Diff", line):
+            summary_header_idx = i
+            break
+
+    if summary_header_idx is None:
+        raise ConfigError("Could not find Mulliken per-atom summary header in .out file.")
+
+    spin_length = []
+    spin_vec = []
+    for line in lines[summary_header_idx + 1:]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("Sum of MulP"):
+            break
+        if mode == "non_collinear":
+            m = PATTERN_NC_ATOM_LINE.match(line)
+            if m is None:
+                break
+            diff = float(m.group(5))
+            theta_deg = float(m.group(6))
+            phi_deg = float(m.group(7))
+            theta = np.radians(theta_deg)
+            phi = np.radians(phi_deg)
+            spin_length.append(abs(diff))
+            spin_vec.append([
+                float(np.sin(theta) * np.cos(phi)),
+                float(np.sin(theta) * np.sin(phi)),
+                float(np.cos(theta)),
+            ])
+        else:
+            m = PATTERN_COL_ATOM_LINE.match(line)
+            if m is None:
+                break
+            up = float(m.group(2))
+            down = float(m.group(3))
+            diff = up - down
+            spin_length.append(abs(diff))
+            if abs(diff) < 1e-12:
+                spin_vec.append([0.0, 0.0, 0.0])
+            else:
+                spin_vec.append([0.0, 0.0, 1.0 if diff >= 0 else -1.0])
+
+    if not spin_length:
+        raise ConfigError("No Mulliken per-atom summary lines found in .out file.")
+    if len(spin_length) != num_atoms:
+        raise ConfigError(
+            f"Mulliken atom count {len(spin_length)} does not match expected {num_atoms}."
+        )
+
+    return np.asarray(spin_length, dtype=float), np.asarray(spin_vec, dtype=float)
 
 
 def _as_integer_valued_array(values, field_name):
@@ -368,25 +440,36 @@ def _fill_vector_blocks(blocks, basis_pairs, nao_max):
     return filled
 
 
-def build_collinear_graph(dat_text, std_text, hs_payload, species_settings, nao_max):
+def build_collinear_graph(dat_text, std_text, hs_payload, species_settings, nao_max, h0_payload=None, spin_length=None, spin_vec=None):
     validate_hs_payload(hs_payload, mode="collinear")
     species, z, coords, cell = _parse_dat_text(dat_text)
     if len(hs_payload["pos"]) != len(species):
         raise ConfigError("HS payload atom count does not match parsed .dat species count.")
-    _validate_payload_positions(hs_payload["pos"], coords)
+    pos = np.asarray(hs_payload["pos"], dtype=float)
+    _validate_payload_positions(pos * AU_TO_ANG, coords)
 
     edge_index = np.asarray(hs_payload["edge_index"], dtype=int)
     inv_edge_idx = np.asarray(hs_payload["inv_edge_idx"], dtype=int)
-    pos = np.asarray(hs_payload["pos"], dtype=float)
     species_basis = _species_basis(species, species_settings)
     total_energy = parse_energy(std_text)
     max_scf = parse_scf_iterations(std_text)
     hon, hoff, son, soff = _build_collinear_hamiltonians(hs_payload, species_basis, edge_index, int(nao_max))
-    spin_length, spin_vec = _build_spin_from_species(species, species_settings)
+    if h0_payload is None:
+        hon0, hoff0 = hon.copy(), hoff.copy()
+    else:
+        validate_hs_payload(h0_payload, mode="collinear")
+        h0_edge_index = np.asarray(h0_payload["edge_index"], dtype=int)
+        if not np.array_equal(h0_edge_index, edge_index):
+            raise ConfigError("H0 HS payload edge_index does not match the Hamiltonian payload.")
+        hon0, hoff0, _, _ = _build_collinear_hamiltonians(
+            h0_payload, species_basis, edge_index, int(nao_max)
+        )
+    if spin_length is None or spin_vec is None:
+        spin_length, spin_vec = _build_spin_from_species(species, species_settings)
 
     return Data(
         z=torch.LongTensor(z),
-        cell=torch.tensor(cell[None, :, :], dtype=torch.float32),
+        cell=torch.tensor(cell[None, :, :] / AU_TO_ANG, dtype=torch.float32),
         total_energy=torch.tensor([total_energy], dtype=torch.float32),
         max_scf=torch.tensor([max_scf], dtype=torch.long),
         pos=torch.tensor(pos, dtype=torch.float32),
@@ -397,8 +480,8 @@ def build_collinear_graph(dat_text, std_text, hs_payload, species_settings, nao_
         cell_shift=torch.tensor(np.asarray(hs_payload["cell_shift"], dtype=int), dtype=torch.long),
         Hon=torch.tensor(hon, dtype=torch.float32),
         Hoff=torch.tensor(hoff, dtype=torch.float32),
-        Hon0=torch.tensor(hon.copy(), dtype=torch.float32),
-        Hoff0=torch.tensor(hoff.copy(), dtype=torch.float32),
+        Hon0=torch.tensor(hon0, dtype=torch.float32),
+        Hoff0=torch.tensor(hoff0, dtype=torch.float32),
         Son=torch.tensor(son, dtype=torch.float32),
         Soff=torch.tensor(soff, dtype=torch.float32),
         spin_length=torch.tensor(spin_length, dtype=torch.float32),
@@ -406,18 +489,19 @@ def build_collinear_graph(dat_text, std_text, hs_payload, species_settings, nao_
     )
 
 
-def build_non_collinear_graph(dat_text, std_text, hs_payload, species_settings, nao_max, spin_vectors=None):
+def build_non_collinear_graph(
+    dat_text, std_text, hs_payload, species_settings, nao_max, spin_vectors=None, h0_payload=None,
+    spin_length=None, spin_vec=None
+):
     validate_hs_payload(hs_payload, mode="non_collinear")
     species, z, coords, cell = _parse_dat_text(dat_text)
     if len(hs_payload["pos"]) != len(species):
         raise ConfigError("HS payload atom count does not match parsed .dat species count.")
-    pos_bohr = np.asarray(hs_payload["pos"], dtype=float)
-    pos_ang = pos_bohr * AU_TO_ANG
-    _validate_payload_positions(pos_ang, coords)
+    pos = np.asarray(hs_payload["pos"], dtype=float)
+    _validate_payload_positions(pos * AU_TO_ANG, coords)
 
     edge_index = np.asarray(hs_payload["edge_index"], dtype=int)
     inv_edge_idx = np.asarray(hs_payload["inv_edge_idx"], dtype=int)
-    pos = pos_ang
     species_basis = _species_basis(species, species_settings)
     total_energy = parse_energy(std_text)
     max_scf = parse_scf_iterations(std_text)
@@ -425,11 +509,30 @@ def build_non_collinear_graph(dat_text, std_text, hs_payload, species_settings, 
         hs_payload, species_basis, edge_index, int(nao_max)
     )
     num_atoms = len(species)
-    spin_length, spin_vec = _build_spin_from_species(species, species_settings, spin_vectors=spin_vectors)
+    if h0_payload is None:
+        hon0 = hon[:num_atoms].copy()
+        hoff0 = hon[num_atoms:].copy()
+        ihon0 = ihon[:num_atoms].copy()
+        ihoff0 = ihon[num_atoms:].copy()
+    else:
+        validate_hs_payload(h0_payload, mode="non_collinear")
+        h0_edge_index = np.asarray(h0_payload["edge_index"], dtype=int)
+        if not np.array_equal(h0_edge_index, edge_index):
+            raise ConfigError("H0 HS payload edge_index does not match the Hamiltonian payload.")
+        h0_hon, h0_ihon, _, _, _, h0_lon, h0_loff = _build_non_collinear_hamiltonians(
+            h0_payload, species_basis, edge_index, int(nao_max)
+        )
+        hon0 = h0_hon[:num_atoms]
+        hoff0 = h0_hon[num_atoms:]
+        ihon0 = h0_ihon[:num_atoms]
+        ihoff0 = h0_ihon[num_atoms:]
+        lon, loff = h0_lon, h0_loff
+    if spin_length is None or spin_vec is None:
+        spin_length, spin_vec = _build_spin_from_species(species, species_settings, spin_vectors=spin_vectors)
 
     return Data(
         z=torch.LongTensor(z),
-        cell=torch.tensor(cell[None, :, :], dtype=torch.float32),
+        cell=torch.tensor(cell[None, :, :] / AU_TO_ANG, dtype=torch.float32),
         total_energy=torch.tensor([total_energy], dtype=torch.float32),
         max_scf=torch.tensor([max_scf], dtype=torch.long),
         pos=torch.tensor(pos, dtype=torch.float32),
@@ -442,10 +545,10 @@ def build_non_collinear_graph(dat_text, std_text, hs_payload, species_settings, 
         Hoff=torch.tensor(hon[num_atoms:], dtype=torch.float32),
         iHon=torch.tensor(ihon[:num_atoms], dtype=torch.float32),
         iHoff=torch.tensor(ihon[num_atoms:], dtype=torch.float32),
-        Hon0=torch.tensor(hon[:num_atoms].copy(), dtype=torch.float32),
-        Hoff0=torch.tensor(hon[num_atoms:].copy(), dtype=torch.float32),
-        iHon0=torch.tensor(ihon[:num_atoms].copy(), dtype=torch.float32),
-        iHoff0=torch.tensor(ihon[num_atoms:].copy(), dtype=torch.float32),
+        Hon0=torch.tensor(hon0, dtype=torch.float32),
+        Hoff0=torch.tensor(hoff0, dtype=torch.float32),
+        iHon0=torch.tensor(ihon0, dtype=torch.float32),
+        iHoff0=torch.tensor(ihoff0, dtype=torch.float32),
         overlap=torch.tensor(overlap, dtype=torch.float32),
         Son=torch.tensor(son, dtype=torch.float32),
         Soff=torch.tensor(soff, dtype=torch.float32),

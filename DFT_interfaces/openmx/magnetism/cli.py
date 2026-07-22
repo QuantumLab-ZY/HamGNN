@@ -6,6 +6,7 @@ import sys
 from copy import deepcopy
 from pathlib import Path
 
+import numpy as np
 from ase.io import read as read_ase
 from pymatgen.core.structure import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
@@ -16,7 +17,11 @@ from DFT_interfaces.openmx.magnetism.graph_data import (
     _parse_dat_text,
     build_collinear_graph,
     build_non_collinear_graph,
+    parse_energy,
+    parse_mulliken_spins,
+    parse_scf_iterations,
     save_graphs_npz,
+    should_skip_scf,
 )
 from DFT_interfaces.openmx.magnetism.io_utils import (
     discover_files,
@@ -182,21 +187,75 @@ def _select_best_file(directory: Path, suffix: str, root_name: str, *, exclude_n
     return max(candidates, key=score)
 
 
+def _resolve_graph_file(root: Path, config, config_key: str, suffix: str, *, exclude_names=None):
+    graph_data = config.get("graph_data", {})
+    explicit_name = graph_data.get(config_key)
+    if explicit_name is not None:
+        if not isinstance(explicit_name, str) or not explicit_name.strip():
+            raise ConfigError(f"graph_data.{config_key} must be a non-empty filename.")
+        candidate = root / explicit_name
+        if not candidate.is_file():
+            raise ConfigError(f"Configured graph_data.{config_key} file not found: '{candidate}'.")
+        return candidate
+    return _select_best_file(root, suffix, root.name, exclude_names=exclude_names)
+
+
+def _max_scf_iterations(config):
+    value = config.get("graph_data", {}).get("max_scf_iterations")
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ConfigError("graph_data.max_scf_iterations must be a non-negative integer.")
+    try:
+        value = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError("graph_data.max_scf_iterations must be a non-negative integer.") from exc
+    if value < 0:
+        raise ConfigError("graph_data.max_scf_iterations must be a non-negative integer.")
+    return value
+
+
 def _pack_graph_for_root(root: Path, config, mode: str, read_openmx, nao_max: int):
-    dat_file = _select_best_file(root, ".dat", root.name)
-    std_file = _select_best_file(root, ".std", root.name)
-    scfout_file = _select_best_file(root, ".scfout", root.name, exclude_names={"overlap.scfout"})
+    dat_file = _resolve_graph_file(root, config, "dat_file_name", ".dat")
+    std_file = _resolve_graph_file(root, config, "std_file_name", ".std")
+    scfout_file = _resolve_graph_file(
+        root, config, "scfout_file_name", ".scfout", exclude_names={"overlap.scfout"}
+    )
+    h0_scfout_file = _resolve_graph_file(root, config, "h0_scfout_file_name", ".scfout") \
+        if config.get("graph_data", {}).get("h0_scfout_file_name") is not None else None
 
     dat_text = dat_file.read_text(encoding="utf-8")
     std_text = std_file.read_text(encoding="utf-8")
+    max_scf = parse_scf_iterations(std_text)
+    parse_energy(std_text)
+    threshold = _max_scf_iterations(config)
+    if threshold is not None and should_skip_scf(max_scf, threshold):
+        raise ConfigError(
+            f"SCF iterations {max_scf} exceed graph_data.max_scf_iterations={threshold}."
+        )
     species, _, _, _ = _parse_dat_text(dat_text)
     species_settings = resolve_species_settings(species, config.get("species"), nao_max=nao_max)
     hs_payload = run_read_openmx(read_openmx, scfout_file, root)
+    h0_payload = run_read_openmx(read_openmx, h0_scfout_file, root) if h0_scfout_file else None
+
+    try:
+        out_file = _resolve_graph_file(root, config, "out_file_name", ".out")
+        out_text = out_file.read_text(encoding="utf-8")
+        mulliken_spin_length, mulliken_spin_vec = parse_mulliken_spins(out_text, len(species), mode=mode)
+    except ConfigError:
+        mulliken_spin_length = np.zeros(len(species), dtype=float)
+        mulliken_spin_vec = np.zeros((len(species), 3), dtype=float)
 
     if mode == "non_collinear":
-        return build_non_collinear_graph(dat_text, std_text, hs_payload, species_settings, nao_max)
+        return build_non_collinear_graph(
+            dat_text, std_text, hs_payload, species_settings, nao_max, h0_payload=h0_payload,
+            spin_length=mulliken_spin_length, spin_vec=mulliken_spin_vec,
+        )
 
-    return build_collinear_graph(dat_text, std_text, hs_payload, species_settings, nao_max)
+    return build_collinear_graph(
+        dat_text, std_text, hs_payload, species_settings, nao_max, h0_payload=h0_payload,
+        spin_length=mulliken_spin_length, spin_vec=mulliken_spin_vec,
+    )
 
 
 def _print_dry_run(command_name, plans):
@@ -343,17 +402,30 @@ def _preflight_make_xsf_spin(input_path, config):
 
 
 def _preflight_pack_graph_root(root, config, mode, read_openmx, nao_max):
-    dat_file = _select_best_file(root, ".dat", root.name)
-    std_file = _select_best_file(root, ".std", root.name)
-    scfout_file = _select_best_file(root, ".scfout", root.name, exclude_names={"overlap.scfout"})
-    if not dat_file.exists() or not std_file.exists() or not scfout_file.exists():
-        raise ConfigError(f"Missing required graph files in '{root}'.")
+    dat_file = _resolve_graph_file(root, config, "dat_file_name", ".dat")
+    std_file = _resolve_graph_file(root, config, "std_file_name", ".std")
+    _resolve_graph_file(root, config, "scfout_file_name", ".scfout", exclude_names={"overlap.scfout"})
+    if config.get("graph_data", {}).get("h0_scfout_file_name") is not None:
+        _resolve_graph_file(root, config, "h0_scfout_file_name", ".scfout")
 
     dat_text = dat_file.read_text(encoding="utf-8")
     std_text = std_file.read_text(encoding="utf-8")
+    max_scf = parse_scf_iterations(std_text)
+    parse_energy(std_text)
+    threshold = _max_scf_iterations(config)
+    if threshold is not None and should_skip_scf(max_scf, threshold):
+        raise ConfigError(
+            f"SCF iterations {max_scf} exceed graph_data.max_scf_iterations={threshold}."
+        )
     species, _, _, _ = _parse_dat_text(dat_text)
     resolve_species_settings(species, config.get("species"), nao_max=nao_max)
-    _ = std_text
+
+    try:
+        out_file = _resolve_graph_file(root, config, "out_file_name", ".out")
+        parse_mulliken_spins(out_file.read_text(encoding="utf-8"), len(species), mode=mode)
+    except ConfigError:
+        pass
+
     return root
 
 

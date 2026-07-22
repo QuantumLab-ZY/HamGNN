@@ -10,3 +10,9 @@ runtime:
 graph_data:
   read_openmx: /root/Github/HamGNN/DFT_interfaces/openmx/magnetism/Tests/read_openmx
   nao_max: 19
+  dat_file_name: openmx.dat
+  std_file_name: openmx.std
+  scfout_file_name: NiI2.scfout
+  h0_scfout_file_name: overlap.scfout
+  out_file_name: NiI2.out
+  max_scf_iterations: 250
