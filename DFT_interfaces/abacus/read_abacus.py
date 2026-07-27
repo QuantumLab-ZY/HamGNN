@@ -21,6 +21,7 @@ from build_graph_from_coordinates import find_inverse_edge_index
 
 au2ang = 0.5291772490000065
 ry2ha  = 13.60580 / 27.21138506
+float_pattern = re.compile(r'[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?')
 
 def convert_to_int(value):
     """
@@ -269,7 +270,7 @@ class STRU:
                 self.cell = []
                 for j in range(1, 4):
                     if i + j < len(lines):
-                        vec = list(map(float, re.findall(r'[+-]?\d+\.?\d*', lines[i + j])))
+                        vec = list(map(float, float_pattern.findall(lines[i + j])))
                         if len(vec) >= 3:
                             self.cell.append(vec[:3])
                 i += 3
