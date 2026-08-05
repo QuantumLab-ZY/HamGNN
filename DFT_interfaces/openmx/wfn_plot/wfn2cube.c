@@ -18,7 +18,7 @@
 
 #define BOHR_TO_ANGSTROM 0.529177249
 #define MAX_SPECIES 64
-#define MAX_ATOMS 1024
+#define MAX_ATOMS 6000
 #define MAX_L 6
 #define MAX_MUL 6
 #define MAX_NAME_LEN 64

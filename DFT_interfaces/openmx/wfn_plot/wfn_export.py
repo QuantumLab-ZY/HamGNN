@@ -13,6 +13,18 @@ import argparse
 
 au2ang = 0.5291772490000065
 
+
+def write_kpoint(file, k_vec):
+    file.write(np.asarray(k_vec, dtype=np.float64).tobytes())
+
+
+def write_coefficients(file, wfn):
+    coefficients = np.empty((len(wfn), 2), dtype=np.float64)
+    coefficients[:, 0] = wfn.real
+    coefficients[:, 1] = wfn.imag
+    file.write(coefficients.tobytes())
+
+
 def main():
     parser = argparse.ArgumentParser(description='Wavefunction export')
     parser.add_argument('--config', default='wfn_export.yaml', type=str, metavar='N')
@@ -52,21 +64,16 @@ def main():
             for ik in range(len(k_vecs)):
                 idx_k = ik
                 k_vec = k_vecs[ik]
-                for i in k_vec.astype(np.float64):
-                    fw_u.write(i)
-                    fw_d.write(i)
+                write_kpoint(fw_u, k_vec)
+                write_kpoint(fw_d, k_vec)
                 for wfn_idx in range(wfn_min, wfn_max+1):
                     wfn = eig_vecs[idx_k, wfn_idx]
                     norbs = int(eig_vecs.shape[2]/2)
                     # output wavefunction
                     wfn_u = wfn[:norbs]
-                    for (i, j) in zip(wfn_u.real.astype(np.float64), wfn_u.imag.astype(np.float64)):
-                        fw_u.write(i)
-                        fw_u.write(j)
+                    write_coefficients(fw_u, wfn_u)
                     wfn_d = wfn[norbs:]
-                    for (i, j) in zip(wfn_d.real.astype(np.float64), wfn_d.imag.astype(np.float64)):
-                        fw_d.write(i)
-                        fw_d.write(j)
+                    write_coefficients(fw_d, wfn_d)
             fw_u.close()
             fw_d.close()
         else:
@@ -76,15 +83,12 @@ def main():
             for ik in range(len(k_vecs)):
                 idx_k = ik
                 k_vec = k_vecs[ik]
-                for i in k_vec.astype(np.float64):
-                    fw.write(i)
+                write_kpoint(fw, k_vec)
                 for wfn_idx in range(wfn_min, wfn_max+1):
                     wfn = eig_vecs[idx_k, wfn_idx]
                     norbs = eig_vecs.shape[2]
                     # output wavefunction
-                    for (i, j) in zip(wfn.real.astype(np.float64), wfn.imag.astype(np.float64)):
-                        fw.write(i)
-                        fw.write(j)
+                    write_coefficients(fw, wfn)
             fw.close()
     else:
         idx_k = input['k_idx'] 
@@ -106,23 +110,17 @@ def main():
             filename = os.path.join(save_dir, 'wfn_up.bin')
             fw = open(filename, "wb")
             idx_k = 0
-            for i in k_vec.astype(np.float64):
-                fw.write(i)
+            write_kpoint(fw, k_vec)
             wfn_u = wfn[:norbs]
-            for (i, j) in zip(wfn_u.real.astype(np.float64), wfn_u.imag.astype(np.float64)):
-                fw.write(i)
-                fw.write(j)
+            write_coefficients(fw, wfn_u)
             fw.close()
             
             filename = os.path.join(save_dir, 'wfn_down.bin')
             fw = open(filename, "wb")
             idx_k = 0
-            for i in k_vec.astype(np.float64):
-                fw.write(i)
+            write_kpoint(fw, k_vec)
             wfn_d = wfn[norbs:]
-            for (i, j) in zip(wfn_d.real.astype(np.float64), wfn_d.imag.astype(np.float64)):
-                fw.write(i)
-                fw.write(j)
+            write_coefficients(fw, wfn_d)
             fw.close()
     
         else:
@@ -131,11 +129,8 @@ def main():
             filename = os.path.join(save_dir, 'wfn.bin')
             fw = open(filename, "wb")
             idx_k = 0
-            for i in k_vec.astype(np.float64):
-                fw.write(i)
-            for (i, j) in zip(wfn.real.astype(np.float64), wfn.imag.astype(np.float64)):
-                fw.write(i)
-                fw.write(j)
+            write_kpoint(fw, k_vec)
+            write_coefficients(fw, wfn)
             fw.close()
 
 if __name__ == '__main__':

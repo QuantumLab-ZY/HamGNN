@@ -9,7 +9,7 @@ The toolkit consists of two components:
 | Component | Language | Purpose |
 |-----------|----------|---------|
 | `wfn_export.py` | Python | Extracts specific band wavefunction coefficients from `eigen_vecs.npy` (output by `band_cal_parallel`) and writes binary `.bin` files |
-| `wfn2cube` / `wfn2cube_mpi` | C (serial + MPI+OpenMP) | Reads binary wavefunction files + OpenMX input (`.dat`) + PAO basis files, evaluates wavefunctions on a real-space grid, and outputs `.cube` files |
+| `wfn2cube` / `wfn2cube_mpi` | C (serial + MPI+OpenMP) | Reads one wavefunction from a binary file plus an OpenMX input (`.dat`) and its PAO basis files, evaluates it on a real-space grid, and outputs `.cube` files |
 
 ---
 
@@ -21,7 +21,7 @@ The toolkit consists of two components:
 |------------|-------------|-------|
 | **GCC** (or compatible C compiler) | `wfn2cube` (serial) | `gcc >= 4.8` recommended |
 | **MPI compiler** (`mpicc`) | `wfn2cube_mpi` (parallel) | OpenMPI or MPICH |
-| **OpenMP** (optional) | `wfn2cube_mpi` parallel performance | Usually bundled with GCC |
+| **OpenMP** | `wfn2cube_mpi` | The Makefile builds the MPI target with `-fopenmp` |
 | **Python 3** | `wfn_export.py` | Python 3.6+ |
 | **NumPy** | `wfn_export.py` | `pip install numpy` |
 | **PyYAML** | `wfn_export.py` | `pip install pyyaml` |
@@ -67,11 +67,11 @@ make clean
 The `wfn_export.py` script is designed to work with the `eigen_vecs.npy` output from HamGNN's `tools/band_cal_parallel` tool. Run a band structure calculation first:
 
 ```bash
-band_cal_parallel --config band_cal.yaml
+mpirun -np <ncpus> band_cal_parallel --config band_cal_parallel.yaml
 ```
 
 This produces `eigen_vecs.npy` containing eigenvector coefficients at each k-point. You also need:
-- `openmx.dat` — Original OpenMX input file (used by `wfn2cube` for crystal structure and basis information)
+- `openmx.dat` — Original OpenMX input file. Its `DATA.PATH` setting must point to an OpenMX DFT data directory containing `PAO/`.
 - `eigen_vecs.npy` — Eigenvector output from `band_cal_parallel`
 
 ### Step 2: Export Wavefunction Coefficients (`wfn_export.py`)
@@ -91,8 +91,8 @@ save_dir: "./output"  # Output directory
 soc_switch: false  # Set true for spin-orbit coupling
 integration: false  # Single mode (export one wavefunction)
 k_idx: 0  # Index of k-point in eigen_vecs.npy
-wfn_idx: 3  # Band index to export (0-based). Corresponds to `num_wfns` in band_cal_parallel.yaml. If `num_wfns=3`, `wfn_idx=3` exports the HOMO wavefunction.
-k_vec: [0.0, 0.0, 0.0]  # k-point in reciprocal coordinates (for cube header)
+wfn_idx: 3  # 0-based index along eigen_vecs.npy axis 1
+k_vec: [0.0, 0.0, 0.0]  # Input k-point; transformed by inv(latt).T before being written
 ```
 
 Run:
@@ -100,23 +100,32 @@ Run:
 python wfn_export.py --config wfn_export.yaml
 ```
 
-Output: `wfn.bin` (or `wfn_up.bin` + `wfn_down.bin` for SOC)
+Output: `wfn.bin` (or `wfn_up.bin` + `wfn_down.bin` for SOC).
+
+`latt` is converted from Angstrom to Bohr before the reciprocal-space k-vector is calculated. `wfn_idx` is a direct array index; it is not automatically mapped to HOMO/VBM from `num_wfns`. The converted k-vector is stored in the binary file and printed by `wfn2cube`, but is not written to the Cube header.
+
+For SOC output, run `wfn2cube` separately for `wfn_up.bin` and `wfn_down.bin`.
+
+#### Integration Mode
+
+When `integration: true`, the script additionally requires `wfn_min`, `wfn_max`, and `k_vecs_path`, and concatenates all selected bands for all k-points into one binary file. The current `wfn2cube` reader consumes only the first record in a file, so integration-mode output is **not directly supported by `wfn2cube`**. Use `integration: false` for the conversion workflow documented below.
 
 ### Step 3: Convert to Cube Format (`wfn2cube`)
 
 #### Serial Mode
 
 ```bash
-./wfn2cube <wfn.bin> <openmx.dat> <DFT_DATA_path> [output_prefix]
+./wfn2cube <openmx.dat> <wfn.bin> [output.cube]
 ```
 
 Arguments:
 | Argument | Description | Example |
 |----------|-------------|---------|
-| `wfn.bin` | Binary wavefunction file from step 2 | `output/wfn.bin` |
 | `openmx.dat` | OpenMX input file | `example_input/openmx.dat` |
-| `DFT_DATA_path` | Path to OpenMX DFT_DATA directory (contains PAO/ and VPS/) | `example_input/DFT_DATA19` |
-| `output_prefix` | (Optional) Prefix for output cube files | `wfn` |
+| `wfn.bin` | Single-wavefunction binary file from step 2 | `output/wfn.bin` |
+| `output.cube` | Optional output base name; the `.cube` suffix is removed before adding component suffixes | `wfn.cube` |
+
+The DFT data path is not a command-line argument. `wfn2cube` reads it from `DATA.PATH` in `openmx.dat` and loads PAO files from `<DATA.PATH>/PAO/`. A relative `DATA.PATH` is resolved relative to the process working directory.
 
 Output files:
 - `<prefix>_real.cube` — Real part of wavefunction
@@ -126,7 +135,7 @@ Output files:
 #### Parallel Mode (MPI+OpenMP)
 
 ```bash
-mpirun -np 8 ./wfn2cube_mpi output/wfn.bin example_input/openmx.dat example_input/DFT_DATA19 wfn_mpi
+mpirun -np 8 ./wfn2cube_mpi example_input/openmx.dat output/wfn.bin wfn_mpi.cube
 ```
 
 Output files:
@@ -145,7 +154,7 @@ cd DFT_interfaces/openmx/wfn_plot
 make all mpi
 
 # 2. Run band structure calculation with band_cal_parallel (prerequisite)
-band_cal_parallel --config band_cal.yaml
+mpirun -np 8 band_cal_parallel --config band_cal_parallel.yaml
 # This produces eigen_vecs.npy containing eigenvectors
 
 # 3. Export specific band wavefunction to binary format
@@ -153,10 +162,10 @@ python wfn_export.py --config wfn_export.yaml
 # This reads eigen_vecs.npy and produces output/wfn.bin
 
 # 4. Convert to cube format (serial)
-./wfn2cube output/wfn.bin /path/to/openmx.dat /path/to/DFT_DATA19 wfn
+./wfn2cube /path/to/openmx.dat output/wfn.bin wfn.cube
 
 # 4b. Or convert to cube format (parallel with 8 MPI ranks)
-mpirun -np 8 ./wfn2cube_mpi output/wfn.bin /path/to/openmx.dat /path/to/DFT_DATA19 wfn_mpi
+mpirun -np 8 ./wfn2cube_mpi /path/to/openmx.dat output/wfn.bin wfn_mpi.cube
 
 # 5. Visualize the .cube files with VESTA, VMD, etc.
 ```
@@ -169,8 +178,10 @@ mpirun -np 8 ./wfn2cube_mpi output/wfn.bin /path/to/openmx.dat /path/to/DFT_DATA
 
 | Offset | Content | Type |
 |--------|---------|------|
-| 0–23 | k-point (kx, ky, kz) | 3 × float64 |
-| 24– | Wavefunction coefficients (Re, Im pairs) | N × 2 × float64 |
+| 0-23 | Converted k-point (kx, ky, kz) | 3 x native-endian float64 |
+| 24- | Wavefunction coefficients as interleaved (Re, Im) pairs | N x 2 x native-endian float64 |
+
+The file has no magic number, dimensions, or orbital count. `wfn2cube` derives the expected coefficient count from `openmx.dat` and the PAO files, so the binary file and OpenMX input must describe the same orbital basis. Extra records, such as those written by integration mode, are ignored after the first wavefunction.
 
 ### Cube File Format
 
@@ -187,22 +198,26 @@ Standard Gaussian Cube format:
 
 The real-space grid is determined by (in priority order):
 
-1. **Explicit grid**: If `scf.Ngrid1/2/3` are set in the `.dat` file, those values are used
-2. **Energy cutoff**: If `scf.energycutoff` is set (in Rydberg), the grid is calculated as `N = ceil(π × lattice_length / √(ecut))`, rounded up to FFT-friendly numbers (factors of 2, 3, 5)
+1. **Explicit grid**: If all of `scf.Ngrid1`, `scf.Ngrid2`, and `scf.Ngrid3` are nonzero in the `.dat` file, those values are used.
+2. **Energy cutoff**: Otherwise, if `scf.energycutoff` is set in Rydberg, each dimension is calculated as `N = ceil(lattice_length_Bohr × sqrt(ecut) / π)`, then increased to the next FFT-friendly integer whose prime factors are only 2, 3, and 5.
+
+The generated Cube dimensions are `(Ngrid1 + 1) x (Ngrid2 + 1) x (Ngrid3 + 1)`. The extra point includes the periodic boundary endpoint, while each step vector is the corresponding lattice vector divided by `Ngrid`.
 
 ---
 
 ## System Limits
 
-| Limit | Value | Defined In |
-|-------|-------|------------|
-| Maximum species | 64 | `MAX_SPECIES` |
-| Maximum atoms | 1024 | `MAX_ATOMS` |
-| Maximum angular momentum | L = 6 | `MAX_L` |
-| Maximum zeta | 6 | `MAX_MUL` |
-| Maximum grid dimension | 3000 | `MAX_MESH` |
+| Limit or constant | Value | Actual behavior |
+|-------------------|-------|-----------------|
+| Maximum cached species | 64 (`MAX_SPECIES`) | Enforced with an error |
+| Maximum stored atoms | 6000 (`MAX_ATOMS`) | Additional atom records are currently ignored |
+| Angular-index array bound | L = 6 (`MAX_L`) | Used for per-atom zeta storage; not a hard PAO parser limit |
+| Declared multiplicity constant | 6 (`MAX_MUL`) | Currently not enforced at runtime |
+| Declared radial-mesh constant | 3000 (`MAX_MESH`) | Currently not enforced at runtime |
 
-For very large systems exceeding these limits, modify the `#define` constants in `wfn2cube.c` and recompile.
+`AngularF` is implemented only for L = 0 through 3. L = 4 through 6 currently emit a warning and contribute zero to the evaluated wavefunction; higher values also contribute zero. Supporting those channels requires implementing their angular functions; increasing `MAX_L` alone is not sufficient.
+
+For systems exceeding an enforced compile-time limit, modify the corresponding `#define` constant in `wfn2cube.c` and recompile. The PAO loader allocates from the file's `PAO.Mul` and `grid.num.output` values, so `MAX_MUL` and `MAX_MESH` do not currently protect those allocations. `MAX_MESH` is not a real-space Cube grid-dimension limit.
 
 ---
 
@@ -210,8 +225,8 @@ For very large systems exceeding these limits, modify the `#define` constants in
 
 | Issue | Solution |
 |-------|----------|
-| `Cannot open PAO file` | Verify `DFT_DATA_path` contains the `PAO/` subdirectory with correct `.pao` files |
-| `Neither scf.Ngrid nor scf.energycutoff found` | Add either `scf.Ngrid1/2/3` or `scf.energycutoff` to your `.dat` file |
+| `Cannot open PAO file` | Verify that `DATA.PATH` in `openmx.dat` resolves to a directory containing the correct files under `PAO/` |
+| `Neither scf.Ngrid nor scf.energycutoff found` | Set all three of `scf.Ngrid1/2/3`, or set a positive `scf.energycutoff`, in the `.dat` file |
 | `No atoms found in dat file` | Check that `<Atoms.SpeciesAndCoordinates>` section exists in `.dat` |
 | `Too many species` | Increase `MAX_SPECIES` in `wfn2cube.c` (default: 64) |
 | MPI build fails | Ensure `mpicc` is in PATH and OpenMPI/MPICH is installed |
