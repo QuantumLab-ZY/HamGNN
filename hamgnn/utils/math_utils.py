@@ -16,10 +16,10 @@ def count_neighbors_per_node(source_nodes, total_nodes=None):
     # Identify unique nodes and count their occurrences
     unique_nodes, counts = torch.unique(source_nodes, return_counts=True)
 
-    # Determine the total number of nodes. Prefer an explicit size to avoid
-    # GPU-CPU synchronization in hot paths.
+    # Determine the total number of nodes. Query only the scalar maximum in
+    # the default path; copying the full tensor to CPU would add a transfer.
     if total_nodes is None:
-        total_nodes = int(source_nodes.detach().cpu().max()) + 1
+        total_nodes = source_nodes.max().item() + 1
     else:
         total_nodes = int(total_nodes)
 
