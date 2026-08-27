@@ -66,6 +66,9 @@ config_default_representation_nets['HamGNN_pre']['use_kan'] = False
 config_default_representation_nets['HamGNN_pre']['radius_scale'] = 1.01
 config_default_representation_nets['HamGNN_pre']['build_internal_graph'] = False
 config_default_representation_nets['HamGNN_pre']['use_gradient_checkpointing'] = False
+config_default_representation_nets['HamGNN_pre']['tp_backend'] = 'e3nn'
+config_default_representation_nets['HamGNN_pre']['tp_backend_max_weight_numel'] = None
+config_default_representation_nets['HamGNN_pre']['tp_backend_max_instruction_count'] = None
 config_default['representation_nets'] = config_default_representation_nets
 
 """The parameters for output_nets"""

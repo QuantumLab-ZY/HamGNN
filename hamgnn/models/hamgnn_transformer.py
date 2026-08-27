@@ -15,6 +15,7 @@ from .base_model import BaseModel
 from ..nn.attention import AttentionBlockE3
 from ..nn.embeddings import PairInteractionEmbeddingBlock, RadialBasisEdgeEncoding
 from ..nn.interaction_blocks import CorrProductBlock, PairInteractionBlock
+from ..nn.tp_backends import configure_default_tp_backend
 from ..toolbox.nequip.data import AtomicDataDict
 from ..toolbox.nequip.nn import AtomwiseLinear
 from ..toolbox.nequip.nn.embedding import (
@@ -40,6 +41,7 @@ class HamGNNTransformer(BaseModel):
         else:
             assert config.HamGNN_pre.radius_scale > 1.0, "The radius scaling factor must be greater than 1.0."
         super().__init__(radius_type=config.HamGNN_pre.radius_type, radius_scale=config.HamGNN_pre.radius_scale)
+        configure_default_tp_backend(config)
         
         # Configuration settings
         self.num_types = config.HamGNN_pre.num_types  # Number of atomic species
