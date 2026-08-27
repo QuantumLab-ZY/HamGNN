@@ -165,6 +165,10 @@ class HamGNNPlusPlusOut(nn.Module):
         
         # Sparsity calculation flag
         self.calculate_sparsity = calculate_sparsity
+
+        # Element tables are indexed by atomic number; cover the full periodic
+        # table instead of stopping at Z=99.
+        self.MAX_ATOMIC_NUMBER = 128
         
         # Initialize configurations
         self._configure_band_num_control(band_num_control)
@@ -1124,7 +1128,7 @@ class HamGNNPlusPlusOut(nn.Module):
 
         # Create orbital validity mask based on atomic numbers
         # (determine which orbitals are valid for each atom type)
-        atom_orbital_mask = torch.zeros((99, self.nao_max), device=data.z.device).type_as(data.z)
+        atom_orbital_mask = torch.zeros((self.MAX_ATOMIC_NUMBER, self.nao_max), device=data.z.device).type_as(data.z)
         basis_definition_mapped = copy.deepcopy(self.basis_def)
 
         # Convert 1-indexed orbital indices to 0-indexed
@@ -1176,7 +1180,7 @@ class HamGNNPlusPlusOut(nn.Module):
         valid_elements = torch.masked_select(combined_hamiltonian, orbital_interaction_mask > 0)
 
         # Calculate the number of valid orbitals per molecule
-        n_molecules = n_atoms / max_atoms_per_crystal
+        n_molecules = n_atoms // max_atoms_per_crystal
         orbitals_per_molecule = int(math.sqrt(valid_elements.shape[0] / n_molecules))
 
         # Reshape to final molecular Hamiltonian form
@@ -1405,7 +1409,7 @@ class HamGNNPlusPlusOut(nn.Module):
         batch_size = lattice_vectors.shape[0]
 
         # Create orbital validity mask based on atomic numbers
-        atomic_orbital_mask = torch.zeros((99, self.nao_max)).type_as(crystal_data.z)
+        atomic_orbital_mask = torch.zeros((self.MAX_ATOMIC_NUMBER, self.nao_max)).type_as(crystal_data.z)
         for atomic_number, orbital_indices in self.basis_def.items():
             atomic_orbital_mask[atomic_number][orbital_indices] = 1
 
@@ -1423,7 +1427,7 @@ class HamGNNPlusPlusOut(nn.Module):
             )
 
         # Set the number of valence electrons per atom type
-        valence_electron_counts = torch.zeros((99,)).type_as(crystal_data.z)
+        valence_electron_counts = torch.zeros((self.MAX_ATOMIC_NUMBER,)).type_as(crystal_data.z)
         for atomic_number, count in self.num_valence.items():
             valence_electron_counts[atomic_number] = count
 
@@ -1433,7 +1437,7 @@ class HamGNNPlusPlusOut(nn.Module):
 
         # Initialize band window sizes if needed
         if self.band_num_control is not None:
-            bands_per_atom_type = torch.zeros((99,)).type_as(crystal_data.z)
+            bands_per_atom_type = torch.zeros((self.MAX_ATOMIC_NUMBER,)).type_as(crystal_data.z)
             for atomic_number, band_count in self.band_num_control.items():
                 bands_per_atom_type[atomic_number] = band_count
             atom_band_counts = bands_per_atom_type[crystal_data.z]  # shape: [total_atoms]
@@ -1706,7 +1710,7 @@ class HamGNNPlusPlusOut(nn.Module):
         batch_size = lattice_vectors.shape[0]
 
         # Create orbital validity mask based on atomic numbers
-        atomic_orbital_mask = torch.zeros((99, self.nao_max)).type_as(crystal_data.z)
+        atomic_orbital_mask = torch.zeros((self.MAX_ATOMIC_NUMBER, self.nao_max)).type_as(crystal_data.z)
         for atomic_number, orbital_indices in self.basis_def.items():
             atomic_orbital_mask[atomic_number][orbital_indices] = 1
 
@@ -1724,7 +1728,7 @@ class HamGNNPlusPlusOut(nn.Module):
             )
 
         # Set the number of valence electrons per atom type
-        valence_electron_counts = torch.zeros((99,)).type_as(crystal_data.z)
+        valence_electron_counts = torch.zeros((self.MAX_ATOMIC_NUMBER,)).type_as(crystal_data.z)
         for atomic_number, count in self.num_valence.items():
             valence_electron_counts[atomic_number] = count
 
@@ -1734,7 +1738,7 @@ class HamGNNPlusPlusOut(nn.Module):
 
         # Initialize band window sizes if needed
         if isinstance(self.band_num_control, dict):
-            bands_per_atom_type = torch.zeros((99,)).type_as(crystal_data.z)
+            bands_per_atom_type = torch.zeros((self.MAX_ATOMIC_NUMBER,)).type_as(crystal_data.z)
             for atomic_number, band_count in self.band_num_control.items():
                 bands_per_atom_type[atomic_number] = band_count
             atom_band_counts = bands_per_atom_type[crystal_data.z]  # shape: [total_atoms]
@@ -2040,7 +2044,7 @@ class HamGNNPlusPlusOut(nn.Module):
         imag_offsite = imag_offsite.reshape(-1, 2*self.nao_max, 2*self.nao_max)
 
         # Create orbital validity mask based on atomic numbers
-        atomic_orbital_mask = torch.zeros((99, self.nao_max)).type_as(crystal_data.z)
+        atomic_orbital_mask = torch.zeros((self.MAX_ATOMIC_NUMBER, self.nao_max)).type_as(crystal_data.z)
         for atomic_number, orbital_indices in self.basis_def.items():
             atomic_orbital_mask[atomic_number][orbital_indices] = 1
 
@@ -2058,7 +2062,7 @@ class HamGNNPlusPlusOut(nn.Module):
             )
 
         # Set the number of valence electrons per atom type
-        valence_electron_counts = torch.zeros((99,)).type_as(crystal_data.z)
+        valence_electron_counts = torch.zeros((self.MAX_ATOMIC_NUMBER,)).type_as(crystal_data.z)
         for atomic_number, count in self.num_valence.items():
             valence_electron_counts[atomic_number] = count
 
@@ -2068,7 +2072,7 @@ class HamGNNPlusPlusOut(nn.Module):
 
         # Initialize band window sizes if needed
         if isinstance(self.band_num_control, dict):
-            bands_per_atom_type = torch.zeros((99,)).type_as(crystal_data.z)
+            bands_per_atom_type = torch.zeros((self.MAX_ATOMIC_NUMBER,)).type_as(crystal_data.z)
             for atomic_number, band_count in self.band_num_control.items():
                 bands_per_atom_type[atomic_number] = band_count
             atom_band_counts = bands_per_atom_type[crystal_data.z]  # shape: [total_atoms]
@@ -2314,7 +2318,7 @@ class HamGNNPlusPlusOut(nn.Module):
                  onsite_orbital_mask, offsite_orbital_mask)
         """
         # Create atomic orbital validity mask based on atomic numbers
-        atomic_orbital_mask = torch.zeros((99, self.nao_max), device=data.z.device).type_as(data.z)
+        atomic_orbital_mask = torch.zeros((self.MAX_ATOMIC_NUMBER, self.nao_max), device=data.z.device).type_as(data.z)
 
         # Populate mask with 1s for valid orbitals of each atomic number
         for atomic_number, orbital_indices in self.basis_def.items():
@@ -2599,12 +2603,12 @@ class HamGNNPlusPlusOut(nn.Module):
                 for device and dtype information.
 
         Returns:
-            torch.Tensor: Binary mask tensor of shape (99, nao_max) where 99 covers
-                all possible elements in the periodic table and nao_max is the maximum
-                number of atomic orbitals.
+            torch.Tensor: Binary mask tensor of shape (128, nao_max) covering
+                all elements in the periodic table (indexed by atomic number),
+                where nao_max is the maximum number of atomic orbitals.
         """
         # Initialize all orbitals as invalid (zeros)
-        orbital_mask = torch.zeros((99, self.nao_max), device=atomic_numbers.device).type_as(atomic_numbers)
+        orbital_mask = torch.zeros((self.MAX_ATOMIC_NUMBER, self.nao_max), device=atomic_numbers.device).type_as(atomic_numbers)
 
         # Set valid orbitals to 1 for each element type based on the basis definition
         for atomic_number, valid_orbital_indices in self.basis_def.items():

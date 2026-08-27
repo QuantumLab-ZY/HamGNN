@@ -336,7 +336,7 @@ class AttentionBlockE3(nn.Module):
 
         # Process key, query, and value
         key = self.linear_key(node_feats)[sender]
-        query = self.linear_key(node_feats)[receiver]
+        query = self.linear_query(node_feats)[receiver]
         
         value = self.conv_tp_value(self.linear_up_src(node_feats)[sender], 
                                    self.linear_up_tar(node_feats)[receiver],  
