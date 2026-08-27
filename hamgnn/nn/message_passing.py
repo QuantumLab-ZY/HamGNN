@@ -20,6 +20,7 @@ from ..toolbox.efficient_kan import KAN
 from ..utils.irreps_utils import scale_irreps
 from ..utils.macro import GRID_RANGE, GRID_SIZE
 from .tensor_products import LinearScaleWithWeights
+from .tp_backends import build_tensor_product
 
 
 @compile_mode("script")
@@ -78,7 +79,7 @@ class MessagePackBlock(nn.Module):
         )
 
         # Initialize tensor product
-        self.node_tensor_product = o3.TensorProduct(
+        self.node_tensor_product = build_tensor_product(
             self.combined_node_irreps,
             self.irreps_local_env_edge,
             self.mid_node_irreps,
@@ -86,7 +87,7 @@ class MessagePackBlock(nn.Module):
             internal_weights=True,
             shared_weights=True
         )
-        self.edge_tensor_product = o3.TensorProduct(
+        self.edge_tensor_product = build_tensor_product(
             self.irreps_edge_feats,
             self.irreps_local_env_edge,
             self.mid_edge_irreps,
@@ -285,7 +286,7 @@ class MessagePackBlockV2(nn.Module):
         )
 
         # Initialize tensor product
-        self.node_tensor_product = o3.TensorProduct(
+        self.node_tensor_product = build_tensor_product(
             self.combined_node_irreps,
             self.irreps_local_env_edge,
             self.mid_node_irreps,
@@ -293,7 +294,7 @@ class MessagePackBlockV2(nn.Module):
             internal_weights=True,
             shared_weights=True
         )
-        self.edge_tensor_product = o3.TensorProduct(
+        self.edge_tensor_product = build_tensor_product(
             self.irreps_edge_feats,
             self.irreps_local_env_edge,
             self.mid_edge_irreps,
@@ -301,7 +302,7 @@ class MessagePackBlockV2(nn.Module):
             internal_weights=True,
             shared_weights=True
         )
-        self.node_node_tensor_product = o3.TensorProduct(
+        self.node_node_tensor_product = build_tensor_product(
             self.irreps_node_feats,
             self.irreps_node_feats,
             self.mid_node_node_irreps,

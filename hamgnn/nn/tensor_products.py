@@ -16,6 +16,7 @@ from e3nn.util.jit import compile_mode
 from torch import nn
 
 from .attention_utils import AttentionHeadsToVector
+from .tp_backends import build_tensor_product
 from ..toolbox.efficient_kan import KAN
 from ..utils.irreps_utils import scale_irreps
 from ..utils.macro import GRID_RANGE, GRID_SIZE
@@ -28,7 +29,7 @@ class LinearScaleWithWeights(nn.Module):
         
         instructions =  [(i, 0, i, "uvu", True) for i in range(len(irreps_in))]
         
-        self.tp = o3.TensorProduct(
+        self.tp = build_tensor_product(
             irreps_in,
             o3.Irreps('1x0e'),
             irreps_in,
@@ -39,9 +40,14 @@ class LinearScaleWithWeights(nn.Module):
         self.weight_numel = self.tp.weight_numel
         
         self.linear_out = o3.Linear(irreps_in, irreps_out, internal_weights=True, shared_weights=True)
-        
+        self._cached_ones: Optional[torch.Tensor] = None
+
     def forward(self, x, weight):
-        y = torch.ones_like(x[:, 0:1])
+        ref = x[:, 0:1]
+        y = self._cached_ones
+        if y is None or y.shape != ref.shape or y.device != ref.device:
+            y = torch.ones_like(ref)
+            self._cached_ones = y
         out = self.tp(x, y, weight)
         out = self.linear_out(out)
         return out
@@ -92,7 +98,7 @@ class TensorProductWithMemoryOptimizationWithWeight(nn.Module):
         )
 
         # Initialize tensor product
-        self.tensor_product = o3.TensorProduct(
+        self.tensor_product = build_tensor_product(
             self.irreps_input_1,
             self.irreps_input_2,
             self.irreps_mid,
@@ -231,7 +237,7 @@ class TensorProductWithScalarComponents(nn.Module):
         instructions = sorted(instructions, key=lambda x: x[2])
 
         # Initialize tensor product
-        self.tensor_product = o3.TensorProduct(
+        self.tensor_product = build_tensor_product(
             self.irreps_input_1,
             self.irreps_input_2,
             irreps_mid,
@@ -301,7 +307,7 @@ class ConcatenatedIrrepsTensorProduct(nn.Module):
         )
 
         # Initialize tensor product
-        self.tensor_product = o3.TensorProduct(
+        self.tensor_product = build_tensor_product(
             self.irreps_in1_combined,
             self.irreps_in2,
             self.irreps_mid,
