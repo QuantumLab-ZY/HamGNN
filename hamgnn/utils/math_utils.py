@@ -1,11 +1,13 @@
 import torch
 
-def count_neighbors_per_node(source_nodes):
+def count_neighbors_per_node(source_nodes, total_nodes=None):
     """
     Calculate the number of neighbors for each node.
 
     Args:
         source_nodes (torch.Tensor): A tensor containing source node indices.
+        total_nodes (int, optional): Total number of nodes. When provided,
+            avoids GPU-CPU synchronization from querying it from `source_nodes`.
 
     Returns:
         torch.Tensor: A tensor where each index represents a node and the value
@@ -14,8 +16,12 @@ def count_neighbors_per_node(source_nodes):
     # Identify unique nodes and count their occurrences
     unique_nodes, counts = torch.unique(source_nodes, return_counts=True)
 
-    # Determine the total number of nodes
-    total_nodes = source_nodes.max().item() + 1
+    # Determine the total number of nodes. Query only the scalar maximum in
+    # the default path; copying the full tensor to CPU would add a transfer.
+    if total_nodes is None:
+        total_nodes = source_nodes.max().item() + 1
+    else:
+        total_nodes = int(total_nodes)
 
     # Initialize a tensor to store the neighbor counts for each node
     neighbor_counts = torch.zeros((total_nodes,)).type_as(source_nodes)

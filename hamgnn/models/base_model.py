@@ -18,8 +18,8 @@ from easydict import EasyDict
 
 import warnings
 from ase import geometry, neighborlist
+from ase.data import chemical_symbols
 import numpy as np
-from pymatgen.core.periodic_table import Element
 from typing import List, Union
 
 ATOMIC_RADII = {
@@ -81,7 +81,7 @@ def get_radii_from_atomic_numbers(atomic_numbers: Union[torch.Tensor, List[int]]
 
     # Convert atomic numbers to element symbols and then to scaled radii.
     # Use 0.0 as a default value for elements not found in the dictionary.
-    return [radius_scale * ATOMIC_RADII[radius_type].get(Element.from_Z(z).symbol, DEFAULT_RADIUS) for z in atomic_numbers]
+    return [radius_scale * ATOMIC_RADII[radius_type].get(chemical_symbols[int(z)], DEFAULT_RADIUS) for z in atomic_numbers]
 
 
 def neighbor_list_and_relative_vec(
