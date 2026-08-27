@@ -100,6 +100,8 @@ config_default_optimizer['gradient_clip_val'] = 0.0
 config_default_optimizer['stop_patience'] = 30
 config_default_optimizer['min_epochs'] = 100
 config_default_optimizer['max_epochs'] = 3000
+config_default_optimizer['use_muon'] = False
+config_default_optimizer['muon_lr'] = 0.02
 config_default['optim_params'] = config_default_optimizer
 
 """The parameters for losses_metrics."""

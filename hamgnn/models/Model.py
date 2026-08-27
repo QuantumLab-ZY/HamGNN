@@ -74,6 +74,8 @@ class Model(pl.LightningModule):
             beta1: float = 0.99,
             beta2: float = 0.999,
             amsgrad: bool = True,
+            use_muon: bool = False,
+            muon_lr: float = 0.02,
             max_points_to_scatter: int = 100000,
             post_processing: Optional[Callable] = None
     ):
@@ -92,6 +94,8 @@ class Model(pl.LightningModule):
         self.beta1 = beta1
         self.beta2 = beta2
         self.amsgrad = amsgrad
+        self.use_muon = use_muon
+        self.muon_lr = muon_lr
         
         # Visualization parameters
         self.max_points_to_scatter = max_points_to_scatter
@@ -421,14 +425,42 @@ class Model(pl.LightningModule):
         Dict
             Configuration dictionary for PyTorch Lightning
         """
-        optimizer = optim.AdamW(
-            self.parameters(),
-            lr=self.lr,
-            eps=self.epsilon,
-            betas=(self.beta1, self.beta2),
-            weight_decay=0.0,
-            amsgrad=self.amsgrad
-        )
+        if self.use_muon:
+            from ..nn.muon import MuonAdamW, classify_params_for_muon
+
+            muon_params, adamw_params = classify_params_for_muon(self)
+            print(
+                f"[Muon] {len(muon_params)} Muon params, "
+                f"{len(adamw_params)} AdamW params, Muon lr={self.muon_lr}"
+            )
+            optimizer = MuonAdamW([
+                {
+                    "params": muon_params,
+                    "use_muon": True,
+                    "lr": self.muon_lr,
+                    "momentum": 0.95,
+                    "weight_decay": 0.0,
+                    "momentum_warmup_steps": 300,
+                    "momentum_start": 0.85,
+                },
+                {
+                    "params": adamw_params,
+                    "use_muon": False,
+                    "lr": self.lr,
+                    "betas": (self.beta1, self.beta2),
+                    "weight_decay": 0.0,
+                    "eps": self.epsilon,
+                },
+            ])
+        else:
+            optimizer = optim.AdamW(
+                self.parameters(),
+                lr=self.lr,
+                eps=self.epsilon,
+                betas=(self.beta1, self.beta2),
+                weight_decay=0.0,
+                amsgrad=self.amsgrad
+            )
         
         scheduler = {
             "scheduler": optim.lr_scheduler.ReduceLROnPlateau(
