@@ -365,7 +365,9 @@ def load_or_create_model(config, graph_representation, output_module, post_proce
         'validation_metrics': metrics,
         'lr': config.optim_params.lr,
         'lr_decay': config.optim_params.lr_decay,
-        'lr_patience': config.optim_params.lr_patience
+        'lr_patience': config.optim_params.lr_patience,
+        'use_muon': getattr(config.optim_params, 'use_muon', False),
+        'muon_lr': getattr(config.optim_params, 'muon_lr', 0.02)
     }
     
     # Load from checkpoint or create new model
