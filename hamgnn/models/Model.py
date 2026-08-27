@@ -74,10 +74,10 @@ class Model(pl.LightningModule):
             beta1: float = 0.99,
             beta2: float = 0.999,
             amsgrad: bool = True,
-            use_muon: bool = False,
-            muon_lr: float = 0.02,
             max_points_to_scatter: int = 100000,
-            post_processing: Optional[Callable] = None
+            post_processing: Optional[Callable] = None,
+            use_muon: bool = False,
+            muon_lr: float = 0.02
     ):
         super().__init__()
         self.representation = representation
@@ -450,6 +450,7 @@ class Model(pl.LightningModule):
                     "betas": (self.beta1, self.beta2),
                     "weight_decay": 0.0,
                     "eps": self.epsilon,
+                    "amsgrad": self.amsgrad,
                 },
             ])
         else:

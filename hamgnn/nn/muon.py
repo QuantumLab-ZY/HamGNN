@@ -36,6 +36,7 @@ class MuonAdamW(Optimizer):
         ns_steps=5,
         use_muon=False,
         eps=1e-8,
+        amsgrad=False,
         momentum_warmup_steps=0,
         momentum_start=0.85,
     ):
@@ -47,6 +48,7 @@ class MuonAdamW(Optimizer):
             ns_steps=ns_steps,
             use_muon=use_muon,
             eps=eps,
+            amsgrad=amsgrad,
             momentum_warmup_steps=momentum_warmup_steps,
             momentum_start=momentum_start,
         )
@@ -59,8 +61,11 @@ class MuonAdamW(Optimizer):
         return d
 
     def load_state_dict(self, state_dict):
-        self._global_step = state_dict.pop('_global_step', 0)
-        super().load_state_dict(state_dict)
+        self._global_step = state_dict.get('_global_step', 0)
+        optimizer_state = {
+            key: value for key, value in state_dict.items() if key != '_global_step'
+        }
+        super().load_state_dict(optimizer_state)
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -121,6 +126,7 @@ class MuonAdamW(Optimizer):
         beta1, beta2 = group["betas"]
         weight_decay = group["weight_decay"]
         eps = group["eps"]
+        amsgrad = group.get("amsgrad", False)
 
         for param in group["params"]:
             if param.grad is None:
@@ -132,6 +138,8 @@ class MuonAdamW(Optimizer):
                 state["step"] = 0
                 state["exp_avg"] = torch.zeros_like(param)
                 state["exp_avg_sq"] = torch.zeros_like(param)
+                if amsgrad:
+                    state["max_exp_avg_sq"] = torch.zeros_like(param)
 
             state["step"] += 1
             exp_avg = state["exp_avg"]
@@ -145,7 +153,13 @@ class MuonAdamW(Optimizer):
 
             bias_correction1 = 1 - beta1 ** state["step"]
             bias_correction2 = 1 - beta2 ** state["step"]
-            denom = (exp_avg_sq.sqrt() / bias_correction2**0.5).add_(eps)
+            if amsgrad:
+                max_exp_avg_sq = state["max_exp_avg_sq"]
+                torch.maximum(max_exp_avg_sq, exp_avg_sq, out=max_exp_avg_sq)
+                second_moment = max_exp_avg_sq
+            else:
+                second_moment = exp_avg_sq
+            denom = (second_moment.sqrt() / bias_correction2**0.5).add_(eps)
             step_size = lr / bias_correction1
             param.addcdiv_(exp_avg, denom, value=-step_size)
 
