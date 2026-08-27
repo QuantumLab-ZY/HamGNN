@@ -116,6 +116,9 @@ config_default_dataset['test_ratio'] = 0.2
 config_default_dataset['train_ratio'] = 0.6
 config_default_dataset['val_ratio'] = 0.2
 config_default_dataset['graph_data_path'] = './'
+config_default_dataset['preload'] = 0
+config_default_dataset['cache_size'] = 100
+config_default_dataset['enable_static_edge_features'] = False
 config_default['dataset_params'] = config_default_dataset
 
 

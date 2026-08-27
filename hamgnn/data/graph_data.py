@@ -19,40 +19,186 @@ import pickle
 import torch
 import math
 from tqdm import tqdm
-    
+from collections import OrderedDict
+
+from e3nn import o3
+
+from ..toolbox.nequip.data import AtomicDataDict
+from ..utils.basis_functions import (
+    BernsteinRadialBasisFunctions,
+    BesselBasis,
+    ExponentialBernsteinRadialBasisFunctions,
+    ExponentialGaussianRadialBasisFunctions,
+    GaussianSmearing,
+)
+from ..utils.cutoff_functions import CosineCutoff
+
+
+class StaticEdgeFeatureTransform:
+    """Precompute static edge attributes/embeddings for fixed-graph workloads.
+
+    Replicates, once per graph, the edge features that the representation
+    network would otherwise recompute on every training step: spherical
+    harmonics of the edge directions (``edge_attrs``), the radial basis
+    expansion of edge lengths (``edge_embedding``), and ``edge_lengths``.
+    These quantities depend only on the fixed graph geometry, so caching
+    them is exact.
+    """
+
+    def __init__(
+        self,
+        irreps_edge_sh: str,
+        edge_sh_normalization: str,
+        edge_sh_normalize: bool,
+        rbf_func: str,
+        num_radial: int,
+        cutoff: float,
+    ):
+        self.coord_change = torch.LongTensor([1, 2, 0])
+        self.sh = o3.SphericalHarmonics(
+            o3.Irreps(irreps_edge_sh),
+            edge_sh_normalize,
+            edge_sh_normalization,
+        )
+        self.cutoff = CosineCutoff(cutoff)
+        self.basis = self._build_radial_basis(
+            rbf_func=rbf_func,
+            num_radial=num_radial,
+            cutoff=cutoff,
+        )
+
+    @staticmethod
+    def _build_radial_basis(rbf_func: str, num_radial: int, cutoff: float):
+        rbf_func = rbf_func.lower()
+        if rbf_func == "gaussian":
+            return GaussianSmearing(
+                start=0.0, stop=cutoff, num_gaussians=num_radial, cutoff_func=None
+            )
+        if rbf_func == "bessel":
+            return BesselBasis(cutoff=cutoff, n_rbf=num_radial, cutoff_func=None)
+        if rbf_func == "exp-gaussian":
+            return ExponentialGaussianRadialBasisFunctions(num_radial, cutoff)
+        if rbf_func == "exp-bernstein":
+            return ExponentialBernsteinRadialBasisFunctions(num_radial, cutoff)
+        if rbf_func == "bernstein":
+            return BernsteinRadialBasisFunctions(num_radial, cutoff)
+        raise ValueError(f"Unsupported radial basis function: {rbf_func}")
+
+    def __call__(self, data):
+        if (
+            AtomicDataDict.EDGE_ATTRS_KEY in data
+            and AtomicDataDict.EDGE_EMBEDDING_KEY in data
+            and AtomicDataDict.EDGE_LENGTH_KEY in data
+        ):
+            return data
+
+        j, i = data.edge_index
+        nbr_shift = data.nbr_shift
+        pos = data.pos
+
+        edge_dir = (pos[i] + nbr_shift) - pos[j]
+        edge_length = edge_dir.norm(dim=-1)
+
+        if AtomicDataDict.EDGE_ATTRS_KEY not in data:
+            edge_unit = edge_dir / edge_length[:, None]
+            data[AtomicDataDict.EDGE_ATTRS_KEY] = self.sh(
+                edge_unit[:, self.coord_change]
+            )
+        if AtomicDataDict.EDGE_EMBEDDING_KEY not in data:
+            edge_embedding = self.basis(edge_length) * self.cutoff(edge_length)[:, None]
+            data[AtomicDataDict.EDGE_EMBEDDING_KEY] = edge_embedding
+        data[AtomicDataDict.EDGE_LENGTH_KEY] = edge_length
+        return data
+
+
+def build_graph_feature_transform(config):
+    """Build an optional exact-preserving static edge-feature transform.
+
+    Returns ``None`` (feature disabled) unless
+    ``config.dataset_params.enable_static_edge_features`` is true and the
+    configuration describes a plain Hamiltonian workload without force
+    outputs, i.e. a setting where edge geometry features never change
+    during training.
+    """
+    dataset_params = getattr(config, "dataset_params", None)
+    if dataset_params is None or not getattr(
+        dataset_params, "enable_static_edge_features", False
+    ):
+        return None
+
+    gnn_net_type = getattr(config.setup, "GNN_Net", "").lower()
+    if gnn_net_type not in {"hamgnnconv", "hamgnnpre", "hamgnn_pre", "hamgnntransformer"}:
+        return None
+
+    property_type = str(getattr(config.setup, "property", "")).lower()
+    if property_type != "hamiltonian" or "epc" in property_type or "force" in property_type:
+        return None
+
+    output_nets = getattr(config, "output_nets", None)
+    output_module_name = getattr(output_nets, "output_module", None) if output_nets is not None else None
+    output_params = None
+    if output_module_name is not None and hasattr(output_nets, output_module_name):
+        output_params = getattr(output_nets, output_module_name)
+    elif output_nets is not None and hasattr(output_nets, "HamGNN_out"):
+        output_params = output_nets.HamGNN_out
+
+    if output_params is not None and (
+        getattr(output_params, "return_forces", False)
+        or getattr(output_params, "create_graph", False)
+    ):
+        return None
+
+    ham_pre = config.representation_nets.HamGNN_pre
+    return StaticEdgeFeatureTransform(
+        irreps_edge_sh=ham_pre.irreps_edge_sh,
+        edge_sh_normalization=ham_pre.edge_sh_normalization,
+        edge_sh_normalize=ham_pre.edge_sh_normalize,
+        rbf_func=ham_pre.rbf_func,
+        num_radial=ham_pre.num_radial,
+        cutoff=ham_pre.cutoff,
+    )
+
+
 class LMDBGraphDataset(Dataset):
     """
     LMDB graph data loader based on regular Dataset implementation
     """
-    def __init__(self, lmdb_path: str, indices: List[int] = None, 
-                 transform: Callable = None, preload: int = 0):
+    def __init__(self, lmdb_path: str, indices: List[int] = None,
+                 transform: Callable = None, preload: int = 0, cache_size: int = 0):
         super(LMDBGraphDataset, self).__init__()
         self.lmdb_path = lmdb_path
         self.transform = transform
         self.preload = preload
+        self.cache_size = max(int(cache_size), 0)
         self.preloaded_data = {}
-        
+        self.runtime_cache = OrderedDict()
+
         # Open LMDB environment to read metadata
         env = lmdb.open(lmdb_path, readonly=True, lock=False)
         with env.begin() as txn:
             self.total_length = int(txn.get('num_graphs'.encode()).decode())
-        
+
         # Set indices
         self.indices = indices if indices is not None else list(range(self.total_length))
-        
+
         # Optionally preload some data to improve performance
         if self.preload > 0:
             n_preload = min(self.preload, len(self.indices))
             indices_to_preload = self.indices[:n_preload]
-            
+
             with env.begin() as txn:
                 for idx in tqdm(indices_to_preload, desc="Preloading data"):
                     data_bytes = txn.get(f'graph_{idx}'.encode())
                     if data_bytes is not None:
-                        self.preloaded_data[idx] = pickle.loads(data_bytes)
-        
+                        data = pickle.loads(data_bytes)
+                        # Apply the transform once here so preloaded graphs
+                        # are served ready-to-use.
+                        if self.transform is not None:
+                            data = self.transform(data)
+                        self.preloaded_data[idx] = data
+
         env.close()
-        
+
         # Maintain an environment connection to avoid repeated opening/closing
         self.env = None
         
@@ -62,30 +208,44 @@ class LMDBGraphDataset(Dataset):
     def __getitem__(self, idx):
         if isinstance(idx, list):
             return [self[i] for i in idx]
-        
+
         # Get the actual index
         real_idx = self.indices[idx]
-        
-        # Check if already preloaded
-        if real_idx in self.preloaded_data:
-            data = self.preloaded_data[real_idx]
-        else:
-            # Lazy load LMDB environment
-            if self.env is None:
-                self.env = lmdb.open(self.lmdb_path, readonly=True, lock=False, 
-                                     readahead=False, meminit=False)
-            
-            # Load from LMDB
-            with self.env.begin() as txn:
-                data_bytes = txn.get(f'graph_{real_idx}'.encode())
-                if data_bytes is None:
-                    raise IndexError(f"Index {real_idx} out of bounds for LMDB dataset")
-                data = pickle.loads(data_bytes)
-        
+
+        # Check if already preloaded (transform was applied at preload time)
+        preloaded_data = self.preloaded_data.get(real_idx)
+        if preloaded_data is not None:
+            return preloaded_data
+
+        # Check the LRU runtime cache of transformed graphs
+        cached_data = self.runtime_cache.get(real_idx)
+        if cached_data is not None:
+            self.runtime_cache.move_to_end(real_idx)
+            return cached_data
+
+        # Lazy load LMDB environment
+        if self.env is None:
+            self.env = lmdb.open(self.lmdb_path, readonly=True, lock=False,
+                                 readahead=False, meminit=False)
+
+        # Load from LMDB
+        with self.env.begin() as txn:
+            data_bytes = txn.get(f'graph_{real_idx}'.encode())
+            if data_bytes is None:
+                raise IndexError(f"Index {real_idx} out of bounds for LMDB dataset")
+            data = pickle.loads(data_bytes)
+
         # Apply transformation
         if self.transform is not None:
             data = self.transform(data)
-            
+
+        # Store the transformed graph in the LRU runtime cache
+        if self.cache_size > 0:
+            self.runtime_cache[real_idx] = data
+            self.runtime_cache.move_to_end(real_idx)
+            while len(self.runtime_cache) > self.cache_size:
+                self.runtime_cache.popitem(last=False)
+
         return data
     
     def __del__(self):
@@ -97,13 +257,15 @@ class NPZGraphDataset(Dataset):
     """
     NPZ graph data loader based on regular Dataset implementation
     """
-    def __init__(self, npz_path: str, indices: List[int] = None, 
-                 transform: Callable = None, preload: int = 0):
+    def __init__(self, npz_path: str, indices: List[int] = None,
+                 transform: Callable = None, preload: int = 0, cache_size: int = 0):
         super(NPZGraphDataset, self).__init__()
         self.npz_path = npz_path
         self.transform = transform
         self.preload = preload
+        self.cache_size = max(int(cache_size), 0)
         self.preloaded_data = {}
+        self.runtime_cache = OrderedDict()
         
         # Load NPZ file to get metadata
         try:
@@ -134,10 +296,14 @@ class NPZGraphDataset(Dataset):
         if self.preload > 0:
             n_preload = min(self.preload, len(self.indices))
             indices_to_preload = self.indices[:n_preload]
-            
+
             for idx in tqdm(indices_to_preload, desc="Preloading data"):
-                real_idx = self.indices[idx]
-                self.preloaded_data[real_idx] = self._process_graph(self.data_list[real_idx])
+                data = self._process_graph(self.data_list[idx])
+                # Apply the transform once here so preloaded graphs
+                # are served ready-to-use.
+                if self.transform is not None:
+                    data = self.transform(data)
+                self.preloaded_data[idx] = data
     
     def _process_graph(self, data):
         """Process the graph data to ensure consistent format"""
@@ -167,21 +333,35 @@ class NPZGraphDataset(Dataset):
     def __getitem__(self, idx):
         if isinstance(idx, list):
             return [self[i] for i in idx]
-        
+
         # Obtain the actual index
         real_idx = self.indices[idx]
-        
-        # Check if it has been preloaded
-        if real_idx in self.preloaded_data:
-            data = self.preloaded_data[real_idx]
-        else:
-            # Obtain and process from the data list
-            data = self._process_graph(self.data_list[real_idx])
-        
+
+        # Check if it has been preloaded (transform was applied at preload time)
+        preloaded_data = self.preloaded_data.get(real_idx)
+        if preloaded_data is not None:
+            return preloaded_data
+
+        # Check the LRU runtime cache of transformed graphs
+        cached_data = self.runtime_cache.get(real_idx)
+        if cached_data is not None:
+            self.runtime_cache.move_to_end(real_idx)
+            return cached_data
+
+        # Obtain and process from the data list
+        data = self._process_graph(self.data_list[real_idx])
+
         # Application of transformation
         if self.transform is not None:
             data = self.transform(data)
-            
+
+        # Store the transformed graph in the LRU runtime cache
+        if self.cache_size > 0:
+            self.runtime_cache[real_idx] = data
+            self.runtime_cache.move_to_end(real_idx)
+            while len(self.runtime_cache) > self.cache_size:
+                self.runtime_cache.popitem(last=False)
+
         return data
 
 class graph_data_module(pl.LightningDataModule):
@@ -323,33 +503,39 @@ class graph_data_module(pl.LightningDataModule):
                 # Test using all indices
                 self.test_data = LMDBGraphDataset(
                     self.dataset_input, indices=all_indices, 
-                    transform=self.transform, preload=self.preload
+                    transform=self.transform, preload=self.preload,
+                    cache_size=self.cache_size
                 )
 
                 # Create empty training and validation sets (for placeholder purposes)
                 self.train_data = LMDBGraphDataset(
-                    self.dataset_input, indices=[], 
-                    transform=self.transform
+                    self.dataset_input, indices=[],
+                    transform=self.transform,
+                    cache_size=self.cache_size
                 )
                 self.val_data = LMDBGraphDataset(
-                    self.dataset_input, indices=[], 
-                    transform=self.transform
+                    self.dataset_input, indices=[],
+                    transform=self.transform,
+                    cache_size=self.cache_size
                 )
             elif use_npz:
                 # Use the dataset in NPZ format
                 self.test_data = NPZGraphDataset(
                     self.dataset_input, indices=all_indices, 
-                    transform=self.transform, preload=self.preload
+                    transform=self.transform, preload=self.preload,
+                    cache_size=self.cache_size
                 )
 
                 # Create empty training and validation sets
                 self.train_data = NPZGraphDataset(
-                    self.dataset_input, indices=[], 
-                    transform=self.transform
+                    self.dataset_input, indices=[],
+                    transform=self.transform,
+                    cache_size=self.cache_size
                 )
                 self.val_data = NPZGraphDataset(
-                    self.dataset_input, indices=[], 
-                    transform=self.transform
+                    self.dataset_input, indices=[],
+                    transform=self.transform,
+                    cache_size=self.cache_size
                 )
             else:
                 # Test using the entire dataset
@@ -398,11 +584,13 @@ class graph_data_module(pl.LightningDataModule):
                     print("Create training and validation datasets from LMDB")
                     self.train_data = LMDBGraphDataset(
                         self.dataset_input, indices=train_indices, 
-                        transform=self.transform, preload=self.preload
+                        transform=self.transform, preload=self.preload,
+                        cache_size=self.cache_size
                     )
                     self.val_data = LMDBGraphDataset(
                         self.dataset_input, indices=val_indices, 
-                        transform=self.transform, preload=self.preload
+                        transform=self.transform, preload=self.preload,
+                        cache_size=self.cache_size
                     )
                 elif use_npz:
                     # Processing NPZ files using NPZGraphDataset
@@ -410,11 +598,13 @@ class graph_data_module(pl.LightningDataModule):
                     print("Create training and validation datasets from NPZ")
                     self.train_data = NPZGraphDataset(
                         self.dataset_input, indices=train_indices, 
-                        transform=self.transform, preload=self.preload
+                        transform=self.transform, preload=self.preload,
+                        cache_size=self.cache_size
                     )
                     self.val_data = NPZGraphDataset(
                         self.dataset_input, indices=val_indices, 
-                        transform=self.transform, preload=self.preload
+                        transform=self.transform, preload=self.preload,
+                        cache_size=self.cache_size
                     )
                 else:
                     # Using Subset to Process Regular Lists
@@ -426,13 +616,15 @@ class graph_data_module(pl.LightningDataModule):
                     print("Create a test dataset from LMDB")
                     self.test_data = LMDBGraphDataset(
                         self.dataset_input, indices=test_indices, 
-                        transform=self.transform, preload=self.preload
+                        transform=self.transform, preload=self.preload,
+                        cache_size=self.cache_size
                     )
                 elif use_npz:
                     print("Create a test dataset from NPZ")
                     self.test_data = NPZGraphDataset(
                         self.dataset_input, indices=test_indices, 
-                        transform=self.transform, preload=self.preload
+                        transform=self.transform, preload=self.preload,
+                        cache_size=self.cache_size
                     )
                 else:
                     self.test_data = Subset(self.dataset, indices=test_indices)
