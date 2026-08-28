@@ -155,6 +155,7 @@ def prepare_dataset(config):
     # Get optional parameters with defaults
     num_workers = getattr(config.dataset_params, 'num_workers', 4)
     preload = getattr(config.dataset_params, 'preload', 0)
+    cache_size = getattr(config.dataset_params, 'cache_size', 100)
     data_format = getattr(config.dataset_params, 'data_format', 'auto')
     is_test_mode = (config.setup.stage == 'test')
     
@@ -168,6 +169,7 @@ def prepare_dataset(config):
         split_file=split_file,
         num_workers=num_workers,
         preload=preload,
+        cache_size=cache_size,
         test_mode=is_test_mode,
         data_format=data_format
     )
