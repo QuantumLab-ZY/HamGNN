@@ -108,6 +108,21 @@ To avoid library version conflicts, create an environment using the YAML configu
 conda env create -f ./HamGNN.yaml
 ```
 
+### Troubleshooting `wandb` Compatibility Errors
+When training HamGNN in the environment configured by `HamGNN.yaml`, you may encounter the following error:
+
+```text
+AttributeError: module 'wandb.proto.wandb_internal_pb2' has no attribute 'Result'
+```
+
+This error is caused by a compatibility issue in the installed `wandb` package. If Weights & Biases logging is not required, uninstall `wandb` from the active environment:
+
+```bash
+python -m pip uninstall -y wandb
+```
+
+After uninstalling `wandb`, run the training command again.
+
 ### Step Two: Install HamGNN from Source
 1. Clone the HamGNN repository:
    ```bash
@@ -555,6 +570,22 @@ This section provides detailed explanations of the parameter modules and paramet
 | `apply_charge_doping` | boolean | Enable charge doping atom embedding for charged defect systems | `false` |
 | `num_charge_attr_feas` | integer | Number of charge attribution Gaussian features (only used if `apply_charge_doping=True`) | `8` |
 | `use_gradient_checkpointing` | boolean | Enable gradient checkpointing to reduce memory usage during training | `false` |
+| `tp_backend` | string | Tensor-product backend used by HamGNN equivariant layers | `e3nn` (default), or `openequivariance` |
+| `tp_backend_max_weight_numel` | integer or null | Maximum number of tensor-product weight elements allowed for the OpenEquivariance backend; larger tensor products fall back to e3nn | `null` (no limit) |
+| `tp_backend_max_instruction_count` | integer or null | Maximum number of tensor-product instructions allowed for the OpenEquivariance backend; larger tensor products fall back to e3nn | `null` (no limit) |
+
+#### Tensor-Product Backend Configuration
+The default `e3nn` backend is unchanged and remains compatible with existing configuration files and checkpoints. OpenEquivariance is an optional CUDA backend and is not installed as a default HamGNN dependency. Enable it for a run by adding the following settings under `representation_nets.HamGNN_pre`:
+
+```yaml
+representation_nets:
+  HamGNN_pre:
+    tp_backend: openequivariance
+    tp_backend_max_weight_numel: null
+    tp_backend_max_instruction_count: null
+```
+
+When `openequivariance` is requested but the package is unavailable, CUDA is unavailable, or a tensor product is unsupported, HamGNN emits a `RuntimeWarning` and falls back to e3nn. The two optional limits provide guard rails for large tensor products. Set `HAMGNN_STRICT_TP_BACKEND=1` to turn a fallback into an error instead of continuing with e3nn. `FullyConnectedTensorProduct` is currently handled by e3nn and falls back to e3nn when `openequivariance` is selected.
 
 ### Parameter Adjustment Recommendations
 1. **Initial Configuration**:
@@ -620,4 +651,3 @@ The papers related to HamGNN:
 ## Project leaders: 
 + Hongjun Xiang  (Fudan University)
 + Xingao Gong  (Fudan University)
-
