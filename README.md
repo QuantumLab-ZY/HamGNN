@@ -592,6 +592,8 @@ representation_nets:
 
 When `openequivariance` is requested but the package is unavailable, CUDA is unavailable, or a tensor product is unsupported, HamGNN emits a `RuntimeWarning` and falls back to e3nn. The two optional limits provide guard rails for large tensor products. Set `HAMGNN_STRICT_TP_BACKEND=1` to turn a fallback into an error instead of continuing with e3nn. `FullyConnectedTensorProduct` is currently handled by e3nn and falls back to e3nn when `openequivariance` is selected.
 
+> **Note:** When using `openequivariance`, backend initialization may take a relatively long time, especially on the first run. Please wait patiently during initialization; a prolonged period without visible output does not necessarily indicate that the program has encountered an error.
+
 ### Parameter Adjustment Recommendations
 1. **Initial Configuration**:
    - When using for the first time, it is recommended to first use default parameters for primary training, then adjust based on needs after observing the effect
