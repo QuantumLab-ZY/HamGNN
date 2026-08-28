@@ -1,38 +1,29 @@
-name: HamGNN
+name: HamGNN-oeq
 channels:
-  #- conda-forge  # Moved to the first position to ensure priority use
-  #- pytorch
-  #- defaults
+  # Keep the same channel order as the standard HamGNN environment.
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
   - nvidia
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
 dependencies:
-  # --- Core compiler upgrades ---
-  - gcc=12         # Force upgrade compiler version
-  - gxx=12         # C++ compiler upgrade
-  - cmake=3.26     # New version build tool
-  
-  # --- Core dependencies and Python version ---
-  - python=3.9
+  # OpenEquivariance requires Python >= 3.10 and a C++ compiler.
+  - python=3.10
   - pip
-  
-  # --- PyTorch and CUDA ---
+  - gcc=12
+  - gxx=12
+  - cmake=3.26
+  - ninja
+  - libgcc-ng=12
+  - libstdcxx-ng=12
+
+  # PyTorch/CUDA stack used by the HamGNN training environment.
   - pytorch=2.5.0
   - torchvision=0.20.0
   - torchaudio=2.5.0
   - pytorch-cuda=12.1
 
-  # --- Pre-compiled binary alternatives ---
-  - libgcc-ng=12   # Supporting library upgrade
-  - libstdcxx-ng=12
-  
-  # --- Build tool optimization ---
-  - ninja          # Replace traditional build
-  - setuptools=59.5.0  # Avoid deprecation warnings
-  
-  # --- Other dependencies (keep as is) ---
+  # HamGNN runtime dependencies.
   - natsort
   - numba
   - pytorch-lightning=1.5.10
@@ -49,23 +40,23 @@ dependencies:
   - easydict
   - prettytable
   - packaging
-  - wandb
   - opt_einsum
   - matplotlib
   - pandas
   - jupyterlab
-  
-  # --- Optimized Pip installation order ---
-  - pip: 
-    - -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
-    # Binary pre-compiled versions (avoid source compilation)
-    - torch-geometric==2.6.1
-    - torch-scatter==2.1.2+pt25cu121
-    - torch-sparse==0.6.18+pt25cu121
-    # Other dependencies
-    - torch-runstats
-    - torch-ema
-    - torch-dftd
-    - opt_einsum_fx
-    - tensorboard
-    - lmdb
+
+  - pip:
+      # PyG wheels matching PyTorch 2.5 and CUDA 12.1.
+      - -f https://data.pyg.org/whl/torch-2.5.0+cu121.html
+      - torch-geometric==2.6.1
+      - torch-scatter==2.1.2+pt25cu121
+      - torch-sparse==0.6.18+pt25cu121
+      - torch-runstats
+      - torch-ema
+      - torch-dftd
+      - opt_einsum_fx
+      - tensorboard
+      - lmdb
+
+      # Optional CUDA tensor-product backend used by PR #110.
+      - openequivariance==0.6.5
