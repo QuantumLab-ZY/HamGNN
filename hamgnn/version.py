@@ -3,11 +3,10 @@
 Version information for HamGNN.
 
 This module provides version information for the HamGNN package, including
-functions to extract version from Git if available.
+optional Git commit and working-tree status information.
 """
 import os
 import subprocess
-import re
 from datetime import datetime
 
 # Hard-coded version - updated with each release
@@ -33,12 +32,12 @@ soft_logo = f"""
 
 def get_git_version():
     """
-    Get version from git if available.
+    Get commit and working-tree status from Git if available.
     
     Returns
     -------
     tuple
-        (version_string, is_dirty_flag)
+        (commit, is_dirty_flag)
     """
     try:
         # Get the path to the directory containing this file
@@ -48,47 +47,30 @@ def get_git_version():
         if not os.path.exists(os.path.join(base_dir, '.git')):
             return None, False
         
-        # Get the most recent tag
-        try:
-            tag = subprocess.check_output(
-                ['git', 'describe', '--tags', '--abbrev=0'],
-                cwd=base_dir, stderr=subprocess.STDOUT
-            ).decode('utf-8').strip()
-        except subprocess.CalledProcessError:
-            tag = '0.0.0'
-        
         # Get current commit hash
-        commit = subprocess.check_output(
-            ['git', 'rev-parse', '--short', 'HEAD'],
-            cwd=base_dir
-        ).decode('utf-8').strip()
-        
-        # Check if working directory is dirty
-        status = subprocess.check_output(
-            ['git', 'status', '--porcelain'],
-            cwd=base_dir
-        ).decode('utf-8').strip()
-        is_dirty = len(status) > 0
-        
-        # Get commit count since tag
         try:
-            count = subprocess.check_output(
-                ['git', 'rev-list', f'{tag}..HEAD', '--count'],
-                cwd=base_dir
+            commit = subprocess.check_output(
+                ['git', 'rev-parse', '--short', 'HEAD'],
+                cwd=base_dir,
+                stderr=subprocess.STDOUT
             ).decode('utf-8').strip()
-        except subprocess.CalledProcessError:
-            count = '0'
-        
-        if count == '0':
-            version = tag
-        else:
-            version = f"{tag}+{count}.{commit}"
-        
-        # Add dirty flag if needed
-        if is_dirty:
-            version += "-dirty"
-            
-        return version, is_dirty
+        except (subprocess.CalledProcessError, OSError, UnicodeDecodeError):
+            commit = None
+
+        # Check if the working directory is dirty independently of commit lookup.
+        try:
+            status = subprocess.check_output(
+                ['git', 'status', '--porcelain'],
+                cwd=base_dir,
+                stderr=subprocess.STDOUT
+            ).decode('utf-8').strip()
+            is_dirty = bool(status)
+        except (subprocess.CalledProcessError, OSError, UnicodeDecodeError):
+            is_dirty = False
+
+        if commit is None and not is_dirty:
+            return None, False
+        return commit, is_dirty
     except (subprocess.CalledProcessError, OSError, UnicodeDecodeError):
         return None, False
 
@@ -101,27 +83,21 @@ def get_version_info():
     dict
         Dictionary containing version information
     """
-    git_version, is_dirty = get_git_version()
-    if git_version:
-        version = git_version
-    else:
-        version = __version__
-        is_dirty = False
-    
-    # Determine if this is a release version
-    is_release = bool(re.match(r'^[0-9]+\.[0-9]+\.[0-9]+$', version))
-    
+    commit, is_dirty = get_git_version()
+
     return {
-        'version': version,
-        'git_version': git_version,
-        'release': is_release,
+        'version': __version__,
+        # Keep git_version as a compatibility alias for existing consumers.
+        'git_version': commit,
+        'commit': commit,
+        'release': True,
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'is_dirty': is_dirty
     }
 
-# Update the VERSION with git info if available
+# Runtime and package versions always come from the explicit release value.
 version_info = get_version_info()
-VERSION = version_info['version']
+VERSION = __version__
 
 # Update logo with the full version
 soft_logo = soft_logo.replace(f"Version: {__version__}", f"Version: {VERSION}")
