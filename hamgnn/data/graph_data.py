@@ -21,144 +21,6 @@ import math
 from tqdm import tqdm
 from collections import OrderedDict
 
-from e3nn import o3
-
-from ..toolbox.nequip.data import AtomicDataDict
-from ..utils.basis_functions import (
-    BernsteinRadialBasisFunctions,
-    BesselBasis,
-    ExponentialBernsteinRadialBasisFunctions,
-    ExponentialGaussianRadialBasisFunctions,
-    GaussianSmearing,
-)
-from ..utils.cutoff_functions import CosineCutoff
-
-
-class StaticEdgeFeatureTransform:
-    """Precompute static edge attributes/embeddings for fixed-graph workloads.
-
-    Replicates, once per graph, the edge features that the representation
-    network would otherwise recompute on every training step: spherical
-    harmonics of the edge directions (``edge_attrs``), the radial basis
-    expansion of edge lengths (``edge_embedding``), and ``edge_lengths``.
-    These quantities depend only on the fixed graph geometry, so caching
-    them is exact.
-    """
-
-    def __init__(
-        self,
-        irreps_edge_sh: str,
-        edge_sh_normalization: str,
-        edge_sh_normalize: bool,
-        rbf_func: str,
-        num_radial: int,
-        cutoff: float,
-    ):
-        self.coord_change = torch.LongTensor([1, 2, 0])
-        self.sh = o3.SphericalHarmonics(
-            o3.Irreps(irreps_edge_sh),
-            edge_sh_normalize,
-            edge_sh_normalization,
-        )
-        self.cutoff = CosineCutoff(cutoff)
-        self.basis = self._build_radial_basis(
-            rbf_func=rbf_func,
-            num_radial=num_radial,
-            cutoff=cutoff,
-        )
-
-    @staticmethod
-    def _build_radial_basis(rbf_func: str, num_radial: int, cutoff: float):
-        rbf_func = rbf_func.lower()
-        if rbf_func == "gaussian":
-            return GaussianSmearing(
-                start=0.0, stop=cutoff, num_gaussians=num_radial, cutoff_func=None
-            )
-        if rbf_func == "bessel":
-            return BesselBasis(cutoff=cutoff, n_rbf=num_radial, cutoff_func=None)
-        if rbf_func == "exp-gaussian":
-            return ExponentialGaussianRadialBasisFunctions(num_radial, cutoff)
-        if rbf_func == "exp-bernstein":
-            return ExponentialBernsteinRadialBasisFunctions(num_radial, cutoff)
-        if rbf_func == "bernstein":
-            return BernsteinRadialBasisFunctions(num_radial, cutoff)
-        raise ValueError(f"Unsupported radial basis function: {rbf_func}")
-
-    def __call__(self, data):
-        if (
-            AtomicDataDict.EDGE_ATTRS_KEY in data
-            and AtomicDataDict.EDGE_EMBEDDING_KEY in data
-            and AtomicDataDict.EDGE_LENGTH_KEY in data
-        ):
-            return data
-
-        j, i = data.edge_index
-        nbr_shift = data.nbr_shift
-        pos = data.pos
-
-        edge_dir = (pos[i] + nbr_shift) - pos[j]
-        edge_length = edge_dir.norm(dim=-1)
-
-        if AtomicDataDict.EDGE_ATTRS_KEY not in data:
-            edge_unit = edge_dir / edge_length[:, None]
-            data[AtomicDataDict.EDGE_ATTRS_KEY] = self.sh(
-                edge_unit[:, self.coord_change]
-            )
-        if AtomicDataDict.EDGE_EMBEDDING_KEY not in data:
-            edge_embedding = self.basis(edge_length) * self.cutoff(edge_length)[:, None]
-            data[AtomicDataDict.EDGE_EMBEDDING_KEY] = edge_embedding
-        data[AtomicDataDict.EDGE_LENGTH_KEY] = edge_length
-        return data
-
-
-def build_graph_feature_transform(config):
-    """Build an optional exact-preserving static edge-feature transform.
-
-    Returns ``None`` (feature disabled) unless
-    ``config.dataset_params.enable_static_edge_features`` is true and the
-    configuration describes a plain Hamiltonian workload without force
-    outputs, i.e. a setting where edge geometry features never change
-    during training.
-    """
-    dataset_params = getattr(config, "dataset_params", None)
-    if dataset_params is None or not getattr(
-        dataset_params, "enable_static_edge_features", False
-    ):
-        return None
-
-    gnn_net_type = getattr(config.setup, "GNN_Net", "").lower()
-    if gnn_net_type not in {"hamgnnconv", "hamgnnpre", "hamgnn_pre", "hamgnntransformer"}:
-        return None
-
-    property_type = str(getattr(config.setup, "property", "")).lower()
-    if property_type != "hamiltonian" or "epc" in property_type or "force" in property_type:
-        return None
-
-    output_nets = getattr(config, "output_nets", None)
-    output_module_name = getattr(output_nets, "output_module", None) if output_nets is not None else None
-    output_params = None
-    if output_module_name is not None and hasattr(output_nets, output_module_name):
-        output_params = getattr(output_nets, output_module_name)
-    elif output_nets is not None and hasattr(output_nets, "HamGNN_out"):
-        output_params = output_nets.HamGNN_out
-
-    if output_params is not None and (
-        getattr(output_params, "return_forces", False)
-        or getattr(output_params, "create_graph", False)
-    ):
-        return None
-
-    ham_pre = config.representation_nets.HamGNN_pre
-    return StaticEdgeFeatureTransform(
-        irreps_edge_sh=ham_pre.irreps_edge_sh,
-        edge_sh_normalization=ham_pre.edge_sh_normalization,
-        edge_sh_normalize=ham_pre.edge_sh_normalize,
-        rbf_func=ham_pre.rbf_func,
-        num_radial=ham_pre.num_radial,
-        cutoff=ham_pre.cutoff,
-    )
-
-
 class LMDBGraphDataset(Dataset):
     """
     LMDB graph data loader based on regular Dataset implementation
@@ -191,8 +53,8 @@ class LMDBGraphDataset(Dataset):
                     data_bytes = txn.get(f'graph_{idx}'.encode())
                     if data_bytes is not None:
                         data = pickle.loads(data_bytes)
-                        # Apply the transform once here so preloaded graphs
-                        # are served ready-to-use.
+                        # Decode and transform once so preloaded graphs are
+                        # served ready-to-use.
                         if self.transform is not None:
                             data = self.transform(data)
                         self.preloaded_data[idx] = data
@@ -217,7 +79,7 @@ class LMDBGraphDataset(Dataset):
         if preloaded_data is not None:
             return preloaded_data
 
-        # Check the LRU runtime cache of transformed graphs
+        # Check the LRU cache of decoded, optionally transformed graphs
         cached_data = self.runtime_cache.get(real_idx)
         if cached_data is not None:
             self.runtime_cache.move_to_end(real_idx)
@@ -239,7 +101,7 @@ class LMDBGraphDataset(Dataset):
         if self.transform is not None:
             data = self.transform(data)
 
-        # Store the transformed graph in the LRU runtime cache
+        # Cache the final graph to avoid repeated decoding and transformation
         if self.cache_size > 0:
             self.runtime_cache[real_idx] = data
             self.runtime_cache.move_to_end(real_idx)
@@ -299,8 +161,8 @@ class NPZGraphDataset(Dataset):
 
             for idx in tqdm(indices_to_preload, desc="Preloading data"):
                 data = self._process_graph(self.data_list[idx])
-                # Apply the transform once here so preloaded graphs
-                # are served ready-to-use.
+                # Decode and transform once so preloaded graphs are
+                # served ready-to-use.
                 if self.transform is not None:
                     data = self.transform(data)
                 self.preloaded_data[idx] = data
@@ -309,7 +171,9 @@ class NPZGraphDataset(Dataset):
         """Process the graph data to ensure consistent format"""
         # If the data is already a torch_geometric.data.Data object, return it directly
         if isinstance(data, Data):
-            return data
+            # Keep transforms and cache entries from mutating the NPZ backing
+            # list when a graph is read again after LRU eviction.
+            return data.clone()
         
         # If the data is a dictionary, attempt to convert it to a Data object
         if isinstance(data, dict) and 'edge_index' in data:
@@ -342,7 +206,7 @@ class NPZGraphDataset(Dataset):
         if preloaded_data is not None:
             return preloaded_data
 
-        # Check the LRU runtime cache of transformed graphs
+        # Check the LRU cache of decoded, optionally transformed graphs
         cached_data = self.runtime_cache.get(real_idx)
         if cached_data is not None:
             self.runtime_cache.move_to_end(real_idx)
@@ -355,7 +219,7 @@ class NPZGraphDataset(Dataset):
         if self.transform is not None:
             data = self.transform(data)
 
-        # Store the transformed graph in the LRU runtime cache
+        # Cache the final graph to avoid repeated decoding and transformation
         if self.cache_size > 0:
             self.runtime_cache[real_idx] = data
             self.runtime_cache.move_to_end(real_idx)
@@ -685,21 +549,21 @@ class graph_data_module(pl.LightningDataModule):
             raise RuntimeError("Dataset has not been set up yet. Call setup() first.")
             
         # Handle different types of datasets to get indices
-        if isinstance(self.train_data, LMDBGraphDataset):
+        if isinstance(self.train_data, (LMDBGraphDataset, NPZGraphDataset)):
             train_indices = self.train_data.indices
         elif isinstance(self.train_data, Subset):
             train_indices = self.train_data.indices
         else:
             train_indices = list(range(len(self.train_data)))
             
-        if isinstance(self.val_data, LMDBGraphDataset):
+        if isinstance(self.val_data, (LMDBGraphDataset, NPZGraphDataset)):
             val_indices = self.val_data.indices
         elif isinstance(self.val_data, Subset):
             val_indices = self.val_data.indices
         else:
             val_indices = list(range(len(self.val_data)))
             
-        if isinstance(self.test_data, LMDBGraphDataset):
+        if isinstance(self.test_data, (LMDBGraphDataset, NPZGraphDataset)):
             test_indices = self.test_data.indices
         elif isinstance(self.test_data, Subset):
             test_indices = self.test_data.indices

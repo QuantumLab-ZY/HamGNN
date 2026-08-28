@@ -24,7 +24,7 @@ except ModuleNotFoundError:
         DDPPlugin = None
 import pprint
 
-from .data.graph_data import build_graph_feature_transform, graph_data_module
+from .data.graph_data import graph_data_module
 from .config.config_parsing import load_config
 from .models.Model import Model
 from .version import get_version, get_full_version_info, soft_logo
@@ -159,10 +159,6 @@ def prepare_dataset(config):
     data_format = getattr(config.dataset_params, 'data_format', 'auto')
     is_test_mode = (config.setup.stage == 'test')
     
-    # Build the optional static edge-feature transform (None unless
-    # dataset_params.enable_static_edge_features is true)
-    transform = build_graph_feature_transform(config)
-    
     # Initialize the graph dataset module
     graph_dataset = graph_data_module(
         dataset=graph_data_path, 
@@ -173,10 +169,7 @@ def prepare_dataset(config):
         split_file=split_file,
         num_workers=num_workers,
         preload=preload,
-        # Only cache when a transform is active; otherwise graphs are
-        # served untransformed and caching would only cost memory.
-        cache_size=cache_size if transform is not None else 0,
-        transform=transform,
+        cache_size=cache_size,
         test_mode=is_test_mode,
         data_format=data_format
     )
