@@ -10,7 +10,7 @@ import subprocess
 from datetime import datetime
 
 # Hard-coded version - updated with each release
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 
 # Descriptive version string with build info
 VERSION = __version__
