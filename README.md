@@ -2,7 +2,7 @@
   <img height="130" src="logo/logo.png"/>
 </p>
 
-# 🚀 HamGNN v2.1 Now Available! 
+# 🚀 HamGNN v2.2 Now Available! 
 
 Getting Started with HamGNN: [Online Documentation](https://hamgnn.readthedocs.io/en/latest/)
 
@@ -642,10 +642,10 @@ The papers related to HamGNN:
 
 ## Code contributors:
 + Yang Zhong (Fudan University)
++ Hongyu Yu (Fudan University)
 + Changwei Zhang (Fudan University)
 + Zhenxing Dai (Fudan University)
 + Shixu Liu (Fudan University)
-+ Hongyu Yu (Fudan University)
 + Yuxing Ma (Fudan University)
 
 ## Project leaders: 
