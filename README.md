@@ -259,6 +259,8 @@ Below are descriptions of key configuration items in `config.yaml`:
      train_ratio: 0.8  # Training set ratio
      val_ratio: 0.1  # Validation set ratio
      graph_data_path: './Examples/pentadiamond/'  # Path to graph_data.npz file
+     preload: 0  # Number of graphs to preload into memory on startup
+     cache_size: 100  # Maximum number of decoded graphs kept in the LRU cache
    ```
 2. **losses_metrics**:
    ```yaml
@@ -489,10 +491,13 @@ This section provides detailed explanations of the parameter modules and paramet
 | `graph_data_path` | string | Directory of processed compressed graph data files | No default value, must be set manually |
 | `num_workers` | integer | Number of parallel DataLoader worker processes | `4` |
 | `preload` | integer | Number of graphs to preload into memory on startup | `0` (load on demand) |
+| `cache_size` | integer | Maximum number of decoded graphs retained by the per-dataset LRU cache. The cache stores graphs after loading and optional transformation to avoid repeated LMDB deserialization or NPZ graph conversion. Set to `0` to disable caching. | `100` |
 | `data_format` | string | Input data format: `'auto'`, `'lmdb'` (LMDB format), or `'npz'` (NPZ format) | `'auto'` (auto-detect based on file extension) |
 | `test_mode` | boolean | Use entire dataset as test set (skip train/val split) | `false` |
 
 > **Note on `data_format`**: For large-scale datasets, using LMDB format (`data_format: lmdb`) with `npz_to_lmdb.py` conversion provides significantly faster I/O compared to NPZ format.
+>
+> **Note on `preload` and `cache_size`**: `preload` permanently keeps the first N graphs of each dataset split in memory. `cache_size` controls the LRU cache for subsequently accessed graphs. Both options apply independently to each dataset split, and the cache may be replicated across DataLoader workers, so choose their values together with `num_workers` and the average graph size. Set both values to `0` to disable these memory optimizations.
 
 ### losses_metrics (Loss Functions and Evaluation Metrics)
 | Parameter | Type | Description | Default/Recommended Value |
