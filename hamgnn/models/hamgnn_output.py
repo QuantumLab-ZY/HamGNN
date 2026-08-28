@@ -169,6 +169,7 @@ class HamGNNPlusPlusOut(nn.Module):
         # Initialize configurations
         self._configure_band_num_control(band_num_control)
         self._initialize_basis_information()
+        self._validate_input_irreps(irreps_in_node)
         self._initialize_irreducible_representations()
         
         # Clebsch-Gordan coefficients
@@ -320,6 +321,42 @@ class HamGNNPlusPlusOut(nn.Module):
             
             self.J_irreps_dimensions = torch.LongTensor(self.J_irreps_dimensions)
             self.K_irreps_dimensions = torch.LongTensor(self.K_irreps_dimensions)
+
+    def _validate_input_irreps(self, irreps_in_node):
+        """Check that node features contain the required Hamiltonian irreps."""
+        try:
+            input_irreps = o3.Irreps(irreps_in_node)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Invalid node feature irreps {irreps_in_node!r}: {exc}"
+            ) from exc
+
+        required = {}
+        for _, li in self.row:
+            for _, lj in self.col:
+                for L in range(abs(li.l - lj.l), li.l + lj.l + 1):
+                    parity = (-1) ** (li.l + lj.l)
+                    key = (L, parity)
+                    required[key] = required.get(key, 0) + 1
+
+        provided = {}
+        for multiplicity, irrep in input_irreps:
+            key = (irrep.l, irrep.p)
+            provided[key] = provided.get(key, 0) + multiplicity
+
+        missing = [
+            f"{multiplicity}x{l}{'e' if parity == 1 else 'o'}"
+            for (l, parity), multiplicity in sorted(required.items())
+            if provided.get((l, parity), 0) < multiplicity
+        ]
+        if missing:
+            raise ValueError(
+                "Insufficient node feature irreps for the configured "
+                f"{self.ham_type} Hamiltonian (nao_max={self.nao_max}). "
+                f"Required minimum: {o3.Irreps([(m, (l, parity)) for (l, parity), m in required.items()]).sort()[0].simplify()}; "
+                f"missing or insufficient: {', '.join(missing)}. "
+                f"Provided: {input_irreps}."
+            )
 
     def _initialize_basis_information(self):
         """
