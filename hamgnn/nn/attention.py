@@ -21,6 +21,7 @@ from torch_scatter import scatter
 from .attention_utils import AttentionHeadsToVector, VectorToAttentionHeads
 from .interaction_blocks import ResidualBlock
 from .message_passing import MessagePackBlock
+from .tp_backends import build_tensor_product
 from ..toolbox.efficient_kan import KAN
 from ..toolbox.nequip.data import AtomicDataDict
 from ..toolbox.nequip.nn import GraphModuleMixin
@@ -273,7 +274,7 @@ class AttentionBlockE3(nn.Module):
 
     def create_tensor_product(self, irreps_mid, instructions):
         """Create a TensorProduct layer."""
-        return o3.TensorProduct(
+        return build_tensor_product(
             self.irreps_in,
             self.irreps_edge_attrs,
             irreps_mid,

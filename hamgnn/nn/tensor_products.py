@@ -45,7 +45,12 @@ class LinearScaleWithWeights(nn.Module):
     def forward(self, x, weight):
         ref = x[:, 0:1]
         y = self._cached_ones
-        if y is None or y.shape != ref.shape or y.device != ref.device:
+        if (
+            y is None
+            or y.shape != ref.shape
+            or y.device != ref.device
+            or y.dtype != ref.dtype
+        ):
             y = torch.ones_like(ref)
             self._cached_ones = y
         out = self.tp(x, y, weight)

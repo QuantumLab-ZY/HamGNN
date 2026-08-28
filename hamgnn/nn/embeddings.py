@@ -22,6 +22,7 @@ from ..toolbox.nequip.nn import GraphModuleMixin
 from ..utils.macro import GRID_RANGE, GRID_SIZE
 from .electron_configurations import electron_configurations
 from .tensor_products import TensorProductWithMemoryOptimizationWithWeight
+from .tp_backends import build_tensor_product
 
 @compile_mode('script')
 class RadialBasisEdgeEncoding(GraphModuleMixin, torch.nn.Module):
@@ -154,7 +155,7 @@ class LocalEnvironmentEmbedding(nn.Module):
         
         instructions = [(i, 0, i, "uvw", True) for i in range(len(irreps_edge_attrs))]
         
-        self.tensor_product = o3.TensorProduct(
+        self.tensor_product = build_tensor_product(
             irreps_edge_attrs,
             o3.Irreps('1x0e'),
             irreps_env_sh,
@@ -289,7 +290,7 @@ class PairInteractionEmbeddingBlock(nn.Module):
 
     def create_tensor_product(self, irreps_mid, instructions):
         """Create a TensorProduct layer."""
-        return o3.TensorProduct(
+        return build_tensor_product(
             self.irreps_node_feats,
             self.irreps_edge_attrs,
             irreps_mid,
