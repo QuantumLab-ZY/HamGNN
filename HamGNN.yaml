@@ -1,4 +1,4 @@
-name: HamGNN-oeq
+name: HamGNN
 channels:
   # Keep the same channel order as the standard HamGNN environment.
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
