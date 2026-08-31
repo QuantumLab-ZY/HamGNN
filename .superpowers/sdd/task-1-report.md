@@ -101,3 +101,17 @@ Verification:
 - Output: passed (no output).
 - Command: `pytest tests/test_lightning2_main.py -q`
 - Output: blocked: `/bin/bash: pytest: command not found`.
+
+## Final Task 1 Review Fix
+
+- Made `load_or_create_model` use the optional `setup.resume` lookup as well,
+  keeping resume handling consistent across model loading and fit orchestration.
+- Added a regression test covering checkpoint loading when `setup.resume` is
+  omitted.
+
+Verification:
+
+- Command: `python -m py_compile hamgnn/main.py tests/test_lightning2_main.py`
+- Output: passed (no output).
+- Command: `pytest tests/test_lightning2_main.py -q`
+- Output: blocked: `/bin/bash: pytest: command not found`.

@@ -380,7 +380,9 @@ def load_or_create_model(config, graph_representation, output_module, post_proce
     }
     
     # Load from checkpoint or create new model
-    is_load_checkpoint = config.setup.load_from_checkpoint and not config.setup.resume
+    is_load_checkpoint = config.setup.load_from_checkpoint and not getattr(
+        config.setup, 'resume', False
+    )
     if is_load_checkpoint:
         model = Model.load_from_checkpoint(
             checkpoint_path=config.setup.checkpoint_path,

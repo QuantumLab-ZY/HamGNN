@@ -181,3 +181,37 @@ def test_resume_defaults_to_false_when_missing():
     config = SimpleNamespace(setup=SimpleNamespace())
 
     assert main._resume_checkpoint_path(config) is None
+
+
+def test_load_or_create_model_defaults_resume_to_false(monkeypatch):
+    config = SimpleNamespace(
+        setup=SimpleNamespace(
+            load_from_checkpoint=True,
+            checkpoint_path='/tmp/model.ckpt',
+        ),
+        optim_params=SimpleNamespace(
+            lr=1e-3,
+            lr_decay=0.99,
+            lr_patience=2,
+        ),
+    )
+    loaded_model = Mock()
+    loaded_model.parameters.return_value = []
+    model_class = Mock()
+    model_class.load_from_checkpoint.return_value = loaded_model
+    monkeypatch.setattr(main, 'Model', model_class)
+
+    model = main.load_or_create_model(
+        config,
+        graph_representation=object(),
+        output_module=object(),
+        post_processing_utility=None,
+        losses={},
+        metrics={},
+    )
+
+    assert model is loaded_model
+    model_class.load_from_checkpoint.assert_called_once()
+    assert model_class.load_from_checkpoint.call_args.kwargs['checkpoint_path'] == (
+        '/tmp/model.ckpt'
+    )
