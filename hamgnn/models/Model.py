@@ -224,7 +224,7 @@ class Model(pl.LightningModule):
             loss,
             on_step=True,
             on_epoch=True,
-            prog_bar=False,
+            prog_bar=True,
             sync_dist=self._use_sync_dist(),
         )
         return loss
