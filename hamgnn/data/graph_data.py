@@ -7,7 +7,7 @@ Provides :class:`LMDBGraphDataset`, graph collation, train/val/test splits, and
 loaders built on PyTorch Geometric :class:`~torch_geometric.data.Data`.
 """
 
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 from typing import Union, Callable, Optional, List
