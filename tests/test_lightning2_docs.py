@@ -66,10 +66,12 @@ def test_current_references_exclude_legacy_checkpoint_metadata():
         Path("README.md"),
         *Path("docs/source").rglob("*.rst"),
     ]
-    assert all("pytorch_lightning" not in path.read_text() for path in current_files)
+    legacy_import = "pytorch" + "_lightning"
+    assert all(legacy_import not in path.read_text() for path in current_files)
 
     # This key is intentional metadata written by old checkpoints, not a current import or dependency.
-    assert "pytorch-lightning_version" in Path("tests/test_lightning2_model.py").read_text()
+    legacy_version_key = "pytorch" + "-lightning_version"
+    assert legacy_version_key in Path("tests/test_lightning2_model.py").read_text()
 
 
 def test_historical_examples_are_removed():

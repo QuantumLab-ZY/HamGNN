@@ -93,7 +93,7 @@ def test_setup_trainer_uses_static_graph_ddp_for_multiple_inferred_gpus(
     monkeypatch.setattr(main.pl, 'Trainer', TrainerDouble)
     setup_trainer(_config(tmp_path, 2), callbacks=[])
     assert captured['strategy'].__class__.__name__ == 'DDPStrategy'
-    assert captured['strategy'].static_graph is True
+    assert captured['strategy']._ddp_kwargs['static_graph'] is True
 
 
 @pytest.mark.parametrize('accelerator', ['tpu', 'ddp'])

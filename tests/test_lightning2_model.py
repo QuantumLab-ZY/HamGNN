@@ -218,8 +218,8 @@ def test_test_epoch_end_writes_expected_outputs_and_epc(model, trainer, tmp_path
     model.trainer = trainer
     trainer.logger.log_dir = str(tmp_path)
     model.test_step_outputs = [{
-        "pred": {"hamiltonian": np.array([1.0])},
-        "target": {"hamiltonian": np.array([2.0])},
+        "pred": {"prediction": np.array([1.0])},
+        "target": {"target": np.array([2.0])},
         "processed_values": {"epc_mat": np.array([3.0])},
     }]
     model.post_processing = object()
@@ -230,8 +230,8 @@ def test_test_epoch_end_writes_expected_outputs_and_epc(model, trainer, tmp_path
 
     model.on_test_epoch_end()
 
-    assert (tmp_path / "prediction_hamiltonian.npy").exists()
-    assert (tmp_path / "target_hamiltonian.npy").exists()
+    assert (tmp_path / "prediction_prediction.npy").exists()
+    assert (tmp_path / "target_target.npy").exists()
     assert (tmp_path / "processed_values_epc_mat.npy").exists()
     plot.assert_called_once_with(gathered, mode="test")
     assert model.test_step_outputs == []

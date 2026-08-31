@@ -286,7 +286,7 @@ class Model(pl.LightningModule):
 
     def on_validation_epoch_end(self) -> None:
         try:
-            gathered = self._gather_step_outputs(self.validation_step_outputs)
+            gathered = self._gather_step_outputs(list(self.validation_step_outputs))
             if (
                 not self.trainer.sanity_checking
                 and self._is_global_zero()
@@ -360,7 +360,7 @@ class Model(pl.LightningModule):
     def on_test_epoch_end(self) -> None:
         """Process and log test results at the end of testing."""
         try:
-            test_step_outputs = self._gather_step_outputs(self.test_step_outputs)
+            test_step_outputs = self._gather_step_outputs(list(self.test_step_outputs))
 
             if not self._is_global_zero() or not test_step_outputs:
                 return
