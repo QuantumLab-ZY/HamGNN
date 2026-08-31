@@ -399,10 +399,10 @@ def load_or_create_model(config, graph_representation, output_module, post_proce
 
 def _resume_checkpoint_path(config) -> Optional[str]:
     """Return the checkpoint path for a resumed fit, if configured."""
-    if not config.setup.resume:
+    if not getattr(config.setup, 'resume', False):
         return None
 
-    checkpoint_path = config.setup.checkpoint_path
+    checkpoint_path = getattr(config.setup, 'checkpoint_path', None)
     if not isinstance(checkpoint_path, str):
         raise ValueError('resume requires a non-empty checkpoint path')
     checkpoint_path = checkpoint_path.strip()

@@ -87,3 +87,17 @@ Verification:
 - Output: passed (no output).
 - Command: `pytest tests/test_lightning2_main.py -q`
 - Output: blocked: `/bin/bash: pytest: command not found`.
+
+## Remaining Task 1 Review Fix
+
+- Made `_resume_checkpoint_path` use optional lookup for `setup.resume` and
+  `setup.checkpoint_path`.
+- Added regression coverage for a missing checkpoint path while resuming and a
+  missing `setup.resume` defaulting to false.
+
+Verification:
+
+- Command: `python -m py_compile hamgnn/main.py tests/test_lightning2_main.py`
+- Output: passed (no output).
+- Command: `pytest tests/test_lightning2_main.py -q`
+- Output: blocked: `/bin/bash: pytest: command not found`.

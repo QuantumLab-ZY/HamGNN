@@ -147,6 +147,13 @@ def test_resume_requires_checkpoint_path_value(checkpoint_path):
         main._resume_checkpoint_path(config)
 
 
+def test_resume_requires_checkpoint_path_attribute():
+    config = SimpleNamespace(setup=SimpleNamespace(resume=True))
+
+    with pytest.raises(ValueError, match='checkpoint path'):
+        main._resume_checkpoint_path(config)
+
+
 @pytest.mark.parametrize('precision', [16, '32', 128])
 def test_setup_trainer_rejects_unsupported_precision(tmp_path, precision):
     config = _config(tmp_path)
@@ -166,5 +173,11 @@ def test_resume_checkpoint_path_is_trimmed():
 
 def test_resume_checkpoint_path_is_none_for_new_fit():
     config = SimpleNamespace(setup=SimpleNamespace(resume=False, checkpoint_path=''))
+
+    assert main._resume_checkpoint_path(config) is None
+
+
+def test_resume_defaults_to_false_when_missing():
+    config = SimpleNamespace(setup=SimpleNamespace())
 
     assert main._resume_checkpoint_path(config) is None
