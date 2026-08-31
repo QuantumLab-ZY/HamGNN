@@ -61,3 +61,29 @@ defaults, or the protected NequIP subtree. The existing `main.py` uses CRLF line
 endings; preserving that format causes `git diff --check` to identify CR bytes
 on changed lines as trailing whitespace, although no new visible trailing-space
 content was introduced.
+
+## Fixes After Task 1 Review
+
+Changed files:
+
+- `hamgnn/main.py`
+- `tests/test_lightning2_main.py`
+- `.superpowers/sdd/task-1-report.md`
+
+Fixes applied:
+
+- Imported `train_model` in `tests/test_lightning2_main.py`.
+- Made resumed fits with a missing, non-string, or blank checkpoint path raise
+  `ValueError`.
+- Enforced the documented `num_gpus` contract so invalid values raise
+  `ValueError` instead of falling through to CPU execution.
+- Restricted trainer and model precision handling to supported `32` and `64`
+  values, with focused boundary tests.
+- The protected `hamgnn/toolbox/nequip` subtree remains unchanged.
+
+Verification:
+
+- Command: `python -m py_compile hamgnn/main.py tests/test_lightning2_main.py`
+- Output: passed (no output).
+- Command: `pytest tests/test_lightning2_main.py -q`
+- Output: blocked: `/bin/bash: pytest: command not found`.

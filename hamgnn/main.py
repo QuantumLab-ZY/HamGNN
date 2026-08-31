@@ -43,11 +43,17 @@ def _normalize_num_gpus(num_gpus):
     int, list, None
         Normalized GPU configuration compatible with ``pl.Trainer``.
     """
-    if num_gpus in (None, 0, '0'):
+    if isinstance(num_gpus, bool):
+        raise ValueError("setup.num_gpus must be null, 0, '0', a positive integer, or a non-empty list/tuple")
+    if num_gpus is None or num_gpus == 0 or num_gpus == '0':
         return None
     if isinstance(num_gpus, (list, tuple)) and len(num_gpus) == 0:
         return None
-    return num_gpus
+    if isinstance(num_gpus, int) and num_gpus > 0:
+        return num_gpus
+    if isinstance(num_gpus, (list, tuple)) and len(num_gpus) > 0:
+        return num_gpus
+    raise ValueError("setup.num_gpus must be null, 0, '0', a positive integer, or a non-empty list/tuple")
 
 
 def _count_requested_gpus(num_gpus) -> int:
@@ -67,7 +73,7 @@ def _count_requested_gpus(num_gpus) -> int:
     if num_gpus is None:
         return 0
     if isinstance(num_gpus, int):
-        return max(num_gpus, 0)
+        return num_gpus
     if isinstance(num_gpus, (list, tuple)):
         return len(num_gpus)
     return 0
@@ -310,6 +316,9 @@ def setup_trainer(config, callbacks):
         accelerator = 'cpu' if requested_gpu_count == 0 else 'gpu'
         devices = 1 if accelerator == 'cpu' else num_gpus
 
+    if config.setup.precision not in (32, 64):
+        raise ValueError('setup.precision must be 32 or 64')
+
     # Configure trainer with parameters from config
     trainer_params = {
         'accelerator': accelerator,
@@ -393,7 +402,10 @@ def _resume_checkpoint_path(config) -> Optional[str]:
     if not config.setup.resume:
         return None
 
-    checkpoint_path = config.setup.checkpoint_path.strip()
+    checkpoint_path = config.setup.checkpoint_path
+    if not isinstance(checkpoint_path, str):
+        raise ValueError('resume requires a non-empty checkpoint path')
+    checkpoint_path = checkpoint_path.strip()
     if not checkpoint_path:
         raise ValueError('resume requires a non-empty checkpoint path')
     return checkpoint_path
@@ -481,6 +493,8 @@ def train_and_evaluate(config):
     graph_representation, output_module, post_processing_utility = build_hamgnn_model(config)
     
     # Set precision (data type)
+    if config.setup.precision not in (32, 64):
+        raise ValueError('setup.precision must be 32 or 64')
     dtype = torch.float32 if config.setup.precision == 32 else torch.float64
     torch.set_default_dtype(dtype)
     

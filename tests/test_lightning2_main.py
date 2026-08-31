@@ -4,7 +4,12 @@ from unittest.mock import Mock
 import pytest
 
 import hamgnn.main as main
-from hamgnn.main import _count_requested_gpus, _normalize_num_gpus, setup_trainer
+from hamgnn.main import (
+    _count_requested_gpus,
+    _normalize_num_gpus,
+    setup_trainer,
+    train_model,
+)
 
 
 @pytest.mark.parametrize(
@@ -22,6 +27,12 @@ from hamgnn.main import _count_requested_gpus, _normalize_num_gpus, setup_traine
 def test_num_gpus_normalization(value, normalized, count):
     assert _normalize_num_gpus(value) == normalized
     assert _count_requested_gpus(normalized) == count
+
+
+@pytest.mark.parametrize('value', [-1, 1.5, '1', {}, True, False])
+def test_invalid_num_gpus_values_raise(value):
+    with pytest.raises(ValueError, match='setup.num_gpus'):
+        _normalize_num_gpus(value)
 
 
 def _config(tmp_path, num_gpus=None, accelerator=None, resume=False, checkpoint_path=None):
@@ -124,6 +135,25 @@ def test_resume_requires_non_empty_checkpoint_path():
 
     with pytest.raises(ValueError, match='checkpoint path'):
         main._resume_checkpoint_path(config)
+
+
+@pytest.mark.parametrize('checkpoint_path', [None, ''])
+def test_resume_requires_checkpoint_path_value(checkpoint_path):
+    config = SimpleNamespace(
+        setup=SimpleNamespace(resume=True, checkpoint_path=checkpoint_path)
+    )
+
+    with pytest.raises(ValueError, match='checkpoint path'):
+        main._resume_checkpoint_path(config)
+
+
+@pytest.mark.parametrize('precision', [16, '32', 128])
+def test_setup_trainer_rejects_unsupported_precision(tmp_path, precision):
+    config = _config(tmp_path)
+    config.setup.precision = precision
+
+    with pytest.raises(ValueError, match='precision'):
+        setup_trainer(config, callbacks=[])
 
 
 def test_resume_checkpoint_path_is_trimmed():
