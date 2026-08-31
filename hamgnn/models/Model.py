@@ -14,7 +14,7 @@ import torch.distributed as dist
 import torch.nn as nn
 import torch.optim as optim
 from torch.nn import functional as F
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 from typing import List, Dict, Union, Callable, Optional, Any
 
 from ..utils.visualization import scatter_plot
@@ -105,6 +105,8 @@ class Model(pl.LightningModule):
         
         # Track if derivatives are required
         self.requires_derivatives = self.output_module.derivative
+        self.validation_step_outputs = []
+        self.test_step_outputs = []
 
     def _use_sync_dist(self) -> bool:
         """Return whether distributed metric synchronization is active."""
@@ -242,6 +244,14 @@ class Model(pl.LightningModule):
             prog_bar=False,
             sync_dist=self._use_sync_dist(),
         )
+        self.log(
+            "validation_total_loss",
+            val_loss,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=False,
+            sync_dist=self._use_sync_dist(),
+        )
         self.log_metrics(batch, predictions, 'validation')
         
         # Collect outputs for epoch-end processing
@@ -251,23 +261,24 @@ class Model(pl.LightningModule):
                 outputs_pred[loss_dict["prediction"]] = predictions[loss_dict["prediction"].lower()].detach().cpu().numpy()
                 outputs_target[loss_dict["target"]] = batch[loss_dict["target"].lower()].detach().cpu().numpy()
                 
-        return {'pred': outputs_pred, 'target': outputs_target}
+        step_output = {'pred': outputs_pred, 'target': outputs_target}
+        self.validation_step_outputs.append(step_output)
+        return step_output
 
-    def validation_epoch_end(self, validation_step_outputs: List[Dict]) -> None:
-        """
-        Process and log validation results at the end of an epoch.
-        
-        Parameters
-        ----------
-        validation_step_outputs : List[Dict]
-            List of outputs from all validation steps in the epoch
-        """
-        validation_step_outputs = self._gather_step_outputs(validation_step_outputs)
+    def on_validation_epoch_start(self) -> None:
+        self.validation_step_outputs.clear()
 
-        if not self._is_global_zero() or not validation_step_outputs:
-            return
-
-        self._plot_prediction_vs_target(validation_step_outputs, mode='validation')
+    def on_validation_epoch_end(self) -> None:
+        try:
+            gathered = self._gather_step_outputs(self.validation_step_outputs)
+            if (
+                not self.trainer.sanity_checking
+                and self._is_global_zero()
+                and gathered
+            ):
+                self._plot_prediction_vs_target(gathered, mode='validation')
+        finally:
+            self.validation_step_outputs.clear()
 
     def test_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict:
         """
@@ -319,46 +330,47 @@ class Model(pl.LightningModule):
                 outputs_pred[loss_dict["prediction"]] = predictions[loss_dict["prediction"].lower()].detach().cpu().numpy()  
                 outputs_target[loss_dict["target"]] = batch[loss_dict["target"].lower()].detach().cpu().numpy()
                 
-        return {
-            'pred': outputs_pred, 
-            'target': outputs_target, 
+        step_output = {
+            'pred': outputs_pred,
+            'target': outputs_target,
             'processed_values': processed_values
         }
+        self.test_step_outputs.append(step_output)
+        return step_output
 
-    def test_epoch_end(self, test_step_outputs: List[Dict]) -> None:
-        """
-        Process and log test results at the end of testing.
-        
-        Parameters
-        ----------
-        test_step_outputs : List[Dict]
-            List of outputs from all test steps
-        """
-        test_step_outputs = self._gather_step_outputs(test_step_outputs)
+    def on_test_epoch_start(self) -> None:
+        self.test_step_outputs.clear()
 
-        if not self._is_global_zero() or not test_step_outputs:
-            return
+    def on_test_epoch_end(self) -> None:
+        """Process and log test results at the end of testing."""
+        try:
+            test_step_outputs = self._gather_step_outputs(self.test_step_outputs)
 
-        # Create output directory if it doesn't exist
-        log_dir = self.trainer.logger.log_dir
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
+            if not self._is_global_zero() or not test_step_outputs:
+                return
+
+            # Create output directory if it doesn't exist
+            log_dir = self.trainer.logger.log_dir
+            os.makedirs(log_dir, exist_ok=True)
         
-        # Save predictions and targets
-        self._save_predictions_and_targets(test_step_outputs, log_dir)
+            # Save predictions and targets
+            self._save_predictions_and_targets(test_step_outputs, log_dir)
         
-        # Generate and log scatter plots
-        self._plot_prediction_vs_target(test_step_outputs, mode='test')
+            # Generate and log scatter plots
+            self._plot_prediction_vs_target(test_step_outputs, mode='test')
         
-        # Save post-processed values if available
-        if self.post_processing is not None:
-            post_processing_name = type(self.post_processing).__name__.split(".")[-1].lower()
-            
-            if post_processing_name == 'epc_output':
+            # Save post-processed values if available
+            if self.post_processing is not None and any(
+                out['processed_values'] is not None for out in test_step_outputs
+            ):
                 processed_values = np.concatenate([
-                    out['processed_values']["epc_mat"] for out in test_step_outputs if out['processed_values'] is not None
+                    out['processed_values']["epc_mat"]
+                    for out in test_step_outputs
+                    if out['processed_values'] is not None
                 ])
                 np.save(os.path.join(log_dir, 'processed_values_epc_mat.npy'), processed_values)
+        finally:
+            self.test_step_outputs.clear()
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
@@ -416,7 +428,7 @@ class Model(pl.LightningModule):
                 sync_dist=self._use_sync_dist(),
             )
 
-    def configure_optimizers(self) -> Dict:
+    def configure_optimizers(self) -> tuple[list[optim.Optimizer], list[Dict]]:
         """
         Configure optimizers and learning rate schedulers.
         

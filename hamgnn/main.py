@@ -517,7 +517,7 @@ def train_and_evaluate(config):
             min_delta=1e-6,
         ),
         pl.callbacks.ModelCheckpoint(
-            filename="{epoch}-{val_loss:.6f}",
+            filename="{epoch}-{validation_total_loss:.6f}",
             save_top_k=1,
             verbose=False,
             monitor='validation/total_loss',
