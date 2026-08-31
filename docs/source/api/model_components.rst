@@ -1,7 +1,7 @@
 Model Components
 ================
 
-This section contains various general components that make up the HamGNN v2.1 models.
+This section contains various general components that make up the HamGNN v2.2 models.
 
 Embeddings
 ----------

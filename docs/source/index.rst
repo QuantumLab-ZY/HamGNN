@@ -1,9 +1,9 @@
 .. hamgnn documentation master file
 
-HamGNN v2.1 Documentation
+HamGNN v2.2 Documentation
 =========================
 
-Welcome to HamGNN v2.1 documentation!
+Welcome to HamGNN v2.2 documentation!
 
 Introduction to HamGNN
 ----------------------

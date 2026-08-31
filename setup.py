@@ -14,7 +14,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="HamGNN",
-    version='2.1.0',
+    version='2.2.0',
     description="Hamiltonian prediction via Graph Neural Network",
     download_url="",
     author="Yang Zhong",

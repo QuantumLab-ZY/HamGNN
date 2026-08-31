@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.abspath('../..'))
 project = 'hamgnn'
 copyright = 'HamGNN Team'
 author = 'HamGNN Team'
-release = '2.1'
+release = '2.2'
 # -- General configuration ---------------------------------------------------
 extensions = [
     'sphinx.ext.autodoc',          # Automatically generate documentation from docstrings
@@ -38,14 +38,14 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '**/toolbox/**', 'hamgnn
 # Additional exclusion rules for multi-version builds
 build_all_docs = os.environ.get("build_all_docs")
 if build_all_docs:
-    current_version = os.environ.get("current_version", "v2.1")
+    current_version = os.environ.get("current_version", "v2.2")
     current_source_dir = os.environ.get("current_source_dir", "")
     
     # Use main index file
     master_doc = 'index'
     
-    # Exclude v1.0 content when building v2.1
-    if current_version == "v2.1":
+    # Exclude v1.0 content when building v2.2
+    if current_version == "v2.2":
         exclude_patterns.extend(['source_v1/**', 'source_v1'])
     # Exclude v2.0 content when building v1.0
     elif current_version == "v1.0":
@@ -63,7 +63,7 @@ gettext_location = False    # Don't include line numbers in .pot files
 # Use RTD theme, which natively supports version switcher
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
-html_title = "HamGNN v2.1 Documentation"
+html_title = "HamGNN v2.2 Documentation"
 html_logo = "_static/logo.png"
 html_favicon = "_static/logo.png"
 html_css_files = ["custom.css"]
@@ -174,7 +174,7 @@ try:
 except (FileNotFoundError, yaml.YAMLError):
     _versions_config_raw = {}
 _branches_config = _versions_config_raw.get("branches", {})
-CURRENT_VERSION = os.environ.get('HAMGNN_DOC_VERSION', 'v2.1')
+CURRENT_VERSION = os.environ.get('HAMGNN_DOC_VERSION', 'v2.2')
 CURRENT_LANGUAGE_RAW = os.environ.get('HAMGNN_DOC_LANGUAGE') or (language or 'en')
 CURRENT_BRANCH = os.environ.get('SPHINX_MULTIVERSION_NAME') or os.environ.get('GITHUB_REF_NAME') or 'docs'
 

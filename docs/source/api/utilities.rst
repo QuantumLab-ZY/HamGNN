@@ -1,7 +1,7 @@
 Utilities
 =========
 
-General utility modules for HamGNN v2.1.
+General utility modules for HamGNN v2.2.
 
 Irreps Utilities
 ----------------
