@@ -2,7 +2,7 @@
   <img height="130" src="logo/logo.png"/>
 </p>
 
-# 🚀 HamGNN v2.2 Now Available! 
+# 🚀 HamGNN v2.3 Now Available! 
 
 Getting Started with HamGNN: [Online Documentation](https://hamgnn.readthedocs.io/en/latest/)
 
