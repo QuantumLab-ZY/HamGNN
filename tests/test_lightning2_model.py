@@ -7,6 +7,7 @@ import torch
 from torch import nn
 
 from hamgnn.models.Model import Model
+from hamgnn.main import train_model
 
 
 class ScalarRepresentation(nn.Module):
@@ -73,6 +74,91 @@ class TinyDataModule(pl.LightningDataModule):
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.samples, batch_size=1)
+
+
+class CaptureRestoredState(pl.Callback):
+    def on_train_start(self, trainer, pl_module):
+        parameter = trainer.optimizers[0].param_groups[0]["params"][0]
+        self.epoch = trainer.current_epoch
+        self.global_step = trainer.global_step
+        self.optimizer_step = trainer.optimizers[0].state[parameter]["step"].item()
+        scheduler = trainer.lr_scheduler_configs[0].scheduler
+        self.scheduler_last_epoch = scheduler.last_epoch
+        self.scheduler_best = scheduler.best
+
+
+def test_lightning15_checkpoint_restores_and_continues_cpu_fit(tmp_path):
+    model = make_model()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=model.lr)
+    predictions = {"prediction": model.output_module.weight * torch.tensor([1.0])}
+    loss = model.calculate_loss(
+        {"x": torch.tensor([1.0]), "target": torch.tensor([0.0])},
+        predictions,
+        "training",
+    )
+    loss.backward()
+    optimizer.step()
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        factor=model.lr_decay,
+        patience=model.lr_patience,
+        threshold=1e-6,
+        cooldown=model.lr_patience // 2,
+        min_lr=1e-6,
+    )
+    scheduler.step(0.25)
+    checkpoint = {
+        "pytorch-lightning_version": "1.5.10",
+        "state_dict": model.state_dict(),
+        "optimizer_states": [optimizer.state_dict()],
+        "lr_schedulers": [scheduler.state_dict()],
+        "epoch": 1,
+        "global_step": 1,
+        "hyper_parameters": {
+            "lr": model.lr,
+            "lr_decay": model.lr_decay,
+            "lr_patience": model.lr_patience,
+        },
+    }
+    checkpoint_path = tmp_path / "legacy.ckpt"
+    torch.save(checkpoint, checkpoint_path)
+
+    restored = Model.load_from_checkpoint(
+        checkpoint_path,
+        representation=model.representation,
+        output=model.output_module,
+        losses=model.losses,
+        validation_metrics=model.metrics,
+        post_processing=None,
+        lr=model.lr,
+        lr_decay=model.lr_decay,
+        lr_patience=model.lr_patience,
+    )
+    assert restored.output_module.weight.item() == pytest.approx(
+        model.output_module.weight.item()
+    )
+    assert restored._trainer is None
+
+    capture = CaptureRestoredState()
+    trainer = pl.Trainer(
+        accelerator="cpu",
+        devices=1,
+        max_epochs=2,
+        logger=pl.loggers.TensorBoardLogger(
+            save_dir=str(tmp_path), name="resume"
+        ),
+        enable_checkpointing=False,
+        callbacks=[capture],
+    )
+    train_model(trainer, restored, TinyDataModule(), str(checkpoint_path))
+
+    assert capture.epoch == 1
+    assert capture.global_step == 1
+    assert capture.optimizer_step == 1
+    assert capture.scheduler_last_epoch == 1
+    assert capture.scheduler_best == pytest.approx(0.25)
+    assert trainer.current_epoch > 1
+    assert trainer.global_step > 1
 
 
 def test_validation_epoch_end_uses_buffer_and_skips_sanity_check(model, trainer, monkeypatch):

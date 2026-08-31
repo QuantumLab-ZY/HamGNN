@@ -108,6 +108,22 @@ class Model(pl.LightningModule):
         self.validation_step_outputs = []
         self.test_step_outputs = []
 
+    def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+        """Preserve top-level epoch counters from pre-1.6 checkpoints."""
+        if "legacy_pytorch-lightning_version" not in checkpoint:
+            return
+
+        fit_loop = checkpoint.get("loops", {}).get("fit_loop")
+        if fit_loop is None:
+            return
+
+        if "epoch" in checkpoint:
+            fit_loop["epoch_progress"]["current"]["processed"] = checkpoint["epoch"]
+        if "global_step" in checkpoint:
+            fit_loop["epoch_loop.state_dict"]["_batches_that_stepped"] = checkpoint[
+                "global_step"
+            ]
+
     def _use_sync_dist(self) -> bool:
         """Return whether distributed metric synchronization is active."""
         return dist.is_available() and dist.is_initialized()
