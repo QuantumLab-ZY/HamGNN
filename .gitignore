@@ -90,6 +90,7 @@ target_*.npy
 docs/_build/
 docs/.doctrees/
 docs/html/
+/docs/superpowers/
 
 # --- Large binary files (use Git LFS) ---
 # *.zip
