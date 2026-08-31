@@ -19,9 +19,11 @@ Task 3 implementation commit: `a844553 refactor: use Lightning 2 imports in owne
 
 ## Verification
 
-- `git diff --check 3e2e3f7..HEAD`: passed after restoring the parent file's
-  mixed LF/CRLF convention.
-- `git diff --name-only 3e2e3f7..HEAD`: contains only
+- `git diff --check 3e2e3f7..HEAD`: exits nonzero because Git reports the two
+  intended CRLF-terminated import additions as trailing whitespace:
+  `Uni-HamGNN/Uni-HamiltonianPredictor.py:15` and
+  `hamgnn/data/graph_data.py:10`. No other issue is reported.
+- `git diff --name-only 3e2e3f7..HEAD`: contains this report plus
   `hamgnn/data/graph_data.py`, `Uni-HamGNN/Uni-HamiltonianPredictor.py`, and
   `tests/test_lightning2_imports.py`; no NequIP path is included.
 - Source stale-import scan: passed (`stale: []`), excluding
@@ -29,8 +31,9 @@ Task 3 implementation commit: `a844553 refactor: use Lightning 2 imports in owne
 - `python -m py_compile hamgnn/data/graph_data.py
   Uni-HamGNN/Uni-HamiltonianPredictor.py tests/test_lightning2_imports.py`:
   passed.
-- `pytest tests/test_lightning2_imports.py tests/test_graph_data_cache.py -q`:
-  blocked because the active Python environment has no `pytest` module.
+- `python -m pytest tests/test_lightning2_imports.py
+  tests/test_graph_data_cache.py -q`: blocked with
+  `/data/home/zhongyang/miniconda3/bin/python: No module named pytest`.
 - Import preflight: the active environment also lacks `lightning` and
   `torch_geometric`, so runtime collection could not be attempted.
 
