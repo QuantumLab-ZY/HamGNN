@@ -65,11 +65,11 @@ According to recent research advances, HamGNN has been extended to a universal m
 
 ## 2. Environment Configuration Requirements
 ### Python Environment
-The HamGNN framework recommends Python 3.9 and depends on the following key Python libraries:
+The HamGNN framework supports Python 3.9 and later and depends on Lightning 2.5 and the following key Python libraries:
 - `numpy == 1.21.2`
-- `PyTorch == 1.11.0`
+- `PyTorch == 2.5.0`
 - `PyTorch Geometric == 2.0.4`
-- `pytorch_lightning == 1.5.10`
+- `lightning>=2.5,<2.6` (imported from `lightning.pytorch`)
 - `e3nn == 0.5.0`
 - `pymatgen == 2022.3.7`
 - `tensorboard == 2.8.0`
@@ -303,12 +303,24 @@ Below are descriptions of key configuration items in `config.yaml`:
      ignore_warnings: true  # Whether to ignore warnings
      checkpoint_path: /path/to/ckpt  # Checkpoint path
      load_from_checkpoint: false  # Whether to load model parameters from checkpoint
-     resume: false  # Whether to continue training from interruption
-     num_gpus: [0]  # GPU device numbers to use, null indicates CPU
-     precision: 32  # Computation precision (32 or 64 bit)
+     resume: false  # Continue training from interruption
+     num_gpus: 1  # null or 0: CPU; positive integer: GPU count; list: GPU IDs
+     precision: 32  # 32-bit; use 64 for double precision
      property: Hamiltonian  # Type of physical quantity output
      stage: fit  # Stage: fit (training) or test (testing)
    ```
+
+`accelerator` supports `null`, `cpu`, `gpu`, and `ddp`. `num_gpus: null` or
+`0` selects CPU; a positive integer selects that many GPUs, and a list selects
+explicit GPU device IDs. When `resume: true`, `checkpoint_path` must be
+non-empty. HamGNN resumes with:
+
+```python
+trainer.fit(model, datamodule, ckpt_path=checkpoint_path)
+```
+
+This restores optimizer, scheduler, epoch, and global-step state. Use
+`load_from_checkpoint` to start a new task from model weights instead.
 5. **output_nets**:
    ```yaml
    output_nets:
@@ -351,7 +363,7 @@ After completing model training, you can use the trained model to predict Hamilt
    ```yaml
    setup:
      checkpoint_path: /path/to/trained/model.ckpt  # Path to trained model
-     num_gpus: null  # Set to null or 0 to use CPU for prediction
+     num_gpus: null  # null or 0: CPU; positive integer: GPU count
      stage: test  # Set to test for prediction mode
    ```
 3. **Set environment variables**: If running on CPU, you can accelerate with multithreading:
@@ -466,9 +478,9 @@ This section provides detailed explanations of the parameter modules and paramet
 | `ignore_warnings` | boolean | Whether to ignore warnings | `true` |
 | `checkpoint_path` | string | Checkpoint path for resuming training or for testing | `'./'` (no default checkpoint) |
 | `load_from_checkpoint` | boolean | Whether to load model parameters from checkpoint | `false` (for new training), `true` (when loading pre-trained model) |
-| `resume` | boolean | Whether to continue training from last interruption | `false` (for new training), `true` (to continue training) |
-| `num_gpus` | null, integer, or list | Number or ID of GPUs to use | `1` (first GPU), `null` for CPU |
-| `precision` | integer | Computation precision | `32` (32-bit precision), optional `64` (64-bit precision) |
+| `resume` | boolean | Continue with `trainer.fit(..., ckpt_path=checkpoint_path)`; requires a non-empty `checkpoint_path` | `false` (new training), `true` (restore optimizer, scheduler, epoch, and global-step state) |
+| `num_gpus` | null, integer, or list | `null` or `0` selects CPU; a positive integer selects a GPU count; a list selects GPU IDs | `1` |
+| `precision` | integer | Computation precision: `32` for standard precision or `64` for double precision | `32` |
 | `property` | string | Type of physical quantity output by the network | `hamiltonian` |
 | `stage` | string | Execution stage | `fit` (training), `test` (testing/prediction) |
 | `hostname` | string | Host identifier (auto-detected) | Auto-detected system hostname |
@@ -478,7 +490,6 @@ This section provides detailed explanations of the parameter modules and paramet
 | Parameter | Type | Description | Default/Recommended Value |
 |-----|-----|------|-------------|
 | `train_dir` | string | Training output directory (tensorboard logs, checkpoints) | `'./'` (current directory) |
-| `progress_bar_refresh_rat` | integer | Progress bar refresh rate | `1` |
 
 ### dataset_params (Dataset Parameters)
 | Parameter | Type | Description | Default/Recommended Value |

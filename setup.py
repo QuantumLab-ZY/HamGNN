@@ -18,7 +18,7 @@ setup(
     description="Hamiltonian prediction via Graph Neural Network",
     download_url="",
     author="Yang Zhong",
-    python_requires=">=3.8",
+    python_requires=">=3.9",
     packages=find_packages(),
     package_dir={},
     package_data={'': ['*.npz', '*.json'],},
@@ -33,6 +33,7 @@ setup(
     install_requires=[
         "numpy",
         "torch",
+        "lightning>=2.5,<2.6",
         "torch_geometric",
         "e3nn",
         "pymatgen",

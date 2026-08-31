@@ -92,7 +92,6 @@ output_nets:
     minMagneticMoment: 0.5
 
 profiler_params:
-  progress_bar_refresh_rat: 1
   train_dir: ./ #The folder for saving training information and prediction results. This directory can be read by tensorboard to monitor the training process.
 
 representation_nets:
@@ -128,7 +127,7 @@ setup:
   checkpoint_path: null # Path to the model weights file
   load_from_checkpoint: False
   resume: False
-  num_gpus: 1 # null: use cpu; [i]: use the ith GPU device
-  precision: 32
+  num_gpus: 1 # null or 0: use CPU; a positive integer: number of GPUs; a list: GPU device IDs
+  precision: 32 # 32: standard precision; 64: double precision
   property: hamiltonian
   stage: fit # fit: training; test: inference

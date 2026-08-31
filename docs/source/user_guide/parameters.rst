@@ -21,7 +21,7 @@ setup (Basic Settings)
      - ``HamGNN_pre`` (or ``HamGNNpre``) for normal Hamiltonian fitting, ``HamGNN_pre_charge`` for charged defect Hamiltonian fitting, ``HamGNNTransformer`` for transformer-based model
    * - ``accelerator``
      - null or String
-     - Accelerator type
+     - Accelerator type. Supported explicit values are ``null``, ``'cpu'``, ``'gpu'``, and ``'ddp'``.
      - ``null``
    * - ``ignore_warnings``
      - Boolean
@@ -29,24 +29,24 @@ setup (Basic Settings)
      - ``true``
    * - ``checkpoint_path``
      - String
-     - Checkpoint path for resuming training or path used during testing
-     - ``'./'`` (no default checkpoint)
+     - Checkpoint path for resuming training or testing; required and non-empty when ``resume`` is true
+     - ``null``
    * - ``load_from_checkpoint``
      - Boolean
      - Whether to load model parameters from checkpoint
      - ``false`` (for new training), ``true`` (when loading pre-trained model)
    * - ``resume``
      - Boolean
-     - Whether to continue training from interruption
-     - ``false`` (for new training), ``true`` (to continue training)
+     - Continue training with ``trainer.fit(..., ckpt_path=checkpoint_path)``
+     - ``false`` (new training), ``true`` (restore optimizer, scheduler, epoch, and global-step state)
    * - ``num_gpus``
      - null, Integer, or List
-     - Number or ID of GPUs to use
-     - ``1`` (first GPU), ``null`` for CPU
+     - ``null`` or ``0`` selects CPU; a positive integer selects a GPU count; a list selects GPU IDs
+     - ``1``
    * - ``precision``
      - Integer
-     - Computation precision
-     - ``32`` (32-bit precision), optional ``64`` (64-bit precision)
+     - Computation precision: ``32`` for standard precision or ``64`` for double precision
+     - ``32``
    * - ``property``
      - String
      - Type of physical quantity output by the network
@@ -79,10 +79,6 @@ profiler_params (Profiler Parameters)
      - String
      - Training output directory (tensorboard logs, checkpoints)
      - ``'./'`` (current directory)
-   * - ``progress_bar_refresh_rat``
-     - Integer
-     - Progress bar refresh rate
-     - ``1``
 
 dataset_params (Dataset Parameters)
 -----------------------------------

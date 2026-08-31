@@ -16,7 +16,7 @@ dependencies:
   # Core dependencies of HamGNN
   - numpy
   - pytorch=2.1.0
-  - pytorch-lightning
+  - lightning>=2.5,<2.6
   - torchmetrics
   - scikit-learn
   - pandas

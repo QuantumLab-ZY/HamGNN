@@ -107,7 +107,7 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'numpy': ('https://numpy.org/doc/stable/', None),
     'torch': ('https://pytorch.org/docs/stable/', None),
-    'pytorch_lightning': ('https://lightning.ai/docs/pytorch/stable/', None),
+    'lightning.pytorch': ('https://lightning.ai/docs/pytorch/stable/', None),
     'e3nn': ('https://docs.e3nn.org/en/stable/', None),
     'torchmetrics': ('https://lightning.ai/docs/torchmetrics/stable/', None),
     'ase': ('https://wiki.fysik.dtu.dk/ase/', None),

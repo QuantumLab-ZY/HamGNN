@@ -104,15 +104,27 @@ Here's an introduction to key configuration items in ``config.yaml``:
 
       setup:
         GNN_Net: HamGNN_pre  # Type of network to use
-        accelerator: null  # Accelerator type
+        accelerator: null  # null, 'cpu', 'gpu', or 'ddp'
         ignore_warnings: true  # Whether to ignore warnings
-        checkpoint_path: /path/to/ckpt  # Checkpoint path
+        checkpoint_path: /path/to/ckpt  # Required when resume is true
         load_from_checkpoint: false  # Whether to load model parameters from checkpoint
-        resume: false  # Whether to continue training from interruption
-        num_gpus: [0]  # GPU device numbers to use, null indicates using CPU
-        precision: 32  # Computation precision (32 or 64 bit)
+        resume: false  # Continue training from interruption
+        num_gpus: 1  # null or 0: CPU; positive integer: GPU count; list: GPU IDs
+        precision: 32  # 32-bit; use 64 for double precision
         property: hamiltonian  # Type of physical quantity output
         stage: fit  # Stage: fit (training) or test (testing)
+
+   ``accelerator`` may be ``null``, ``'cpu'``, ``'gpu'``, or ``'ddp'``.
+   ``num_gpus: null`` (or ``0``) selects CPU; a positive integer selects that
+   many GPUs, and a list selects explicit GPU device IDs. When ``resume: true``,
+   ``checkpoint_path`` must be non-empty and training resumes with:
+
+   .. code-block:: python
+
+      trainer.fit(model, datamodule, ckpt_path=checkpoint_path)
+
+   This restores optimizer, scheduler, epoch, and global-step state. Use
+   ``load_from_checkpoint`` when starting a new task from model weights.
 
 5. **output_nets**:
 

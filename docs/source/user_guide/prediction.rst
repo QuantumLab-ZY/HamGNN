@@ -20,8 +20,17 @@ Preparation for Prediction
 
       setup:
         checkpoint_path: /path/to/trained/model.ckpt  # Path to trained model
-        num_gpus: null  # Set to null or 0 to use CPU for prediction
+        num_gpus: null  # null or 0: CPU; positive integer: GPU count
         stage: test  # Set to test for prediction mode
+
+   ``accelerator`` supports ``null``, ``'cpu'``, ``'gpu'``, and ``'ddp'``;
+   ``num_gpus`` remains the device-count or device-ID setting. For training
+   resumption, set ``resume: true`` and provide a non-empty
+   ``checkpoint_path``; HamGNN calls ``trainer.fit(model, datamodule,
+   ckpt_path=checkpoint_path)``. This restores optimizer, scheduler, epoch,
+   and global-step state, whereas ``load_from_checkpoint`` starts a new task
+   from weights. ``precision: 32`` uses standard precision and ``64`` uses
+   double precision.
 
 3. **Set environment variables**: For CPU execution, you can accelerate with multi-threading:
 

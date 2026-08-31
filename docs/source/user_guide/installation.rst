@@ -5,12 +5,12 @@ Environment Configuration and Installation
 Python Environment
 ==================
 
-HamGNN framework recommends using Python 3.9 and depends on the following key Python libraries:
+HamGNN supports Python 3.9 and later and depends on Lightning 2.5 and the following key Python libraries:
 
 - ``numpy == 1.21.2``
-- ``PyTorch == 1.11.0``
+- ``PyTorch == 2.5.0``
 - ``PyTorch Geometric == 2.0.4``
-- ``pytorch_lightning == 1.5.10``
+- ``lightning >= 2.5, < 2.6`` (imported from ``lightning.pytorch``)
 - ``e3nn == 0.5.0``
 - ``pymatgen == 2022.3.7``
 - ``tensorboard == 2.8.0``
@@ -108,7 +108,22 @@ Method 2: Create Environment Using Configuration File
       pip install torch-scatter==2.1.2+pt25cu121 torch-sparse==0.6.18+pt25cu121 -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
 
    .. note::
-      The version numbers in the link need to match your actual PyTorch and CUDA versions
+      The version numbers in the link need to match your actual PyTorch and CUDA versions.
+
+Lightning 2 installation and checkpoint behavior
+--------------------------------------------------
+
+HamGNN uses the ``lightning.pytorch`` namespace. To resume an interrupted
+training run, set ``resume: true`` and provide a non-empty
+``checkpoint_path``. The checkpoint is passed to Lightning as follows:
+
+.. code-block:: python
+
+   trainer.fit(model, datamodule, ckpt_path=checkpoint_path)
+
+Resuming restores the optimizer, scheduler, epoch, and global-step state.
+By contrast, ``load_from_checkpoint`` loads model weights to start a new task
+and does not continue the previous training state.
 
 Step Two: Source Installation of HamGNN
 ---------------------------------------
