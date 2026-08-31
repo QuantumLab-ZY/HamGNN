@@ -92,3 +92,48 @@ failures. The fix commit is recorded after this report is staged.
   checkpoint restoration. They do not fail the suite.
 - The exact stale scan was unavailable due to the missing `rg` executable;
   equivalent scoped searches and the migration tests passed.
+
+## Final Fix Wave
+
+- Synchronized `docs/source/user_guide/parameters.rst` with the runtime
+  `config_default`: `setup.checkpoint_path` defaults to `'./'`, rather than
+  `null`. The V2 example continues to set `null` explicitly.
+- Added a focused consistency assertion that the documented value and runtime
+  default remain aligned.
+- Commands and results:
+
+```text
+conda run -n HamGNN-oeq-pl2.x python -m pytest tests/test_lightning2_main.py tests/test_lightning2_model.py tests/test_lightning2_imports.py tests/test_lightning2_docs.py tests/test_graph_data_cache.py -q
+62 passed, 25 warnings in 69.65s
+
+conda run -n HamGNN-oeq-pl2.x python -m pytest -q
+62 passed, 25 warnings in 77.33s
+
+rg -n "pytorch_lightning|resume_from_checkpoint|progress_bar_refresh_rate|['\"]gpus['\"]|examples/V1\.0" hamgnn Uni-HamGNN tests README.md docs/source HamGNN.yaml docs/environment.yml setup.py -g '!hamgnn/toolbox/nequip/**' -g '!tests/test_lightning2_imports.py' -g '!tests/test_lightning2_docs.py'
+/bin/bash: rg: command not found
+
+Equivalent scan using git grep with the same pattern and scope
+No matches.
+
+conda run -n base sphinx-build -W -b html docs/source /tmp/hamgnn-sphinx-html
+Failed: sphinx-build: command not found
+
+conda run -n HamGNN sphinx-build -W -b html docs/source /tmp/hamgnn-sphinx-html
+Failed: sphinx-build: command not found
+
+conda run -n HamGNN-oeq sphinx-build -W -b html docs/source /tmp/hamgnn-sphinx-html
+Failed: sphinx-build: command not found
+
+conda run -n HamGNN-oeq-pl2.x sphinx-build -W -b html docs/source /tmp/hamgnn-sphinx-html
+Failed: sphinx-build: command not found
+
+conda run -n openequivariance-py311 sphinx-build -W -b html docs/source /tmp/hamgnn-sphinx-html
+Failed: sphinx-build: command not found
+
+conda run -n HamGNN-oeq-pl2.x python -m pytest tests/test_lightning2_docs.py -q
+Initial post-edit attempt: 1 failed, 8 passed. The failure was the new
+test's overly specific RST indentation assertion; it was corrected.
+
+conda run -n HamGNN-oeq-pl2.x python -m pytest tests/test_lightning2_docs.py -q
+9 passed, 0 warnings in 0.34s
+```

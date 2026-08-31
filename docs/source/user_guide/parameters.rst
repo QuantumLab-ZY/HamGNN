@@ -30,7 +30,7 @@ setup (Basic Settings)
    * - ``checkpoint_path``
      - String
      - Checkpoint path for resuming training or testing; required and non-empty when ``resume`` is true
-     - ``null``
+     - ``'./'``
    * - ``load_from_checkpoint``
      - Boolean
      - Whether to load model parameters from checkpoint

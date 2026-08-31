@@ -49,6 +49,15 @@ def test_user_docs_describe_lightning2_resume_and_keep_num_gpus():
     assert "examples/V1.0" not in text
 
 
+def test_documented_checkpoint_path_default_matches_runtime():
+    from hamgnn.config.config_parsing import config_default
+
+    parameters = Path("docs/source/user_guide/parameters.rst").read_text()
+    assert "``checkpoint_path``" in parameters
+    assert "- ``'./'``" in parameters
+    assert config_default["setup"]["checkpoint_path"] == "./"
+
+
 def test_v2_example_exposes_migrated_setup_contract():
     setup = yaml.safe_load(Path("examples/V2.x/config.yaml").read_text())["setup"]
     assert setup["num_gpus"] == 1
