@@ -165,6 +165,32 @@ def test_test_epoch_end_gathers_before_rank_zero_filter(model, trainer, monkeypa
     assert model.test_step_outputs == []
 
 
+def test_test_epoch_end_supports_outputs_without_processed_values(model, trainer, tmp_path, monkeypatch):
+    model.trainer = trainer
+    trainer.logger.log_dir = str(tmp_path)
+    output = {"pred": {}, "target": {}}
+    model.test_step_outputs = [output]
+    monkeypatch.setattr(model, "_gather_step_outputs", Mock(return_value=[output]))
+    monkeypatch.setattr(model, "_save_predictions_and_targets", Mock())
+    monkeypatch.setattr(model, "_plot_prediction_vs_target", Mock())
+    model.post_processing = object()
+
+    model.on_test_epoch_end()
+
+    assert model.test_step_outputs == []
+
+
+def test_test_epoch_end_clears_buffer_when_processing_raises(model, trainer, monkeypatch):
+    model.trainer = trainer
+    model.test_step_outputs = [{"pred": {}, "target": {}}]
+    monkeypatch.setattr(model, "_gather_step_outputs", Mock(side_effect=RuntimeError("boom")))
+
+    with pytest.raises(RuntimeError, match="boom"):
+        model.on_test_epoch_end()
+
+    assert model.test_step_outputs == []
+
+
 def test_configure_optimizers_preserves_plateau_scheduler(model):
     optimizers, schedulers = model.configure_optimizers()
     scheduler = schedulers[0]

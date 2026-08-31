@@ -361,12 +361,12 @@ class Model(pl.LightningModule):
         
             # Save post-processed values if available
             if self.post_processing is not None and any(
-                out['processed_values'] is not None for out in test_step_outputs
+                out.get('processed_values') is not None for out in test_step_outputs
             ):
                 processed_values = np.concatenate([
-                    out['processed_values']["epc_mat"]
+                    out.get('processed_values')["epc_mat"]
                     for out in test_step_outputs
-                    if out['processed_values'] is not None
+                    if out.get('processed_values') is not None
                 ])
                 np.save(os.path.join(log_dir, 'processed_values_epc_mat.npy'), processed_values)
         finally:

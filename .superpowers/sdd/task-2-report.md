@@ -113,3 +113,29 @@ an empty `np.concatenate` call.
 No changes were made to `hamgnn/toolbox/nequip`. The unrelated legacy import in
 `hamgnn/data/graph_data.py` remains outside this task's requested model
 lifecycle scope.
+
+## Review Fixes
+
+- Updated `on_test_epoch_end` to use `out.get("processed_values")` consistently,
+  so gathered outputs that omit the optional key are supported.
+- Added focused coverage for omitted `processed_values` and for clearing
+  `test_step_outputs` when test epoch processing raises.
+- `hamgnn/data/graph_data.py` remains unchanged; its legacy import migration is
+  an integration follow-up owned by Task 3.
+
+## Review-Fix Verification
+
+Command:
+
+```text
+pytest tests/test_lightning2_model.py tests/test_graph_data_cache.py -q
+```
+
+Output:
+
+```text
+/bin/bash: pytest: command not found
+```
+
+The requested covering test command remains unavailable because this checkout
+does not provide the `pytest` executable.
