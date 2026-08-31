@@ -15,7 +15,7 @@ dependencies:
 
   # Core dependencies of HamGNN
   - numpy
-  - pytorch=2.1.0
+  - pytorch=2.5.0
   - lightning>=2.5,<2.6
   - torchmetrics
   - scikit-learn
@@ -36,12 +36,12 @@ dependencies:
   # Other pip dependencies
   - pip
   - pip:
-    - --find-links https://data.pyg.org/whl/torch-2.1.0+cpu.html
+    - --find-links https://data.pyg.org/whl/torch-2.5.0+cpu.html
     - torch-scatter
     - torch-sparse
     - torch-cluster
     - torch-spline-conv
-    - torch-geometric
+    - torch-geometric==2.6.1
     - torch-ema
     - torch-runstats
     - lie_learn

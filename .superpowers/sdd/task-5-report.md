@@ -49,7 +49,7 @@ Output:
 /data/home/zhongyang/miniconda3/bin/python: No module named pytest
 ```
 
-The six test functions were executed directly through Python after import.
+The five original test functions were executed directly through Python after import.
 All passed:
 
 ```text
@@ -120,3 +120,30 @@ No output was written to `docs/_build/`.
 - Existing historical checkpoint metadata containing the old package name was
   not changed; the task scope concerns current dependency declarations and
   user-facing documentation.
+
+## Review Fix Verification
+
+Addressed all actionable Task 5 review findings:
+
+- Synchronized `docs/environment.yml` with the documented PyTorch 2.5.0 and
+  PyG 2.6.1 stack, including matching PyG wheel links and the pinned
+  `torch-geometric==2.6.1` dependency.
+- Strengthened `tests/test_lightning2_docs.py` to assert the exact resume call,
+  the non-empty checkpoint requirement, CPU/GPU `num_gpus` mapping, supported
+  accelerator values, precision 32/64 behavior, and the parsed V2.x setup
+  contract directly.
+- Distinguished intentional legacy checkpoint metadata in
+  `tests/test_lightning2_model.py` from stale current dependency, import, and
+  documentation references.
+- Corrected the direct consistency-test count from six to eight functions.
+
+Verification performed:
+
+```text
+PASS direct execution of all 8 tests in tests/test_lightning2_docs.py
+PASS python -m py_compile setup.py tests/test_lightning2_docs.py
+PASS git diff --check
+BLOCKED pytest tests/test_lightning2_docs.py -q: pytest command not found
+BLOCKED python -m pytest tests/test_lightning2_docs.py -q: No module named pytest
+BLOCKED sphinx-build -W -b html docs/source /tmp/hamgnn-sphinx-html: sphinx-build command not found
+```

@@ -68,7 +68,7 @@ According to recent research advances, HamGNN has been extended to a universal m
 The HamGNN framework supports Python 3.9 and later and depends on Lightning 2.5 and the following key Python libraries:
 - `numpy == 1.21.2`
 - `PyTorch == 2.5.0`
-- `PyTorch Geometric == 2.0.4`
+- `PyTorch Geometric == 2.6.1`
 - `lightning>=2.5,<2.6` (imported from `lightning.pytorch`)
 - `e3nn == 0.5.0`
 - `pymatgen == 2022.3.7`

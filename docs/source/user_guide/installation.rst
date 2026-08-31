@@ -9,7 +9,7 @@ HamGNN supports Python 3.9 and later and depends on Lightning 2.5 and the follow
 
 - ``numpy == 1.21.2``
 - ``PyTorch == 2.5.0``
-- ``PyTorch Geometric == 2.0.4``
+- ``PyTorch Geometric == 2.6.1``
 - ``lightning >= 2.5, < 2.6`` (imported from ``lightning.pytorch``)
 - ``e3nn == 0.5.0``
 - ``pymatgen == 2022.3.7``
@@ -105,7 +105,7 @@ Method 2: Create Environment Using Configuration File
 
    .. code-block:: bash
 
-      pip install torch-scatter==2.1.2+pt25cu121 torch-sparse==0.6.18+pt25cu121 -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
+      pip install torch-scatter==2.1.2+pt25cu121 torch-sparse==0.6.18+pt25cu121 -f https://data.pyg.org/whl/torch-2.5.0+cu121.html
 
    .. note::
       The version numbers in the link need to match your actual PyTorch and CUDA versions.

@@ -18,15 +18,58 @@ def test_setup_metadata_requires_supported_python_and_lightning():
     assert '"lightning>=2.5,<2.6"' in setup_text
 
 
+def test_documented_pytorch_pyg_stack_matches_environment():
+    environment = yaml.safe_load(Path("docs/environment.yml").read_text())
+    assert "pytorch=2.5.0" in environment["dependencies"]
+    pip_dependencies = environment["dependencies"][-1]["pip"]
+    assert "--find-links https://data.pyg.org/whl/torch-2.5.0+cpu.html" in pip_dependencies
+    assert "torch-geometric==2.6.1" in pip_dependencies
+
+    text = "\n".join(
+        path.read_text()
+        for path in [Path("README.md"), Path("docs/source/user_guide/installation.rst")]
+    )
+    assert "PyTorch == 2.5.0" in text
+    assert "PyTorch Geometric == 2.6.1" in text
+    assert "torch-2.5.0+cu121.html" in text
+
+
 def test_user_docs_describe_lightning2_resume_and_keep_num_gpus():
     text = "\n".join(
         path.read_text()
         for path in [Path("README.md"), *Path("docs/source/user_guide").glob("*.rst")]
     )
     assert "lightning>=2.5,<2.6" in text or "Lightning 2" in text
-    assert "trainer.fit" in text and "ckpt_path" in text
-    assert "num_gpus" in text
+    assert "trainer.fit(model, datamodule, ckpt_path=checkpoint_path)" in text
+    assert "resume: true" in text and "checkpoint_path" in text
+    assert "num_gpus: null" in text and "positive integer" in text
+    assert "null" in text and "cpu" in text
+    assert all(value in text for value in ("'cpu'", "'gpu'", "'ddp'"))
+    assert "precision: 32" in text and "64" in text
     assert "examples/V1.0" not in text
+
+
+def test_v2_example_exposes_migrated_setup_contract():
+    setup = yaml.safe_load(Path("examples/V2.x/config.yaml").read_text())["setup"]
+    assert setup["num_gpus"] == 1
+    assert setup["precision"] == 32
+    assert setup["accelerator"] is None
+    assert setup["resume"] is False
+    assert setup["checkpoint_path"] is None
+
+
+def test_current_references_exclude_legacy_checkpoint_metadata():
+    current_files = [
+        Path("HamGNN.yaml"),
+        Path("docs/environment.yml"),
+        Path("setup.py"),
+        Path("README.md"),
+        *Path("docs/source").rglob("*.rst"),
+    ]
+    assert all("pytorch_lightning" not in path.read_text() for path in current_files)
+
+    # This key is intentional metadata written by old checkpoints, not a current import or dependency.
+    assert "pytorch-lightning_version" in Path("tests/test_lightning2_model.py").read_text()
 
 
 def test_historical_examples_are_removed():
