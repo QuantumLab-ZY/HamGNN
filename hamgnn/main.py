@@ -13,16 +13,11 @@ import yaml
 import torch
 import torch.nn as nn
 import numpy as np
-import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger
-try:
-    from pytorch_lightning.plugins.training_type import DDPPlugin  # PL 1.x
-except ModuleNotFoundError:
-    try:
-        from pytorch_lightning.strategies import DDPStrategy as DDPPlugin  # PL 2.x
-    except ModuleNotFoundError:
-        DDPPlugin = None
+import lightning.pytorch as pl
+from lightning.pytorch.loggers import TensorBoardLogger
+from lightning.pytorch.strategies import DDPStrategy
 import pprint
+from typing import Optional
 
 from .data.graph_data import graph_data_module
 from .config.config_parsing import load_config
@@ -297,19 +292,30 @@ def setup_trainer(config, callbacks):
     
     num_gpus = _normalize_num_gpus(getattr(config.setup, 'num_gpus', None))
     requested_gpu_count = _count_requested_gpus(num_gpus)
-    accelerator = getattr(config.setup, 'accelerator', None)
+    configured_accelerator = getattr(config.setup, 'accelerator', None)
+    if configured_accelerator not in (None, 'cpu', 'gpu', 'ddp'):
+        raise ValueError("setup.accelerator must be one of null, 'cpu', 'gpu', or 'ddp'")
 
-    # Prefer process-based DDP for multi-GPU training on Slurm instead of Lightning's
-    # default ddp_spawn fallback, which is slower and more fragile for this project.
-    if not accelerator and requested_gpu_count > 1:
-        accelerator = 'ddp'
+    if configured_accelerator == 'cpu':
+        accelerator, devices = 'cpu', 1
+    elif configured_accelerator == 'gpu':
+        if requested_gpu_count == 0:
+            raise ValueError("setup.accelerator='gpu' requires a positive num_gpus or non-empty GPU list")
+        accelerator, devices = 'gpu', num_gpus
+    elif configured_accelerator == 'ddp':
+        if requested_gpu_count <= 1:
+            raise ValueError("setup.accelerator='ddp' requires more than one GPU")
+        accelerator, devices = 'gpu', num_gpus
+    else:
+        accelerator = 'cpu' if requested_gpu_count == 0 else 'gpu'
+        devices = 1 if accelerator == 'cpu' else num_gpus
 
     # Configure trainer with parameters from config
     trainer_params = {
-        'gpus': num_gpus,
-        'precision': config.setup.precision,
+        'accelerator': accelerator,
+        'devices': devices,
+        'precision': '32-true' if config.setup.precision == 32 else '64-true',
         'callbacks': callbacks,
-        'progress_bar_refresh_rate': 1,
         'logger': tb_logger,
         'gradient_clip_val': config.optim_params.gradient_clip_val,
         'max_epochs': config.optim_params.max_epochs,
@@ -317,16 +323,8 @@ def setup_trainer(config, callbacks):
         'min_epochs': config.optim_params.min_epochs,
     }
 
-    if accelerator == 'ddp':
-        # Resolve DDP + gradient checkpointing incompatibility on multi-GPU runs.
-        # https://pytorch.org/docs/stable/notes/ddp.html#ddp-internal
-        trainer_params['strategy'] = DDPPlugin(static_graph=True)
-    elif accelerator:
-        trainer_params['strategy'] = accelerator
-
-    # Add checkpoint path if resuming training
-    if config.setup.resume and config.setup.checkpoint_path:
-        trainer_params['resume_from_checkpoint'] = config.setup.checkpoint_path
+    if requested_gpu_count > 1 and configured_accelerator in (None, 'ddp'):
+        trainer_params['strategy'] = DDPStrategy(static_graph=True)
 
     # Create the trainer with the configured parameters
     trainer = pl.Trainer(**trainer_params)
@@ -390,7 +388,18 @@ def load_or_create_model(config, graph_representation, output_module, post_proce
     return model
 
 
-def train_model(trainer, model, data_module):
+def _resume_checkpoint_path(config) -> Optional[str]:
+    """Return the checkpoint path for a resumed fit, if configured."""
+    if not config.setup.resume:
+        return None
+
+    checkpoint_path = config.setup.checkpoint_path.strip()
+    if not checkpoint_path:
+        raise ValueError('resume requires a non-empty checkpoint path')
+    return checkpoint_path
+
+
+def train_model(trainer, model, data_module, checkpoint_path=None):
     """
     Train the model using the configured trainer.
     
@@ -402,6 +411,8 @@ def train_model(trainer, model, data_module):
         Model to train
     data_module : graph_data_module
         Data module containing training data
+    checkpoint_path : str or None
+        Optional checkpoint path used to resume the fit.
     
     Returns
     -------
@@ -411,7 +422,7 @@ def train_model(trainer, model, data_module):
     print("Starting training...")
     
     # Train the model
-    trainer.fit(model, data_module)
+    trainer.fit(model, data_module, ckpt_path=checkpoint_path)
     
     print("Training completed.")
     print("Starting evaluation...")
@@ -515,7 +526,9 @@ def train_and_evaluate(config):
             tb_logger.experiment.add_text(f"version/{key}", str(value), global_step=0)
         
         # Train and evaluate model
-        test_results = train_model(trainer, model, data_module)
+        test_results = train_model(
+            trainer, model, data_module, _resume_checkpoint_path(config)
+        )
         
         # Log hyperparameters in tensorboard
         hparam_dict = get_hparam_dict(config)
