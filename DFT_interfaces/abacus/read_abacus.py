@@ -7,30 +7,30 @@ Loads SCF metadata, orbital indexing, and matrix elements for graph-data generat
 and downstream HamGNN targets.
 """
 
-import numpy as np
 from copy import deepcopy
-import json
 import os
 import re
-import sys
 import numpy as np
 from typing import List, Dict
 from scipy.sparse import csr_matrix as csr
 from pymatgen.core.periodic_table import Element
 from build_graph_from_coordinates import find_inverse_edge_index
+from abacus_csr import ABACUSCSRFile
 
 au2ang = 0.5291772490000065
+# Match ModuleBase::BOHR_TO_A used by ABACUS 3.11 UcellIO::write_ucell.
+abacus_csr_bohr_to_angstrom = 0.5291770
 ry2ha  = 13.60580 / 27.21138506
 float_pattern = re.compile(r'[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?')
 
 def convert_to_int(value):
     """
     Convert a value or a collection of values to integers.
-    
+
     Parameters:
     value: int, list, or np.ndarray
         The value to convert. Can be a single integer, a list of values, or a NumPy array.
-        
+
     Returns:
     int, list, or np.ndarray
         The converted integer value(s). If the input is a list or array, it returns the converted values in the same structure.
@@ -46,11 +46,11 @@ def convert_to_int(value):
 def convert_to_float(value):
     """
     Convert a value or a collection of values to floats.
-    
+
     Parameters:
     value: float, list, or np.ndarray
         The value to convert. Can be a single float, a list of values, or a NumPy array.
-        
+
     Returns:
     float, list, or np.ndarray
         The converted float value(s). If the input is a list or array, it returns the converted values in the same structure.
@@ -66,11 +66,11 @@ def convert_to_float(value):
 def convert_complex(value):
     """
     Convert a complex number or a collection of complex numbers to their real and imaginary parts.
-    
+
     Parameters:
     value: complex, list, or np.ndarray
         The complex value to convert. Can be a single complex number, a list of complex values, or a NumPy array.
-        
+
     Returns:
     tuple
         A tuple containing lists of real and imaginary parts of the complex value(s).
@@ -100,27 +100,27 @@ def convert_complex(value):
 def find_matching_column_index(matrix, target_column_values):
     """
     Find the index of a column in a 2D numpy array that exactly matches a given target column of values.
-    
+
     This function compares each column of the matrix with the target column values and returns the index of
     the first column that matches. If no match is found, it returns None.
 
     Parameters:
         matrix (np.ndarray): A 2D numpy array (N×5), where N is the number of rows and 5 is the number of columns.
         target_column_values (list or np.ndarray): A 1D array or list containing the target column values to match.
-        
+
     Returns:
         int or None: The index of the matching column if found, otherwise None.
     """
     # Ensure the target column is a numpy array for consistency and correct shape
     target_column_values = np.asarray(target_column_values)
-    
+
     # Validate that the target column has the same number of rows as the matrix
     if target_column_values.shape[0] != matrix.shape[0]:
         raise ValueError("The number of elements in the target column must match the number of rows in the matrix.")
-    
+
     # Compare each column of the matrix with the target column using broadcasting
     column_matches = np.all(matrix == target_column_values[:, None], axis=0)
-    
+
     # If a match is found, return the index of the first matching column; otherwise, return None
     return np.argmax(column_matches) if column_matches.any() else None
 
@@ -131,7 +131,11 @@ class STRU:
     Supports two input formats:
     1) STRU file (blocks such as ATOMIC_SPECIES, LATTICE_CONSTANT, LATTICE_VECTORS, ATOMIC_POSITIONS)
     2) ABACUS running_scf.log (READING UNITCELL info from OUT.ABACUS/running_scf.log)
-    
+
+    A validated ABACUS 3.11 HContainer CSR header can subsequently replace
+    only the geometry through :meth:`use_csr_geometry`; log-only orbital and
+    pseudopotential metadata are retained.
+
     Attributes:
         species (List[str]): List of species (element types).
         num_orbitals (List[int]): List of number of orbitals for each species.
@@ -141,11 +145,11 @@ class STRU:
         atomic_numbers (ndarray): Atomic numbers for each atom (1D array).
         num_species (int): Number of unique species.
         num_atoms_unit_cell (int): Total number of atoms in the unit cell.
-    
+
     Methods:
         __init__(file: str) -> None: Initializes the structure by reading data from the given file.
     """
-    
+
     def __init__(self, file: str) -> None:
         """
         Initialize the structure by reading data from the specified file.
@@ -158,7 +162,7 @@ class STRU:
             content_preview = fp.read(4096)
             fp.seek(0)
             is_log = (
-                'lattice constant (Bohr)' in content_preview
+                'lattice constant (bohr)' in content_preview.lower()
                 or 'READING UNITCELL INFORMATION' in content_preview
             )
 
@@ -169,13 +173,88 @@ class STRU:
 
         self.num_species = len(self.species)
         self.num_atoms_unit_cell = sum(self.num_atoms_per_species)
-        self.atomic_numbers = np.array([Element(spec).Z for spec, na in zip(self.species, self.num_atoms_per_species) for _ in range(na)], dtype=int)
+        self.atomic_numbers = np.array(
+            [
+                Element(spec).Z
+                for spec, count in zip(self.species, self.num_atoms_per_species)
+                for _ in range(count)
+            ],
+            dtype=int,
+        )
+        self.structure_source = file
+        self.structure_format = 'running-scf-log' if is_log else 'STRU'
+
+    @staticmethod
+    def _geometry_from_csr(csr_file: ABACUSCSRFile):
+        structure = csr_file.structure
+        if structure is None:
+            raise ValueError(f'ABACUS CSR does not contain a structure header: {csr_file.path}')
+
+        cell = (
+            np.asarray(structure.lattice_vectors, dtype=float)
+            * structure.lattice_constant_angstrom
+            / abacus_csr_bohr_to_angstrom
+        )
+        if not np.all(np.isfinite(cell)) or abs(np.linalg.det(cell)) < 1e-12:
+            raise ValueError(f'invalid cell in ABACUS CSR structure header: {csr_file.path}')
+        direct_positions = np.asarray(structure.direct_positions, dtype=float)
+        positions = direct_positions @ cell
+        return structure, cell, direct_positions, positions
+
+    def validate_csr_geometry(self, csr_file: ABACUSCSRFile):
+        """Validate one 3.11 CSR unit cell against the current structure."""
+
+        structure, cell, direct_positions, positions = self._geometry_from_csr(csr_file)
+        if list(structure.species) != self.species:
+            raise ValueError(
+                f'species mismatch between structure metadata {self.species} and '
+                f'CSR {list(structure.species)}: {csr_file.path}'
+            )
+        if list(structure.atom_counts) != self.num_atoms_per_species:
+            raise ValueError(
+                f'atom-count mismatch between structure metadata {self.num_atoms_per_species} '
+                f'and CSR {list(structure.atom_counts)}: {csr_file.path}'
+            )
+        if np.shape(self.cell) != (3, 3) or np.shape(self.positions) != positions.shape:
+            raise ValueError(f'invalid structure metadata dimensions for CSR: {csr_file.path}')
+        # ABACUS 3.11 writes lattice scale/vectors with the C++ default of six
+        # significant digits, so the product can carry about 1e-5 relative error.
+        if not np.allclose(self.cell, cell, rtol=1.1e-5, atol=1e-6):
+            error = float(np.max(np.abs(np.asarray(self.cell) - cell)))
+            raise ValueError(
+                f'cell mismatch between structure metadata and CSR '
+                f'(max_abs={error:.6g} Bohr): {csr_file.path}'
+            )
+
+        metadata_direct = np.linalg.solve(
+            np.asarray(self.cell).T, np.asarray(self.positions).T
+        ).T
+        fractional_delta = metadata_direct - direct_positions
+        fractional_delta -= np.rint(fractional_delta)
+        position_error = float(np.max(np.linalg.norm(fractional_delta @ self.cell, axis=1)))
+        if position_error > 1e-5:
+            raise ValueError(
+                f'atomic-position mismatch between structure metadata and CSR '
+                f'(max_periodic_distance={position_error:.6g} Bohr): {csr_file.path}'
+            )
+        return cell, positions
+
+    def use_csr_geometry(self, csr_file: ABACUSCSRFile) -> None:
+        """Replace only cell/positions with the validated 3.11 CSR geometry."""
+
+        cell, positions = self.validate_csr_geometry(csr_file)
+        self.cell = cell
+        self.positions = positions
+        self.pos_type = 'cartesian'
+        self.structure_source = str(csr_file.path)
+        self.structure_format = csr_file.format_version
 
     def _read_from_running_scf_log(self, file: str) -> None:
         """Read structure information from ABACUS running_scf.log."""
         self.species = []
         self.num_orbitals = []
         self.num_atoms_per_species = []
+        self.valence_electrons_per_species = []
         self.cell = []
         self.positions = []
         self.pos_type = 'cartesian'
@@ -189,15 +268,23 @@ class STRU:
         while i < len(lines):
             line = lines[i]
 
-            if 'lattice constant (Bohr)' in line and '=' in line:
+            valence_match = re.search(
+                r'valence electrons\s*=\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))',
+                line,
+                re.IGNORECASE,
+            )
+            if valence_match:
+                self.valence_electrons_per_species.append(float(valence_match.group(1)))
+
+            if 'lattice constant (bohr)' in line.lower() and '=' in line:
                 latconst = float(line.split('=')[-1].strip())
 
-            if 'READING ATOM TYPE' in line and 'atom label' not in line:
+            if 'reading atom type' in line.lower() and 'atom label' not in line.lower():
                 i += 1
                 if i >= len(lines):
                     break
 
-                while i < len(lines) and 'atom label' not in lines[i]:
+                while i < len(lines) and 'atom label' not in lines[i].lower():
                     i += 1
                 if i >= len(lines):
                     break
@@ -225,7 +312,9 @@ class STRU:
                 )
                 self.num_orbitals.append(num_orbitals)
 
-                while i < len(lines) and 'number of atom for this type' not in lines[i]:
+                while i < len(lines) and not re.search(
+                    r'number of atoms? for this type', lines[i], re.IGNORECASE
+                ):
                     i += 1
                 if i < len(lines):
                     num_atoms = int(lines[i].split('=')[-1].strip())
@@ -295,6 +384,7 @@ class STRU:
             self.species = []
             self.num_orbitals = []
             self.num_atoms_per_species = []
+            self.valence_electrons_per_species = None
             self.cell = []
             self.positions = []
             active_block = None
@@ -347,10 +437,10 @@ class STRU:
     def parse_orbitals(self, orbital_data: str) -> int:
         """
         Parse the orbital string and calculate the total number of orbitals for the species.
-        
+
         Args:
             orbital_data (str): The string containing orbital information.
-        
+
         Returns:
             int: The total number of orbitals for the species.
         """
@@ -368,7 +458,7 @@ class STRU:
     def _process_atomic_positions(self, fp, line):
         """
         Process atomic positions block and parse relevant data.
-        
+
         Args:
             fp (file): File pointer to read atomic data.
             line (str): Line read from the file containing atomic position info.
@@ -409,7 +499,7 @@ class STRU:
     def convert_to_cartesian(self) -> np.ndarray:
         """
         Convert atomic positions from direct to Cartesian coordinates.
-        
+
         Returns:
             np.ndarray: The atomic positions in Cartesian coordinates.
         """
@@ -419,36 +509,37 @@ class STRU:
 class ABACUSHS:
     """
     A class to handle the ABACUS Hamiltonian structure and related operations.
-    
+
     Attributes:
         no_u (int): Number of orbitals in the unit cell.
         ncell_shift (int): Number of cell shifts.
         max_rcut (ndarray): Maximum cutoff distance for each species.
         noff (int): Number of off-site Hamiltonian terms.
         fp (file object): File pointer for reading input data.
-    
+
     Methods:
         __init__(file: str): Initialize the ABACUSHS class by reading data from the specified file.
-        getGraph(stru: STRU, graph: dict, skip: bool, isH: bool, isSOC: bool, calcRcut: bool, tojson: bool): 
+        getGraph(stru: STRU, graph: dict, skip: bool, isH: bool, isSOC: bool, calcRcut: bool, tojson: bool):
             Constructs and returns the graph (edges, Hamiltonian matrices, etc.) from the ABACUSHS data.
         getHK(stru: STRU, k: np.ndarray, isH: bool, isSOC: bool): Returns the Hamiltonian matrix for the specified k-point.
         close(): Closes the file pointer.
     """
-    
+
     def __init__(self, file: str) -> None:
         """
         Initializes the ABACUSHS object by reading the data from the provided file.
-        
+
         Args:
             file (str): The file containing the ABACUSHS data.
         """
-        self.fp = open(file)
-        line = self.fp.readline()  # Read first line to determine the format
-        if 'STEP' in line:
-            self.no_u = int(self.fp.readline().split()[-1])
-        else:
-            self.no_u = int(line.split()[-1])  # Number of orbitals in the unit cell.
-        self.ncell_shift = int(self.fp.readline().split()[-1])
+        self.csr_file = ABACUSCSRFile(file)
+        if self.csr_file.representation_note:
+            raise ValueError(
+                f'folded ABACUS matrix representation is not a real-space graph input: '
+                f'{self.csr_file.representation_note}'
+            )
+        self.no_u = self.csr_file.no_u
+        self.ncell_shift = self.csr_file.ncell_shift
 
     def _calculate_atom_orbitals(self, stru, repeat):
         """
@@ -490,11 +581,11 @@ class ABACUSHS:
 
         return orbitals_per_atom, orbital_indices
 
-    def getGraph(self, stru, graph: dict = {}, skip: bool = False, isH: bool = False, 
+    def getGraph(self, stru, graph: dict = {}, skip: bool = False, isH: bool = False,
                     isSOC: bool = False, calcRcut: bool = False, tojson: bool = False) -> dict:
         """
         Constructs the graph (edges, Hamiltonian matrices, etc.) from ABACUSHS data.
-        
+
         Args:
             stru (STRU): The structure object containing atomic information.
             graph (dict, optional): The graph object to update, defaults to an empty dictionary.
@@ -503,7 +594,7 @@ class ABACUSHS:
             isSOC (bool, optional): If True, includes spin-orbit coupling, defaults to False.
             calcRcut (bool, optional): If True, calculates the maximum cutoff distances, defaults to False.
             tojson (bool, optional): If True, converts the graph to JSON format, defaults to False.
-        
+
         Returns:
             dict: The constructed graph containing edge information and Hamiltonian matrices.
         """
@@ -531,40 +622,22 @@ class ABACUSHS:
         # Initialize the atomic orbital indices
         no, indo = self._calculate_atom_orbitals(stru, repeat)
 
-        while True:
-            line = self.fp.readline()
-            if not line:
-                break
-            tmp = line.split()
-            cx, cy, cz = int(tmp[0]), int(tmp[1]), int(tmp[2])
-            nh = int(tmp[3])
-            if nh == 0:
-                continue
-            val = self.fp.readline()
-            col = self.fp.readline().split()
-            row = self.fp.readline().split()
-
-            # Handle Hamiltonian values
-            if not isSOC:
-                val = list(map(float, val.split()))
-            else:
-                val_raw = re.findall(r'[\-\+\d\.eE]+', val)
-                val_raw = np.asarray(val_raw, dtype=np.float32)
-                val = np.zeros(len(val_raw) // 2, dtype=np.complex64)
-                val += val_raw[0::2] + 1j * val_raw[1::2]
-            
-            col = list(map(int, col))
-            row = list(map(int, row))
-            hamilt = csr((val, col, row), shape=[self.no_u, self.no_u], dtype=dtype)
+        for block in self.csr_file.iter_blocks(is_soc=isSOC):
+            cx, cy, cz = block.cell_shift
+            hamilt = csr(
+                (block.values, block.columns, block.row_pointers),
+                shape=[self.no_u, self.no_u],
+                dtype=dtype,
+            )
 
             if isH:
                 hamilt *= ry2ha
-            
+
             if skip:
-                edge_info_array = np.concatenate([np.array(graph_['edge_index']), np.array(cell_shift).T], axis=0) 
+                edge_info_array = np.concatenate([np.array(graph_['edge_index']), np.array(cell_shift).T], axis=0)
             else:
                 edge_info_array = None
-            
+
             # Process Hamiltonian and populate graph data
             for ia in range(stru.num_atoms_unit_cell):
                 for ja in range(stru.num_atoms_unit_cell):
@@ -613,7 +686,7 @@ class ABACUSHS:
             # Construct the edges and graph
             edge_index = [edge_idx_src, edge_idx_dst]
             self.noff = len(edge_idx_src)
-            
+
             inv_edge_idx = find_inverse_edge_index(np.array(edge_index), np.array(cell_shift))
 
             graph_ = {}
@@ -622,7 +695,7 @@ class ABACUSHS:
             graph_['cell_shift'] = convert_to_int(cell_shift) if tojson else np.array(cell_shift)
             graph_['nbr_shift'] = convert_to_float(nbr_shift) if tojson else np.array(nbr_shift)
             graph_['pos'] = convert_to_float(stru.positions) if tojson else stru.positions
-            
+
         if not tojson:
             graph_['Hon'] = Hon
             graph_['Hoff'] = Hoff
@@ -639,9 +712,9 @@ class ABACUSHS:
     def _fill_offsite_hamiltonian(self, cx, cy, cz, ia, ja, edge_info_array):
         """
         Checks if an offsite Hamiltonian term already exists and returns the appropriate index.
-        """        
+        """
         ioff = find_matching_column_index(edge_info_array, [ia, ja, cx, cy, cz])
-        
+
         if ioff is not None:
             return False, ioff
         else:
@@ -685,31 +758,12 @@ class ABACUSHS:
         dtype = np.float32 if not isSOC else np.complex64
         HK = np.zeros([self.no_u, self.no_u], dtype=dtype)
 
-        while True:
-            line = self.fp.readline()
-            if not line:
-                break
-            tmp = line.split()
-            cx, cy, cz = int(tmp[0]), int(tmp[1]), int(tmp[2])
-            nh = int(tmp[3])
-            if nh == 0:
-                continue
-            val = self.fp.readline()
-            col = self.fp.readline().split()
-            row = self.fp.readline().split()
-
-            # Handle Hamiltonian values
-            if not isSOC:
-                val = list(map(float, val.split()))
-            else:
-                val_raw = re.findall(r'[\-\+\d\.eE]+', val)
-                val_raw = np.asarray(val_raw, dtype=np.float32)
-                val = np.zeros(len(val_raw) // 2, dtype=np.complex64)
-                val += val_raw[0::2] + 1j * val_raw[1::2]
-            
-            col = list(map(int, col))
-            row = list(map(int, row))
-            hamilt = csr((val, col, row), shape=[self.no_u, self.no_u], dtype=dtype)
+        for block in self.csr_file.iter_blocks(is_soc=isSOC):
+            hamilt = csr(
+                (block.values, block.columns, block.row_pointers),
+                shape=[self.no_u, self.no_u],
+                dtype=dtype,
+            )
             if isH:
                 hamilt *= ry2ha
 
@@ -721,57 +775,42 @@ class ABACUSHS:
         """
         Closes the file pointer.
         """
-        self.fp.close()
+        self.csr_file.close()
 
-def process_graph_data():
+
+def select_structure_for_matrices(
+    crystal: STRU,
+    primary_matrix: ABACUSHS,
+    *other_matrices: ABACUSHS,
+) -> STRU:
+    """Select geometry by matrix generation while retaining log-only metadata.
+
+    Legacy 3.10 matrices keep the historical ``running_scf.log`` geometry.
+    For a 3.11 primary matrix, the embedded HContainer CSR unit cell becomes
+    authoritative. Any additional 3.11 matrices must describe the same cell.
     """
-    Processes the Hamiltonian and overlap data, creates a merged graph, 
-    and saves the graph data to a formatted JSON file.
-    """
-    # Load structure and Hamiltonian
-    poscar = STRU(os.path.join('/public/home/zhongyang/yzhong/CsVSb/50/Training/perturbation_cal/STRU_1', 'STRU'))
-    H = ABACUSHS(os.path.join('/public/home/zhongyang/yzhong/CsVSb/50/Training/perturbation_cal/STRU_1/OUT.ABACUS', 'data-H0R-sparse_SPIN0.csr'))
-    graphH = H.getGraph(stru=poscar, graph={}, isH=True, tojson=True)
 
-    # Load overlap matrix and skip Hamiltonian generation
-    S = ABACUSHS(os.path.join('/public/home/zhongyang/yzhong/CsVSb/50/Training/perturbation_cal/STRU_1/OUT.ABACUS', 'data-S0R-sparse_SPIN0.csr'))
-    graphS = S.getGraph(stru=poscar, graph=graphH, skip=True, tojson=True)
+    primary_csr = primary_matrix.csr_file
+    if primary_csr.format_version == 'hcontainer-3.11':
+        crystal.use_csr_geometry(primary_csr)
+    elif primary_csr.format_version == 'legacy-3.10':
+        crystal.structure_format = 'legacy-3.10-running-log'
+    else:
+        raise ValueError(f'unsupported ABACUS CSR format: {primary_csr.format_version}')
 
-    # Close files
-    H.close()
-    S.close()
-
-    # Merge Hamiltonian and overlap data
-    graph = deepcopy(graphH)
-    graph['Hon'] = [graphH['Hon']]
-    graph['Hoff'] = [graphH['Hoff']]
-    graph['Son'] = graphS['Hon']
-    graph['Soff'] = graphS['Hoff']
-
-    # Output file name
-    fname = 'HS.json'
-
-    # Write the graph data to the JSON file
-    with open(fname, 'w') as f:
-        json.dump(graph, f, separators=[',', ':'])
-
-    # Reopen the file for formatting (newlines after commas for readability)
-    with open(fname, 'r') as f:
-        file_content = f.read()
-        formatted_content = re.sub(r', *"', ',\n"', file_content)
-
-    # Write the formatted content back to the file
-    with open(fname, 'w') as f:
-        f.write(formatted_content)
-
+    for matrix in other_matrices:
+        csr_file = matrix.csr_file
+        if csr_file.format_version == 'hcontainer-3.11':
+            crystal.validate_csr_geometry(csr_file)
+    return crystal
 
 def read_abacus_input(input_file: str) -> dict:
     """
     Read ABACUS INPUT file and extract electron-related parameters.
-    
+
     Parameters:
         input_file (str): Path to the ABACUS INPUT file.
-    
+
     Returns:
         dict: Dictionary containing:
             - 'nelec': Total number of electrons (if specified)
@@ -783,121 +822,64 @@ def read_abacus_input(input_file: str) -> dict:
         'nelec_delta': None,
         'doping_charge': None
     }
-    
+
     if not os.path.exists(input_file):
         return result
-    
+
     with open(input_file, 'r') as f:
         for line in f:
             line = line.split('//')[0].split('#')[0].strip()
             if not line:
                 continue
-            
+
             line_lower = line.lower()
-            
+
             if 'nelec_delta' in line_lower:
                 try:
                     result['nelec_delta'] = float(line.split()[-1])
                 except:
                     pass
-            
+
             elif 'nelec' in line_lower and 'nelec_delta' not in line_lower:
                 try:
                     result['nelec'] = float(line.split()[-1])
                 except:
                     pass
-    
+
     return result
 
 
-def get_valence_electrons(atomic_number: int) -> int:
-    """
-    Get the number of valence electrons for an element.
-    
-    Parameters:
-        atomic_number (int): Atomic number (Z).
-    
-    Returns:
-        int: Number of valence electrons.
-    """
-    if atomic_number > 118 or atomic_number < 1:
-        return 0
-    
-    from pymatgen.core.periodic_table import Element
-    try:
-        element = Element.from_Z(atomic_number)
-        group = element.group
-        period = element.period
-        
-        # Period 1: H=1 (1 valence), He=2 (2 valence)
-        if period == 1:
-            return 1 if atomic_number == 1 else 2
-        
-        # Period 2: Li(3)=1, Be(4)=2, B(5)=3, C(6)=4, N(7)=5, O(8)=6, F(9)=7, Ne(10)=8
-        elif period == 2:
-            return max(1, atomic_number - 2)
-        
-        # Period >= 3
-        elif period >= 3:
-            if atomic_number <= 12:  # s-block: Na(11)=1, Mg(12)=2
-                return atomic_number - 10
-            else:  # p-block elements: Al(13)=3, Si(14)=4, P(15)=5, S(16)=6
-                # For p-block, valence electrons = group number - 10
-                # Al: group=13, valence=3
-                # Si: group=14, valence=4
-                # P: group=15, valence=5
-                return int(group) - 10
-    
-    except:
-        pass
-    
-    # Fallback: estimate from atomic number
-    # Common valence patterns:
-    if atomic_number <= 2:
-        return atomic_number  # H=1, He=2
-    elif atomic_number <= 10:
-        return atomic_number - 2  # Li=1, Be=2, B=3, C=4, N=5, O=6, F=7, Ne=8
-    elif atomic_number <= 18:
-        return atomic_number - 10  # Na=1, Mg=2, Al=3, Si=4, P=5, S=6, Cl=7, Ar=8
-    else:
-        # For heavier elements, use group-based estimate
-        try:
-            element = Element.from_Z(atomic_number)
-            g = int(group) if group else 14
-            if atomic_number > 12:  # p-block
-                return g - 10
-            else:  # s-block
-                return atomic_number - 10
-        except:
-            return 4  # Default for transition metals
-
-
-def get_neutral_electrons(stru: STRU) -> int:
+def get_neutral_electrons(stru: STRU) -> float:
     """
     Calculate the number of valence electrons in a neutral system.
-    
+
     Parameters:
         stru (STRU): STRU object containing atomic information.
-    
+
     Returns:
-        int: Total number of valence electrons in the neutral system.
+        float: Total pseudopotential valence-electron count.
     """
-    total_valence = 0
-    for z in stru.atomic_numbers:
-        total_valence += get_valence_electrons(int(z))
-    return total_valence
+    valence = getattr(stru, 'valence_electrons_per_species', None)
+    if valence is None or len(valence) != len(stru.species):
+        raise ValueError(
+            'missing pseudopotential valence-electron metadata in ABACUS running log; '
+            'refusing periodic-table fallback for charge labels'
+        )
+    return float(sum(electrons * count for electrons, count in zip(
+        valence, stru.num_atoms_per_species
+    )))
 
 
-def calculate_doping_charge(input_params: dict, neutral_electrons: int) -> float:
+def calculate_doping_charge(input_params: dict, neutral_electrons: float) -> float:
     """
     Calculate the doping charge from INPUT parameters.
-    
+
     Priority:
     1. If both nelec and nelec_delta are present and nelec != 0, use
-       total_electrons = nelec + nelec_delta
+       doping_charge = neutral_electrons - (nelec + nelec_delta)
     2. If only nelec is effectively set (nelec != 0), use
-       total_electrons = nelec
-    3. If only nelec_delta is effectively set, use it directly as the doping charge
+       doping_charge = neutral_electrons - nelec
+    3. If only nelec_delta is effectively set, use -nelec_delta
     4. Otherwise, return 0.0 (neutral system)
 
     Notes:
@@ -907,11 +889,11 @@ def calculate_doping_charge(input_params: dict, neutral_electrons: int) -> float
       when the user specified only `nelec_delta`.
     - To avoid misinterpreting these defaults, `nelec == 0` is treated as
       "not explicitly set" in this function.
-    
+
     Parameters:
         input_params (dict): Output from read_abacus_input().
-        neutral_electrons (int): Number of electrons in neutral system.
-    
+        neutral_electrons (float): Pseudopotential valence-electron count of the neutral system.
+
     Returns:
         float: Doping charge (positive = hole doping, negative = electron doping).
     """
@@ -922,14 +904,10 @@ def calculate_doping_charge(input_params: dict, neutral_electrons: int) -> float
     has_nelec_delta = nelec_delta is not None
 
     if has_effective_nelec and has_nelec_delta:
-        return float(nelec + nelec_delta - neutral_electrons)
+        return float(neutral_electrons - (nelec + nelec_delta))
     elif has_effective_nelec:
-        return float(nelec - neutral_electrons)
+        return float(neutral_electrons - nelec)
     elif has_nelec_delta:
-        return float(input_params['nelec_delta'])
+        return float(-input_params['nelec_delta'])
     else:
         return 0.0
-
-
-if __name__ == '__main__':
-    process_graph_data()
