@@ -1,0 +1,2775 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 5556be3..0bf4054 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -34,6 +34,8 @@ project(
+ 
+ option(ENABLE_MPI "Enable MPI" ON)
+ option(ENABLE_OPENMP "Enable OpenMP" ON)
++option(H0LITE_MKL_SEQUENTIAL "Use sequential oneMKL inside the OpenMP H0Lite frontend" OFF)
++option(H0LITE_PORTABLE_STATIC "Build the H0Lite executable as a single portable ELF" OFF)
+ option(USE_CUDA "Enable CUDA" OFF)
+ option(USE_ROCM "Enable ROCm" OFF)
+ option(USE_DSP "Enable DSP" OFF)
+diff --git a/cmake/modules/FindMKL.cmake b/cmake/modules/FindMKL.cmake
+index 8d32466..c0083ed 100644
+--- a/cmake/modules/FindMKL.cmake
++++ b/cmake/modules/FindMKL.cmake
+@@ -61,7 +61,7 @@ endif()
+ # Keep MKL threading internal: derive it from ABACUS OpenMP support and the
+ # known compiler/runtime combinations. Unknown OpenMP runtimes use sequential MKL.
+ set(_mkl_threading sequential)
+-if(ENABLE_OPENMP)
++if(ENABLE_OPENMP AND NOT H0LITE_MKL_SEQUENTIAL)
+   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+     set(_mkl_threading gnu_thread)
+   elseif(CMAKE_CXX_COMPILER_ID MATCHES "Intel")
+diff --git a/source/CMakeLists.txt b/source/CMakeLists.txt
+index 0c16532..40ce933 100644
+--- a/source/CMakeLists.txt
++++ b/source/CMakeLists.txt
+@@ -646,6 +646,108 @@ if(ENABLE_COVERAGE)
+   add_coverage(driver)
+ endif()
+ 
++# Standalone real-space H0/S0 generator. Internal object libraries are first
++# collected into a static archive so the linker pulls only the ABACUS source
++# files needed by this frontend rather than the complete DFT executable.
++if(ENABLE_LCAO AND NOT ENABLE_MPI)
++  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/source_main/licenses/ABACUS-LGPL-3.0.txt" H0LITE_ABACUS_LICENSE_TEXT)
++  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/source_main/licenses/GCC-Runtime-Library-Exception-3.1.txt" H0LITE_GCC_RUNTIME_LICENSE_TEXT)
++  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/source_main/licenses/oneMKL-license.txt" H0LITE_MKL_LICENSE_TEXT)
++  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/source_main/licenses/oneMKL-third-party-programs.txt" H0LITE_MKL_THIRD_PARTY_TEXT)
++  configure_file(
++    "${CMAKE_CURRENT_SOURCE_DIR}/source_main/h0lite_licenses.h.in"
++    "${CMAKE_CURRENT_BINARY_DIR}/source_main/h0lite_licenses.h"
++    @ONLY)
++
++  add_library(
++    h0lite_abacus_core
++    STATIC
++      $<TARGET_OBJECTS:base>
++      $<TARGET_OBJECTS:device>
++      $<TARGET_OBJECTS:cell>
++      $<TARGET_OBJECTS:symmetry>
++      $<TARGET_OBJECTS:neighbor>
++      $<TARGET_OBJECTS:neighbor_search>
++      $<TARGET_OBJECTS:psi>
++      $<TARGET_OBJECTS:orb>
++      $<TARGET_OBJECTS:planewave>
++      $<TARGET_OBJECTS:gint>
++      $<TARGET_OBJECTS:hcontainer>
++      $<TARGET_OBJECTS:numerical_atomic_orbitals>
++      $<TARGET_OBJECTS:parameter>
++      $<TARGET_OBJECTS:io_input>)
++
++  add_executable(
++    abacus_h0lite
++      source_main/h0lite.cpp
++      source_main/h0lite_frontend.cpp
++      source_cell/cal_wfc.cpp
++      source_estate/param_update.cpp
++      source_estate/module_pot/pot_local.cpp
++      source_hamilt/operator.cpp
++      source_lcao/setup_nonlocal.cpp
++      source_lcao/module_operator_lcao/operator_lcao.cpp
++      source_lcao/module_operator_lcao/operator_fs_utils.cpp
++      source_lcao/module_operator_lcao/overlap.cpp
++      source_lcao/module_operator_lcao/ekinetic.cpp
++      source_lcao/module_operator_lcao/nonlocal.cpp
++      source_lcao/module_rt/td_folding.cpp
++      source_lcao/module_rt/td_info.cpp
++      source_pw/module_pwdft/parallel_grid.cpp
++      source_pw/module_pwdft/soc.cpp
++      source_pw/module_pwdft/structure_factor.cpp
++      source_pw/module_pwdft/vl_pw.cpp
++      source_io/module_output/sparse_matrix.cpp
++      source_io/module_output/ucell_io.cpp)
++  set_target_properties(abacus_h0lite PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
++  if(H0LITE_PORTABLE_STATIC)
++    set_target_properties(
++      abacus_h0lite
++      PROPERTIES
++        OUTPUT_NAME abacus_h0
++        SKIP_BUILD_RPATH TRUE
++        INSTALL_RPATH "")
++  else()
++    set(_h0lite_runtime_dirs ${CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES})
++    list(FILTER _h0lite_runtime_dirs EXCLUDE REGEX "/(elpa|libxc)-")
++    list(APPEND _h0lite_runtime_dirs "$ENV{MKLROOT}/lib" "$ENV{MKLROOT}/lib/intel64")
++    list(REMOVE_DUPLICATES _h0lite_runtime_dirs)
++    set_target_properties(
++      abacus_h0lite
++      PROPERTIES
++        BUILD_RPATH "${_h0lite_runtime_dirs}"
++        INSTALL_RPATH "${_h0lite_runtime_dirs}")
++  endif()
++  target_compile_features(abacus_h0lite PRIVATE cxx_std_17)
++  target_include_directories(abacus_h0lite PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
++  target_compile_definitions(
++    abacus_h0lite
++    PRIVATE H0LITE_ABACUS_COMMIT="d88b719ea287e13b0e133eb57b8e16baa5361fa6")
++  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|Intel")
++    target_compile_options(abacus_h0lite PRIVATE -ffunction-sections -fdata-sections)
++    target_link_options(abacus_h0lite PRIVATE -Wl,--gc-sections)
++  endif()
++  if(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
++    target_compile_options(abacus_h0lite PRIVATE -fp-model=strict)
++  endif()
++  target_link_libraries(
++    abacus_h0lite
++    PRIVATE
++      h0lite_abacus_core
++      container
++      abacus::link_libs)
++  if(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
++    target_link_libraries(abacus_h0lite PRIVATE stdc++fs)
++  endif()
++  if(H0LITE_PORTABLE_STATIC)
++    if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
++      message(FATAL_ERROR "H0LITE_PORTABLE_STATIC currently requires GNU C++")
++    endif()
++    target_link_options(abacus_h0lite PRIVATE -static-libstdc++ -static-libgcc)
++  endif()
++  install(TARGETS abacus_h0lite RUNTIME DESTINATION bin COMPONENT h0lite)
++endif()
++
+ # ==============================================================================
+ # Final link closure and ordering
+ # ==============================================================================
+diff --git a/source/source_io/module_parameter/read_input.cpp b/source/source_io/module_parameter/read_input.cpp
+index b98254a..e354be1 100644
+--- a/source/source_io/module_parameter/read_input.cpp
++++ b/source/source_io/module_parameter/read_input.cpp
+@@ -213,7 +213,7 @@ void ReadInput::read_parameters(Parameter& param, const std::string& filename_in
+     // 5. check the value of the parameters
+     // It must be after the check_ntype, because some parameters need to be checked according to ntype
+     // It must be after the set_globalv, because some parameters need to be checked according to param.sys
+-    if (this->rank == 0)
++    if (this->rank == 0 && !this->skip_parameter_checks)
+     {
+         for (auto& input_item: this->input_lists)
+         {
+@@ -228,7 +228,7 @@ void ReadInput::read_parameters(Parameter& param, const std::string& filename_in
+     // 6. Initialize GPU device context (unified entry point)
+     // This must be after bcastfunc to ensure param.inp.device is synchronized across all ranks
+     // This replaces scattered cudaSetDevice/hipSetDevice calls throughout the codebase
+-    if (param.inp.device == "gpu")
++    if (!this->skip_parameter_checks && param.inp.device == "gpu")
+     {
+         base_device::DeviceContext::instance().init();
+     }
+diff --git a/source/source_io/module_parameter/read_input.h b/source/source_io/module_parameter/read_input.h
+index c938bdb..0e1d9bc 100644
+--- a/source/source_io/module_parameter/read_input.h
++++ b/source/source_io/module_parameter/read_input.h
+@@ -60,6 +60,7 @@ class ReadInput
+     void write_parameters(const Parameter& param, const std::string& filename_out);
+     static bool check_mode;
+     bool check_ntype_flag = true; ///< check ntype from STRU file
++    bool skip_parameter_checks = false; ///< frontend validates only the parameters it consumes
+ 
+   private:
+     /**
+diff --git a/source/source_main/h0lite.cpp b/source/source_main/h0lite.cpp
+new file mode 100644
+index 0000000..df8dd8d
+--- /dev/null
++++ b/source/source_main/h0lite.cpp
+@@ -0,0 +1,540 @@
++// SPDX-License-Identifier: LGPL-3.0-or-later
++// A minimal H0/S0 frontend built from ABACUS numerical-orbital components.
++
++#include "source_main/h0lite_core.h"
++
++#include "source_base/constants.h"
++#include "source_base/global_variable.h"
++#include "source_basis/module_ao/parallel_orbitals.h"
++#include "source_basis/module_nao/two_center_bundle.h"
++#include "source_basis/module_pw/pw_basis.h"
++#include "source_cell/check_atomic_stru.h"
++#include "source_cell/cal_atoms_info.h"
++#include "source_cell/module_neighbor/sltk_atom_arrange.h"
++#include "source_cell/read_pp.h"
++#include "source_cell/read_pseudo.h"
++#include "source_cell/unitcell.h"
++#include "source_estate/module_pot/pot_local.h"
++#include "source_estate/param_update.h"
++#include "source_hamilt/module_gint/gint.h"
++#include "source_hamilt/module_gint/gint_info.h"
++#include "source_hamilt/module_gint/gint_vl.h"
++#include "source_hamilt/module_hcontainer/hcontainer.h"
++#include "source_hamilt/module_hcontainer/output_hcontainer.h"
++#include "source_io/module_output/ucell_io.h"
++#include "source_io/module_parameter/parameter.h"
++#include "source_io/module_parameter/read_input.h"
++#include "source_lcao/LCAO_nonlocal_info.h"
++#include "source_lcao/module_operator_lcao/ekinetic.h"
++#include "source_lcao/module_operator_lcao/nonlocal.h"
++#include "source_lcao/module_operator_lcao/operator_lcao.h"
++#include "source_lcao/module_operator_lcao/overlap.h"
++#include "source_pw/module_pwdft/parallel_grid.h"
++#include "source_pw/module_pwdft/structure_factor.h"
++#include "source_pw/module_pwdft/vl_pw.h"
++
++#include <cerrno>
++#include <chrono>
++#include <cctype>
++#include <complex>
++#include <cstdio>
++#include <cstdlib>
++#include <fstream>
++#include <iomanip>
++#include <iostream>
++#include <memory>
++#include <stdexcept>
++#include <string>
++#include <sys/stat.h>
++#include <unistd.h>
++#include <vector>
++
++#ifndef H0LITE_ABACUS_COMMIT
++#define H0LITE_ABACUS_COMMIT "unknown"
++#endif
++
++namespace
++{
++
++constexpr const char* kContract
++    = "H0LITE_V353_CONTRACT: H0=T+Vnl; S0=NAO overlap; SCF iterations=0; diagonalizations=0";
++constexpr const char* kVlContract
++    = "H0LITE_VL_MERGED_CONTRACT: H0=T+Vnl+Vl; Vl=<NAO|Vlocal_pseudopotential|NAO>; density inputs=0; separate Vl output=0; SCF iterations=0; diagonalizations=0";
++
++struct Config
++{
++    std::string input;
++    std::string output_dir;
++    bool with_vl = false;
++};
++
++std::string directory(std::string value)
++{
++    if (value.empty())
++    {
++        throw std::runtime_error("directory argument must not be empty");
++    }
++    if (value.back() != '/')
++    {
++        value.push_back('/');
++    }
++    return value;
++}
++
++void require_directory(const std::string& value)
++{
++    struct stat info
++    {
++    };
++    if (stat(value.c_str(), &info) != 0 || !S_ISDIR(info.st_mode))
++    {
++        throw std::runtime_error("directory does not exist: " + value);
++    }
++}
++
++bool path_exists(const std::string& value)
++{
++    struct stat info
++    {
++    };
++    return stat(value.c_str(), &info) == 0;
++}
++
++std::string element_key(const std::string& value)
++{
++    std::string key;
++    for (const char ch : value)
++    {
++        if (!std::isalpha(static_cast<unsigned char>(ch)))
++        {
++            break;
++        }
++        key.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
++    }
++    return key;
++}
++
++void read_pseudopotentials(UnitCell& ucell, std::ofstream& log)
++{
++    for (int it = 0; it < ucell.ntype; ++it)
++    {
++        Atom& atom = ucell.atoms[it];
++        Pseudopot_upf reader;
++        reader.coulomb_potential = atom.coulomb_potential;
++        const std::string path = PARAM.inp.pseudo_dir + ucell.pseudo_fn[it];
++        const int error = reader.init_pseudo_reader(path, ucell.pseudo_type[it], atom.ncpp);
++        if (error != 0)
++        {
++            throw std::runtime_error("failed to read pseudopotential (error " + std::to_string(error) + "): " + path);
++        }
++        if (atom.flag_empty_element)
++        {
++            reader.set_empty_element(atom.ncpp);
++        }
++        reader.set_upf_q(atom.ncpp);
++        if (reader.average_p(PARAM.inp.soc_lambda, atom.ncpp, PARAM.inp.lspinorb) != 0)
++        {
++            throw std::runtime_error("failed to scalar-average pseudopotential: " + path);
++        }
++        reader.complete_default(atom.ncpp, PARAM.inp.pseudo_rcut);
++        atom.coulomb_potential = reader.coulomb_potential;
++        if (atom.ncpp.pp_type != "NC")
++        {
++            throw std::runtime_error("h0lite LCAO route requires an NC pseudopotential: " + path);
++        }
++        if (!atom.label_orb.empty() && element_key(atom.label_orb) != element_key(atom.ncpp.psd))
++        {
++            throw std::runtime_error("orbital/pseudopotential element mismatch for " + atom.label);
++        }
++        log << "Pseudopotential " << atom.label << ": " << path << " (" << atom.ncpp.nbeta
++            << " projectors)\n";
++    }
++}
++
++void write_matrix(const std::string& final_path,
++                  const std::string& label,
++                  const UnitCell& ucell,
++                  hamilt::HContainer<double>& matrix,
++                  const int precision)
++{
++    const std::string temporary = final_path + ".tmp." + std::to_string(static_cast<long long>(getpid()));
++    std::ofstream output(temporary);
++    if (!output)
++    {
++        throw std::runtime_error("cannot open output: " + temporary);
++    }
++    output << " --- Ionic Step 1 ---\n";
++    output << " # print " << label << " matrix in real space " << label << "(R)\n";
++    output << " 1 # number of spin directions\n";
++    output << " 1 # spin index\n";
++    output << " " << matrix.get_nbasis() << " # number of localized basis\n";
++    output << " " << matrix.size_R_loop() << " # number of Bravais lattice vector R\n\n";
++    ModuleIO::UcellIO::write_ucell(output, &ucell);
++    output << "\n";
++    constexpr double sparse_threshold = 1.0e-10;
++    hamilt::Output_HContainer<double> writer(&matrix, output, sparse_threshold, precision);
++    writer.write();
++    output.close();
++    if (!output)
++    {
++        std::remove(temporary.c_str());
++        throw std::runtime_error("failed while writing output: " + temporary);
++    }
++    if (std::rename(temporary.c_str(), final_path.c_str()) != 0)
++    {
++        const int error = errno;
++        std::remove(temporary.c_str());
++        throw std::runtime_error("cannot install output " + final_path + ": errno " + std::to_string(error));
++    }
++}
++
++long long milliseconds(const std::chrono::steady_clock::time_point& start)
++{
++    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
++}
++
++int run(const Config& config)
++{
++    const auto total_start = std::chrono::steady_clock::now();
++    const std::string log_path = config.output_dir + "running_h0lite.log";
++    const std::string warning_path = config.output_dir + "warning_h0lite.log";
++    const std::string resolved_input_path = config.output_dir + "INPUT.resolved";
++    const std::vector<std::string> protected_outputs = {
++        config.output_dir + "h0rs1_nao.csr",
++        config.output_dir + "s0r_nao.csr",
++        resolved_input_path,
++        log_path,
++        warning_path};
++    for (const std::string& path : protected_outputs)
++    {
++        if (path_exists(path))
++        {
++            throw std::runtime_error("refusing to overwrite existing output: " + path);
++        }
++    }
++    GlobalV::ofs_running.open(log_path);
++    GlobalV::ofs_warning.open(warning_path);
++    if (!GlobalV::ofs_running || !GlobalV::ofs_warning)
++    {
++        throw std::runtime_error("cannot open h0lite logs in " + config.output_dir);
++    }
++
++    GlobalV::MY_RANK = 0;
++    GlobalV::NPROC = 1;
++    PARAM.set_pal_param(0, 1, 1);
++    ModuleIO::ReadInput input_reader(0);
++    input_reader.skip_parameter_checks = true;
++    input_reader.read_parameters(PARAM, config.input);
++    const bool input_requests_vl
++        = !PARAM.inp.out_mat_h_vl.empty() && PARAM.inp.out_mat_h_vl.front() != 0;
++    const bool include_vl = config.with_vl || input_requests_vl;
++    const char* active_contract = include_vl ? kVlContract : kContract;
++
++    if (PARAM.inp.basis_type != "lcao")
++    {
++        throw std::runtime_error("H0Lite requires basis_type=lcao in the SCF INPUT");
++    }
++    if (PARAM.inp.gamma_only)
++    {
++        throw std::runtime_error("H0Lite graph export requires gamma_only=0 in the SCF INPUT");
++    }
++    if (PARAM.inp.nspin != 1 || PARAM.inp.noncolin || PARAM.inp.lspinorb)
++    {
++        throw std::runtime_error("H0Lite currently requires scalar nspin=1 without SOC/noncollinear spin");
++    }
++    if (PARAM.inp.esolver_type != "ksdft")
++    {
++        throw std::runtime_error("H0Lite currently requires esolver_type=ksdft");
++    }
++    if (!PARAM.inp.t_in_h || !PARAM.inp.vnl_in_h)
++    {
++        throw std::runtime_error("the SCF INPUT must enable t_in_h=1 and vnl_in_h=1 for the strict H0 contract");
++    }
++    if (PARAM.inp.ntype <= 0 || PARAM.inp.lcao_ecut <= 0.0 || PARAM.inp.lcao_dk <= 0.0
++        || PARAM.inp.lcao_dr <= 0.0 || PARAM.inp.lcao_rmax <= 0.0 || PARAM.inp.pseudo_rcut <= 0.0
++        || PARAM.inp.out_hsr.size() < 2 || PARAM.inp.out_hsr[1] <= 0)
++    {
++        throw std::runtime_error("invalid SCF INPUT parameter required by H0Lite");
++    }
++    input_reader.write_parameters(PARAM, resolved_input_path);
++
++    GlobalV::ofs_running << "ABACUS H0Lite\n"
++                         << "ABACUS source commit: " << H0LITE_ABACUS_COMMIT << "\n"
++                         << "SCF INPUT: " << config.input << "\n"
++                         << "calculation_from_input: " << PARAM.inp.calculation << "\n"
++                         << "STRU: " << PARAM.globalv.global_in_stru << "\n"
++                         << "pseudo_dir: " << PARAM.inp.pseudo_dir << "\n"
++                         << "orbital_dir: " << PARAM.inp.orbital_dir << "\n"
++                         << std::setprecision(17)
++                         << "lcao_ecut: " << PARAM.inp.lcao_ecut << "\n"
++                         << "lcao_dk: " << PARAM.inp.lcao_dk << "\n"
++                         << "lcao_dr: " << PARAM.inp.lcao_dr << "\n"
++                         << "lcao_rmax: " << PARAM.inp.lcao_rmax << "\n"
++                         << "pseudo_rcut: " << PARAM.inp.pseudo_rcut << "\n"
++                         << "csr_precision_from_input: " << PARAM.inp.out_hsr.at(1) << "\n"
++                         << "vl_included_in_h0: " << include_vl << "\n"
++                         << "vl_requested_by_input: " << input_requests_vl << "\n"
++                         << "h0_operator: " << (include_vl ? "T+Vnl+Vl" : "T+Vnl") << "\n"
++                         << "excluded_density_or_state_dependent_terms: Hartree, XC, DFT+U, EXX, DeePKS, spin constraint\n";
++
++    UnitCell ucell;
++    ucell.setup_from_input(PARAM.inp.latname,
++                           PARAM.inp.ntype,
++                           PARAM.inp.lmaxmax,
++                           PARAM.inp.init_vel,
++                           PARAM.inp.fixed_axes);
++    ucell.setup_cell(PARAM.globalv.global_in_stru,
++                     GlobalV::ofs_running,
++                     PARAM.inp.symmetry_prec,
++                     PARAM.inp.dfthalf_type,
++                     PARAM.inp.pseudo_dir,
++                     PARAM.inp.nspin,
++                     PARAM.inp.basis_type,
++                     PARAM.inp.orbital_dir,
++                     PARAM.inp.init_wfc,
++                     PARAM.inp.onsite_radius,
++                     false,
++                     false,
++                     PARAM.inp.fixed_atoms,
++                     PARAM.inp.noncolin,
++                     PARAM.inp.calculation,
++                     PARAM.inp.esolver_type,
++                     std::stoi(PARAM.inp.symmetry));
++    unitcell::check_atomic_stru(ucell, PARAM.inp.min_dist_coef);
++
++    read_pseudopotentials(ucell, GlobalV::ofs_running);
++    CalAtomsInfo atom_info_calculator;
++    const AtomsInfoResult atoms_info = atom_info_calculator.cal_atoms_info(ucell.atoms,
++                                                                            ucell.ntype,
++                                                                            PARAM.inp.nspin,
++                                                                            PARAM.globalv.two_fermi,
++                                                                            PARAM.inp.nelec_delta,
++                                                                            PARAM.inp.esolver_type,
++                                                                            PARAM.inp.lspinorb,
++                                                                            PARAM.inp.basis_type,
++                                                                            PARAM.inp.smearing_method,
++                                                                            PARAM.inp.ks_solver,
++                                                                            PARAM.inp.bndpar,
++                                                                            PARAM.inp.nbands,
++                                                                            PARAM.inp.nelec,
++                                                                            PARAM.inp.nupdown);
++    elecstate::ParamUpdater::update_from_atoms_info(atoms_info);
++    const int nlocal = atoms_info.nlocal;
++    unitcell::cal_nwfc(GlobalV::ofs_running,
++                       ucell,
++                       ucell.atoms,
++                       PARAM.inp.nspin,
++                       nlocal,
++                       PARAM.globalv.npol,
++                       PARAM.inp.basis_type,
++                       PARAM.inp.esolver_type,
++                       PARAM.inp.init_wfc,
++                       PARAM.inp.nbands);
++
++    TwoCenterBundle two_center;
++    LCAO_Orbitals orbitals;
++    two_center.build_orb(ucell.ntype, ucell.orbital_fn.data(), PARAM.inp.orbital_dir);
++    two_center.to_LCAO_Orbitals(orbitals,
++                                PARAM.inp.lcao_ecut,
++                                PARAM.inp.lcao_dk,
++                                PARAM.inp.lcao_dr,
++                                PARAM.inp.lcao_rmax,
++                                PARAM.inp.out_element_info,
++                                PARAM.inp.cal_force);
++    auto* nonlocal_info = new LCAONonlocalInfo();
++    nonlocal_info->setupNonlocal(ucell.ntype,
++                                 ucell.atoms,
++                                 GlobalV::ofs_running,
++                                 orbitals,
++                                 PARAM.inp.basis_type,
++                                 PARAM.inp.out_element_info,
++                                 PARAM.inp.lspinorb,
++                                 PARAM.inp.nspin);
++    ucell.infoNL.reset(nonlocal_info);
++    two_center.build_beta(ucell.ntype, nonlocal_info->get_nonlocal().Beta);
++    two_center.tabulate();
++    const long long setup_ms = milliseconds(total_start);
++
++    Parallel_Orbitals pv;
++    pv.set_serial(nlocal, nlocal);
++    pv.nrow_bands = nlocal;
++    pv.ncol_bands = PARAM.inp.nbands;
++    pv.set_atomic_trace(ucell.get_iat2iwt(), ucell.nat, nlocal);
++
++    const double search_radius = atom_arrange::set_sr_NL(GlobalV::ofs_running,
++                                                          PARAM.inp.out_level,
++                                                          orbitals.get_rcutmax_Phi(),
++                                                          ucell.infoNL->get_rcutmax_Beta(),
++                                                          PARAM.globalv.gamma_only_local);
++    Grid_Driver grid;
++    atom_arrange::search(PARAM.globalv.search_pbc,
++                         GlobalV::ofs_running,
++                         grid,
++                         ucell,
++                         search_radius,
++                         PARAM.inp.test_atom_input);
++
++    const std::vector<ModuleBase::Vector3<double>> unused_kvec(
++        1, ModuleBase::Vector3<double>(0.0, 0.0, 0.0));
++    hamilt::HContainer<double> s0(&pv);
++    hamilt::HContainer<double> kinetic_matrix(&pv);
++    hamilt::HContainer<double> nonlocal_matrix(&pv);
++
++    const auto matrix_start = std::chrono::steady_clock::now();
++    hamilt::Overlap<hamilt::OperatorLCAO<std::complex<double>, double>> overlap(
++        nullptr,
++        unused_kvec,
++        nullptr,
++        &s0,
++        &ucell,
++        orbitals.cutoffs(),
++        &grid,
++        two_center.overlap_orb.get());
++    overlap.contributeHR();
++
++    hamilt::EKinetic<hamilt::OperatorLCAO<std::complex<double>, double>> kinetic(
++        nullptr,
++        unused_kvec,
++        &kinetic_matrix,
++        &ucell,
++        orbitals.cutoffs(),
++        &grid,
++        two_center.kinetic_orb.get());
++    kinetic.contributeHR();
++
++    hamilt::Nonlocal<hamilt::OperatorLCAO<std::complex<double>, double>> nonlocal(
++        nullptr,
++        unused_kvec,
++        &nonlocal_matrix,
++        &ucell,
++        orbitals.cutoffs(),
++        &grid,
++        two_center.overlap_orb_beta.get());
++    nonlocal.contributeHR();
++    kinetic_matrix.add_value_union(nonlocal_matrix, 1.0);
++    const long long matrix_ms = milliseconds(matrix_start);
++
++    long long vl_ms = 0;
++    if (include_vl)
++    {
++        const auto vl_start = std::chrono::steady_clock::now();
++        if (PARAM.globalv.double_grid)
++        {
++            throw std::runtime_error("H0Lite local-pseudopotential term currently requires the single LCAO density grid");
++        }
++
++        std::string fft_precision = "double";
++        if (PARAM.inp.precision == "single" || PARAM.inp.precision == "mixing")
++        {
++            fft_precision = "mixing";
++        }
++        std::unique_ptr<ModulePW::PW_Basis_Big> pw_rho(
++            new ModulePW::PW_Basis_Big("cpu", fft_precision));
++        pw_rho->setbxyz(PARAM.inp.bx, PARAM.inp.by, PARAM.inp.bz);
++        if (PARAM.inp.nx * PARAM.inp.ny * PARAM.inp.nz == 0)
++        {
++            pw_rho->initgrids(PARAM.inp.ref_cell_factor * ucell.lat0,
++                              ucell.latvec,
++                              4.0 * PARAM.inp.ecutwfc);
++        }
++        else
++        {
++            pw_rho->initgrids(PARAM.inp.ref_cell_factor * ucell.lat0,
++                              ucell.latvec,
++                              PARAM.inp.nx,
++                              PARAM.inp.ny,
++                              PARAM.inp.nz);
++        }
++        pw_rho->initparameters(false, 4.0 * PARAM.inp.ecutwfc);
++        pw_rho->fft_bundle.initfftmode(PARAM.inp.fft_mode);
++        static_cast<ModulePW::PW_Basis*>(pw_rho.get())->setuptransform();
++        pw_rho->collect_local_pw();
++        pw_rho->collect_uniqgg();
++
++        Parallel_Grid parallel_grid;
++        parallel_grid.init(pw_rho->nx,
++                           pw_rho->ny,
++                           pw_rho->nz,
++                           pw_rho->nplane,
++                           pw_rho->nrxx,
++                           pw_rho->nbz,
++                           pw_rho->bz);
++        Structure_Factor structure_factor;
++        structure_factor.set(pw_rho.get(), PARAM.inp.nbspline);
++        structure_factor.setup(&ucell, parallel_grid, pw_rho.get());
++
++        pseudopot_cell_vl local_pseudopotential;
++        local_pseudopotential.init_vloc(ucell, pw_rho.get());
++        std::vector<double> local_potential_grid(pw_rho->nrxx, 0.0);
++        double vl_of_zero = 0.0;
++        elecstate::PotLocal pot_local(&local_pseudopotential.vloc,
++                                      &structure_factor.strucFac,
++                                      pw_rho.get(),
++                                      vl_of_zero);
++        pot_local.cal_fixed_v(local_potential_grid.data());
++
++        std::unique_ptr<ModuleGint::GintInfo> gint_info(new ModuleGint::GintInfo(
++            pw_rho->nbx,
++            pw_rho->nby,
++            pw_rho->nbz,
++            pw_rho->nx,
++            pw_rho->ny,
++            pw_rho->nz,
++            0,
++            0,
++            pw_rho->nbzp_start,
++            pw_rho->nbx,
++            pw_rho->nby,
++            pw_rho->nbzp,
++            orbitals.Phi,
++            ucell,
++            grid));
++        ModuleGint::Gint::set_gint_info(gint_info.get());
++        hamilt::HContainer<double> vl_matrix(&pv, nullptr, &gint_info->get_ijr_info());
++        ModuleGint::Gint_vl vl_integrator(local_potential_grid.data(), &vl_matrix);
++        vl_integrator.cal_gint();
++        ModuleGint::Gint::set_gint_info(nullptr);
++        kinetic_matrix.add_value_union(vl_matrix, 1.0);
++        vl_ms = milliseconds(vl_start);
++        GlobalV::ofs_running << "vl_fft_grid: " << pw_rho->nx << " " << pw_rho->ny << " " << pw_rho->nz << "\n"
++                             << "vl_of_g0: " << std::setprecision(17) << vl_of_zero << "\n"
++                             << "vl_r_blocks_merged: " << vl_matrix.size_R_loop() << "\n";
++    }
++
++    write_matrix(config.output_dir + "h0rs1_nao.csr", "H", ucell, kinetic_matrix, PARAM.inp.out_hsr.at(1));
++    write_matrix(config.output_dir + "s0r_nao.csr", "S", ucell, s0, PARAM.inp.out_hsr.at(1));
++    const long long total_ms = milliseconds(total_start);
++
++    GlobalV::ofs_running << active_contract << "\n"
++                         << "basis_dimension: " << nlocal << "\n"
++                         << "h0_r_blocks: " << kinetic_matrix.size_R_loop() << "\n"
++                         << "s0_r_blocks: " << s0.size_R_loop() << "\n"
++                         << "setup_ms: " << setup_ms << "\n"
++                         << "matrix_ms: " << matrix_ms << "\n"
++                         << "vl_ms: " << vl_ms << "\n"
++                         << "total_ms: " << total_ms << "\n"
++                         << "Finish Time\n";
++    GlobalV::ofs_running.close();
++    GlobalV::ofs_warning.close();
++
++    std::cout << active_contract << "\n"
++              << "basis_dimension=" << nlocal << " setup_ms=" << setup_ms << " matrix_ms=" << matrix_ms
++              << " total_ms=" << total_ms << std::endl;
++    return 0;
++}
++
++} // namespace
++
++int h0lite_run_core(const std::string& input, const std::string& output_dir, const bool with_vl)
++{
++    Config config;
++    config.input = input;
++    config.output_dir = directory(output_dir);
++    config.with_vl = with_vl;
++    require_directory(config.output_dir);
++    if (!path_exists(config.input))
++    {
++        throw std::runtime_error("INPUT does not exist: " + config.input);
++    }
++    return run(config);
++}
+diff --git a/source/source_main/h0lite_core.h b/source/source_main/h0lite_core.h
+new file mode 100644
+index 0000000..f5fba58
+--- /dev/null
++++ b/source/source_main/h0lite_core.h
+@@ -0,0 +1,8 @@
++// SPDX-License-Identifier: LGPL-3.0-or-later
++
++#pragma once
++
++#include <string>
++
++int h0lite_run_core(const std::string& input, const std::string& output_dir, bool with_vl);
++
+diff --git a/source/source_main/h0lite_frontend.cpp b/source/source_main/h0lite_frontend.cpp
+new file mode 100644
+index 0000000..fd9b2ef
+--- /dev/null
++++ b/source/source_main/h0lite_frontend.cpp
+@@ -0,0 +1,1163 @@
++// SPDX-License-Identifier: LGPL-3.0-or-later
++// Case-oriented, dependency-free frontend for the standalone ABACUS H0Lite core.
++
++#include "source_main/h0lite_core.h"
++#include "source_main/h0lite_licenses.h"
++
++#include <algorithm>
++#include <cerrno>
++#include <chrono>
++#include <climits>
++#include <cstdlib>
++#include <cstring>
++#include <filesystem>
++#include <fstream>
++#include <iomanip>
++#include <iostream>
++#include <map>
++#include <set>
++#include <sstream>
++#include <stdexcept>
++#include <string>
++#include <sys/stat.h>
++#include <sys/types.h>
++#include <sys/wait.h>
++#include <sched.h>
++#include <unistd.h>
++#include <vector>
++
++#ifdef _OPENMP
++#include <omp.h>
++#endif
++
++#ifndef H0LITE_ABACUS_COMMIT
++#define H0LITE_ABACUS_COMMIT "unknown"
++#endif
++
++namespace fs = std::filesystem;
++
++namespace
++{
++
++constexpr const char* kGenerator = "ABACUS-3.11-H0Lite-native-single-v1";
++constexpr const char* kMarkerName = "get_H0-v311-strict.json";
++constexpr const char* kH0Contract = "H0=T+Vnl; S0=NAO overlap; no Vl/Veff/DFT+U/EXX/DeePKS";
++constexpr const char* kH0VlContract = "H0=T+Vnl+Vl; S0=NAO overlap; no Hartree/XC/DFT+U/EXX/DeePKS";
++constexpr const char* kBackendContract
++    = "H0LITE_V353_CONTRACT: H0=T+Vnl; S0=NAO overlap; SCF iterations=0; diagonalizations=0";
++constexpr const char* kBackendVlContract
++    = "H0LITE_VL_MERGED_CONTRACT: H0=T+Vnl+Vl; Vl=<NAO|Vlocal_pseudopotential|NAO>; density inputs=0; separate Vl output=0; SCF iterations=0; diagonalizations=0";
++
++struct Cli
++{
++    std::vector<std::string> positional_cases;
++    std::string case_list;
++    int tasks = 1;
++    int cpus_per_task = 0;
++    int shard_index = -1;
++    int shard_count = -1;
++    bool with_vl = false;
++    bool show_help = false;
++    bool show_version = false;
++    bool show_license = false;
++    std::string raw_input;
++    std::string raw_output_dir;
++};
++
++struct InputData
++{
++    std::map<std::string, std::vector<std::string>> values;
++    std::string effective_text;
++    std::vector<std::string> removed_keys;
++};
++
++struct FileRecord
++{
++    std::string path;
++    long long size = 0;
++    long long mtime_ns = 0;
++};
++
++struct Dependency
++{
++    std::string kind;
++    std::string name;
++    std::string declared_path;
++    FileRecord file;
++};
++
++struct Shard
++{
++    int index = 0;
++    int count = 1;
++    std::string source = "single-process";
++};
++
++std::string trim(const std::string& value)
++{
++    const std::string whitespace = " \t\r\n";
++    const std::size_t begin = value.find_first_not_of(whitespace);
++    if (begin == std::string::npos)
++    {
++        return "";
++    }
++    return value.substr(begin, value.find_last_not_of(whitespace) - begin + 1);
++}
++
++std::string lower(std::string value)
++{
++    std::transform(value.begin(), value.end(), value.begin(), [](const unsigned char ch) {
++        return static_cast<char>(std::tolower(ch));
++    });
++    return value;
++}
++
++std::string uncomment(const std::string& value)
++{
++    std::size_t end = value.size();
++    const std::size_t slash = value.find("//");
++    const std::size_t hash = value.find('#');
++    if (slash != std::string::npos)
++    {
++        end = std::min(end, slash);
++    }
++    if (hash != std::string::npos)
++    {
++        end = std::min(end, hash);
++    }
++    return trim(value.substr(0, end));
++}
++
++std::vector<std::string> split_words(const std::string& value)
++{
++    std::vector<std::string> words;
++    std::string word;
++    char quote = '\0';
++    bool escaped = false;
++    for (const char ch : value)
++    {
++        if (escaped)
++        {
++            word.push_back(ch);
++            escaped = false;
++        }
++        else if (ch == '\\' && quote != '\'')
++        {
++            escaped = true;
++        }
++        else if (quote != '\0')
++        {
++            if (ch == quote)
++            {
++                quote = '\0';
++            }
++            else
++            {
++                word.push_back(ch);
++            }
++        }
++        else if (ch == '\'' || ch == '"')
++        {
++            quote = ch;
++        }
++        else if (std::isspace(static_cast<unsigned char>(ch)))
++        {
++            if (!word.empty())
++            {
++                words.push_back(word);
++                word.clear();
++            }
++        }
++        else
++        {
++            word.push_back(ch);
++        }
++    }
++    if (escaped || quote != '\0')
++    {
++        throw std::runtime_error("unterminated quote or escape: " + value);
++    }
++    if (!word.empty())
++    {
++        words.push_back(word);
++    }
++    return words;
++}
++
++int parse_positive(const std::string& option, const std::string& value)
++{
++    std::size_t consumed = 0;
++    const long parsed = std::stol(value, &consumed);
++    if (consumed != value.size() || parsed <= 0 || parsed > INT_MAX)
++    {
++        throw std::runtime_error(option + " must be a positive integer: " + value);
++    }
++    return static_cast<int>(parsed);
++}
++
++int parse_nonnegative(const std::string& option, const std::string& value)
++{
++    std::size_t consumed = 0;
++    const long parsed = std::stol(value, &consumed);
++    if (consumed != value.size() || parsed < 0 || parsed > INT_MAX)
++    {
++        throw std::runtime_error(option + " must be a non-negative integer: " + value);
++    }
++    return static_cast<int>(parsed);
++}
++
++void usage(std::ostream& output)
++{
++    output
++        << "Usage:\n"
++        << "  abacus_h0 [CASE] [--with-vl]\n"
++        << "  abacus_h0 --case-list FILE [--tasks N] [--cpus-per-task N] [--with-vl]\n\n"
++        << "CASE defaults to the current directory. A single case automatically uses\n"
++        << "SLURM_CPUS_PER_TASK, or all CPUs available to the process outside Slurm.\n\n"
++        << "Options:\n"
++        << "  --case-list FILE       one case directory per line\n"
++        << "  --tasks N              concurrent cases in this process (default: 1)\n"
++        << "  --cpus-per-task N      OpenMP CPUs per case (batch default: available/tasks)\n"
++        << "  --with-vl              merge the local pseudopotential Vl into H0\n"
++        << "  --shard-index I        explicit zero-based shard index\n"
++        << "  --shard-count N        explicit shard count\n"
++        << "  --version              print source version\n"
++        << "  --license              print embedded redistribution notices\n";
++}
++
++Cli parse_cli(const int argc, char** argv)
++{
++    Cli cli;
++    for (int i = 1; i < argc; ++i)
++    {
++        const std::string arg = argv[i];
++        auto next = [&](const std::string& option) -> std::string {
++            if (++i >= argc)
++            {
++                throw std::runtime_error("missing value after " + option);
++            }
++            return argv[i];
++        };
++        if (arg == "--help" || arg == "-h")
++        {
++            cli.show_help = true;
++        }
++        else if (arg == "--version")
++        {
++            cli.show_version = true;
++        }
++        else if (arg == "--license")
++        {
++            cli.show_license = true;
++        }
++        else if (arg == "--with-vl")
++        {
++            cli.with_vl = true;
++        }
++        else if (arg == "--case-list")
++        {
++            cli.case_list = next(arg);
++        }
++        else if (arg == "--tasks" || arg == "--jobs")
++        {
++            cli.tasks = parse_positive(arg, next(arg));
++        }
++        else if (arg == "--cpus-per-task" || arg == "--threads" || arg == "--threads-per-case")
++        {
++            cli.cpus_per_task = parse_positive(arg, next(arg));
++        }
++        else if (arg == "--shard-index")
++        {
++            cli.shard_index = parse_nonnegative(arg, next(arg));
++        }
++        else if (arg == "--shard-count")
++        {
++            cli.shard_count = parse_positive(arg, next(arg));
++        }
++        else if (arg == "--input")
++        {
++            cli.raw_input = next(arg);
++        }
++        else if (arg == "--output-dir")
++        {
++            cli.raw_output_dir = next(arg);
++        }
++        else if (!arg.empty() && arg.front() == '-')
++        {
++            throw std::runtime_error("unknown option: " + arg);
++        }
++        else
++        {
++            cli.positional_cases.push_back(arg);
++        }
++    }
++    return cli;
++}
++
++std::string json_escape(const std::string& value)
++{
++    std::ostringstream output;
++    for (const unsigned char ch : value)
++    {
++        switch (ch)
++        {
++            case '\\': output << "\\\\"; break;
++            case '"': output << "\\\""; break;
++            case '\b': output << "\\b"; break;
++            case '\f': output << "\\f"; break;
++            case '\n': output << "\\n"; break;
++            case '\r': output << "\\r"; break;
++            case '\t': output << "\\t"; break;
++            default:
++                if (ch < 0x20)
++                {
++                    output << "\\u" << std::hex << std::setw(4) << std::setfill('0')
++                           << static_cast<int>(ch) << std::dec;
++                }
++                else
++                {
++                    output << ch;
++                }
++        }
++    }
++    return output.str();
++}
++
++std::string quote(const std::string& value)
++{
++    return "\"" + json_escape(value) + "\"";
++}
++
++std::string utc_now()
++{
++    const std::time_t now = std::time(nullptr);
++    std::tm utc {};
++    gmtime_r(&now, &utc);
++    char buffer[32];
++    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &utc);
++    return buffer;
++}
++
++std::string unique_tag()
++{
++    char hostname[256] = {};
++    if (gethostname(hostname, sizeof(hostname) - 1) != 0)
++    {
++        std::strcpy(hostname, "host");
++    }
++    std::string host(hostname);
++    for (char& ch : host)
++    {
++        if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '-' && ch != '_')
++        {
++            ch = '_';
++        }
++    }
++    const auto stamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
++                           std::chrono::system_clock::now().time_since_epoch())
++                           .count();
++    return std::to_string(stamp) + "-" + host + "-" + std::to_string(static_cast<long long>(getpid()));
++}
++
++FileRecord file_record(const fs::path& path)
++{
++    struct stat info {};
++    if (lstat(path.c_str(), &info) != 0 || !S_ISREG(info.st_mode) || S_ISLNK(info.st_mode) || info.st_size <= 0)
++    {
++        throw std::runtime_error("missing, empty, or non-regular file: " + path.string());
++    }
++    FileRecord record;
++    record.path = fs::absolute(path).lexically_normal().string();
++    record.size = static_cast<long long>(info.st_size);
++#if defined(__APPLE__)
++    record.mtime_ns = static_cast<long long>(info.st_mtimespec.tv_sec) * 1000000000LL
++                      + info.st_mtimespec.tv_nsec;
++#else
++    record.mtime_ns = static_cast<long long>(info.st_mtim.tv_sec) * 1000000000LL + info.st_mtim.tv_nsec;
++#endif
++    return record;
++}
++
++bool exists_or_symlink(const fs::path& path)
++{
++    std::error_code error;
++    const fs::file_status status = fs::symlink_status(path, error);
++    return !error && status.type() != fs::file_type::not_found;
++}
++
++std::string read_text(const fs::path& path)
++{
++    std::ifstream input(path);
++    if (!input)
++    {
++        throw std::runtime_error("cannot read file: " + path.string());
++    }
++    std::ostringstream text;
++    text << input.rdbuf();
++    if (!input.good() && !input.eof())
++    {
++        throw std::runtime_error("failed while reading file: " + path.string());
++    }
++    return text.str();
++}
++
++void write_text_atomic(const fs::path& path, const std::string& text)
++{
++    const fs::path temporary = path.parent_path()
++                               / ("." + path.filename().string() + ".tmp-"
++                                  + std::to_string(static_cast<long long>(getpid())));
++    if (exists_or_symlink(temporary))
++    {
++        throw std::runtime_error("temporary output already exists: " + temporary.string());
++    }
++    {
++        std::ofstream output(temporary);
++        if (!output)
++        {
++            throw std::runtime_error("cannot create temporary output: " + temporary.string());
++        }
++        output << text;
++        output.close();
++        if (!output)
++        {
++            throw std::runtime_error("failed while writing temporary output: " + temporary.string());
++        }
++    }
++    if (std::rename(temporary.c_str(), path.c_str()) != 0)
++    {
++        const int error = errno;
++        std::remove(temporary.c_str());
++        throw std::runtime_error("cannot install output " + path.string() + ": " + std::strerror(error));
++    }
++}
++
++InputData parse_input(const fs::path& path)
++{
++    file_record(path);
++    std::ifstream input(path);
++    InputData data;
++    std::ostringstream effective;
++    std::string line;
++    while (std::getline(input, line))
++    {
++        const std::string clean = uncomment(line);
++        const std::vector<std::string> words = split_words(clean);
++        if (!words.empty() && lower(words.front()) != "input_parameters")
++        {
++            const std::string key = lower(words.front());
++            if (key == "out_interval")
++            {
++                data.removed_keys.push_back(key);
++                continue;
++            }
++            data.values[key] = std::vector<std::string>(words.begin() + 1, words.end());
++        }
++        effective << line << "\n";
++    }
++    if (!input.eof())
++    {
++        throw std::runtime_error("failed while reading INPUT: " + path.string());
++    }
++    std::sort(data.removed_keys.begin(), data.removed_keys.end());
++    data.removed_keys.erase(std::unique(data.removed_keys.begin(), data.removed_keys.end()), data.removed_keys.end());
++    data.effective_text = effective.str();
++    return data;
++}
++
++std::string input_value(const InputData& input, const std::string& key, const std::string& fallback)
++{
++    const auto found = input.values.find(key);
++    if (found == input.values.end() || found->second.empty())
++    {
++        return fallback;
++    }
++    if (found->second.size() != 1)
++    {
++        throw std::runtime_error("INPUT key requires one value: " + key);
++    }
++    return found->second.front();
++}
++
++bool parse_bool(const std::string& name, const std::string& value)
++{
++    const std::string normalized = lower(value);
++    if (normalized == "1" || normalized == "true" || normalized == "t")
++    {
++        return true;
++    }
++    if (normalized == "0" || normalized == "false" || normalized == "f")
++    {
++        return false;
++    }
++    throw std::runtime_error("invalid boolean value for " + name + ": " + value);
++}
++
++fs::path resolve_from(const fs::path& base, const std::string& value)
++{
++    fs::path path(value);
++    if (path.is_relative())
++    {
++        path = base / path;
++    }
++    return fs::absolute(path).lexically_normal();
++}
++
++fs::path directory_parameter(const fs::path& case_dir, const InputData& input, const std::string& key)
++{
++    const fs::path path = resolve_from(case_dir, input_value(input, key, "."));
++    std::error_code error;
++    if (!fs::is_directory(path, error) || error)
++    {
++        throw std::runtime_error("missing " + key + ": " + path.string());
++    }
++    return path;
++}
++
++std::vector<std::string> section(const std::vector<std::string>& lines, const std::string& name)
++{
++    static const std::set<std::string> names = {
++        "ATOMIC_SPECIES", "NUMERICAL_ORBITAL", "NUMERICAL_DESCRIPTOR", "ABFS_ORBITAL",
++        "ABFS_JLES_ORBITAL", "LATTICE_CONSTANT", "LATTICE_VECTORS", "LATTICE_PARAMETERS",
++        "ATOMIC_POSITIONS", "PAW_FILES"};
++    const auto found = std::find(lines.begin(), lines.end(), name);
++    if (found == lines.end())
++    {
++        throw std::runtime_error("STRU is missing section " + name);
++    }
++    std::vector<std::string> result;
++    for (auto current = found + 1; current != lines.end() && names.count(*current) == 0; ++current)
++    {
++        result.push_back(*current);
++    }
++    return result;
++}
++
++std::vector<Dependency> resolve_dependencies(const fs::path& case_dir,
++                                             const fs::path& stru,
++                                             const InputData& input)
++{
++    std::ifstream source(stru);
++    if (!source)
++    {
++        throw std::runtime_error("cannot read STRU: " + stru.string());
++    }
++    std::vector<std::string> lines;
++    std::string line;
++    while (std::getline(source, line))
++    {
++        const std::string clean = uncomment(line);
++        if (!clean.empty())
++        {
++            lines.push_back(clean);
++        }
++    }
++    const std::vector<std::string> species = section(lines, "ATOMIC_SPECIES");
++    const std::vector<std::string> orbitals = section(lines, "NUMERICAL_ORBITAL");
++    if (species.empty())
++    {
++        throw std::runtime_error("STRU has no ATOMIC_SPECIES entries");
++    }
++    if (species.size() != orbitals.size())
++    {
++        throw std::runtime_error("LCAO STRU requires one NUMERICAL_ORBITAL file per species");
++    }
++    const fs::path pseudo_dir = directory_parameter(case_dir, input, "pseudo_dir");
++    const fs::path orbital_dir = directory_parameter(case_dir, input, "orbital_dir");
++    std::vector<Dependency> result;
++    for (const std::string& entry : species)
++    {
++        const std::vector<std::string> fields = split_words(entry);
++        if (fields.size() < 3)
++        {
++            throw std::runtime_error("invalid ATOMIC_SPECIES entry: " + entry);
++        }
++        const fs::path declared = pseudo_dir / fields[2];
++        std::error_code error;
++        const fs::path resolved = fs::canonical(declared, error);
++        if (error)
++        {
++            throw std::runtime_error("cannot resolve pseudopotential " + declared.string() + ": " + error.message());
++        }
++        result.push_back({"pseudopotential", fields[2], declared.string(), file_record(resolved)});
++    }
++    for (const std::string& entry : orbitals)
++    {
++        const std::vector<std::string> fields = split_words(entry);
++        if (fields.size() != 1)
++        {
++            throw std::runtime_error("invalid NUMERICAL_ORBITAL entry: " + entry);
++        }
++        const fs::path declared = orbital_dir / fields[0];
++        std::error_code error;
++        const fs::path resolved = fs::canonical(declared, error);
++        if (error)
++        {
++            throw std::runtime_error("cannot resolve orbital " + declared.string() + ": " + error.message());
++        }
++        result.push_back({"orbital", fields[0], declared.string(), file_record(resolved)});
++    }
++    return result;
++}
++
++void validate_source_input(const InputData& input)
++{
++    if (lower(input_value(input, "basis_type", "pw")) != "lcao")
++    {
++        throw std::runtime_error("H0Lite requires basis_type=lcao");
++    }
++    if (parse_bool("gamma_only", input_value(input, "gamma_only", "0")))
++    {
++        throw std::runtime_error("H0Lite graph export requires gamma_only=0");
++    }
++    if (input_value(input, "nspin", "1") != "1")
++    {
++        throw std::runtime_error("H0Lite currently requires scalar nspin=1");
++    }
++    if (parse_bool("lspinorb", input_value(input, "lspinorb", "0")))
++    {
++        throw std::runtime_error("H0Lite does not support spin-orbit coupling");
++    }
++    if (!parse_bool("t_in_h", input_value(input, "t_in_h", "1"))
++        || !parse_bool("vnl_in_h", input_value(input, "vnl_in_h", "1")))
++    {
++        throw std::runtime_error("strict H0 requires t_in_h=1 and vnl_in_h=1");
++    }
++}
++
++std::string file_record_json(const FileRecord& file, const int indent)
++{
++    const std::string pad(static_cast<std::size_t>(indent), ' ');
++    std::ostringstream output;
++    output << "{\n"
++           << pad << "  \"path\": " << quote(file.path) << ",\n"
++           << pad << "  \"size\": " << file.size << ",\n"
++           << pad << "  \"mtime_ns\": " << file.mtime_ns << "\n"
++           << pad << "}";
++    return output.str();
++}
++
++std::string array_json(const std::vector<std::string>& values)
++{
++    std::ostringstream output;
++    output << "[";
++    for (std::size_t i = 0; i < values.size(); ++i)
++    {
++        if (i != 0)
++        {
++            output << ", ";
++        }
++        output << quote(values[i]);
++    }
++    output << "]";
++    return output.str();
++}
++
++bool reusable_marker(const fs::path& marker, const bool with_vl)
++{
++    if (!exists_or_symlink(marker))
++    {
++        return false;
++    }
++    file_record(marker);
++    const std::string text = read_text(marker);
++    const bool expected_mode = text.find(std::string("\"enabled\": ") + (with_vl ? "true" : "false"))
++                               != std::string::npos;
++    if (text.find("\"status\": \"complete\"") == std::string::npos
++        || text.find(std::string("\"generator\": \"") + kGenerator + "\"") == std::string::npos
++        || !expected_mode)
++    {
++        throw std::runtime_error("existing H0 marker is incompatible: " + marker.string());
++    }
++    file_record(marker.parent_path() / "h0rs1_nao.csr");
++    file_record(marker.parent_path() / "s0r_nao.csr");
++    return true;
++}
++
++void validate_backend(const fs::path& log, const bool with_vl)
++{
++    const std::string text = read_text(log);
++    const char* expected = with_vl ? kBackendVlContract : kBackendContract;
++    const char* unexpected = with_vl ? kBackendContract : kBackendVlContract;
++    if (text.find("Finish Time") == std::string::npos || text.find(expected) == std::string::npos
++        || text.find(unexpected) != std::string::npos)
++    {
++        throw std::runtime_error("H0Lite backend contract validation failed: " + log.string());
++    }
++}
++
++std::string marker_json(const fs::path& case_dir,
++                        const fs::path& input_path,
++                        const fs::path& stru,
++                        const InputData& input,
++                        const std::vector<Dependency>& dependencies,
++                        const fs::path& archive,
++                        const FileRecord& h0,
++                        const FileRecord& s0,
++                        const bool with_vl,
++                        const bool vl_from_input,
++                        const bool vl_from_cli,
++                        const int cpus,
++                        const int tasks,
++                        const Shard& shard)
++{
++    const FileRecord source_input = file_record(input_path);
++    const FileRecord source_stru = file_record(stru);
++    const FileRecord effective = file_record(archive / "INPUT.h0lite");
++    const FileRecord resolved = file_record(archive / "INPUT.resolved");
++    std::vector<std::string> requested_by;
++    if (vl_from_input)
++    {
++        requested_by.push_back("INPUT:out_mat_h_vl");
++    }
++    if (vl_from_cli)
++    {
++        requested_by.push_back("CLI:--with-vl");
++    }
++    std::ostringstream output;
++    output << "{\n"
++           << "  \"schema_version\": 1,\n"
++           << "  \"status\": \"complete\",\n"
++           << "  \"created_at_utc\": " << quote(utc_now()) << ",\n"
++           << "  \"generator\": " << quote(kGenerator) << ",\n"
++           << "  \"operator_contract\": " << quote(with_vl ? kH0VlContract : kH0Contract) << ",\n"
++           << "  \"output_validation\": {\"integrity_on_demand\": true, \"recorded_size_check\": false},\n"
++           << "  \"binary\": {\"source_commit\": " << quote(H0LITE_ABACUS_COMMIT) << "},\n"
++           << "  \"execution\": {\n"
++           << "    \"omp_num_threads\": " << cpus << ",\n"
++           << "    \"local_tasks\": " << tasks << ",\n"
++           << "    \"shard_index\": " << shard.index << ",\n"
++           << "    \"shard_count\": " << shard.count << ",\n"
++           << "    \"shard_source\": " << quote(shard.source) << ",\n"
++           << "    \"backend_contract\": " << quote(with_vl ? kBackendVlContract : kBackendContract) << ",\n"
++           << "    \"scf_iterations\": 0,\n"
++           << "    \"diagonalizations\": 0,\n"
++           << "    \"source_calculation\": " << quote(input_value(input, "calculation", "scf")) << ",\n"
++           << "    \"vl_included_in_h0\": " << (with_vl ? "true" : "false") << ",\n"
++           << "    \"separate_vl_output\": false\n"
++           << "  },\n"
++           << "  \"source_dft_functional\": " << quote(input_value(input, "dft_functional", "default")) << ",\n"
++           << "  \"nspin\": 1,\n"
++           << "  \"effective_operator_switches\": {\"t_in_h\": 1, \"vl_in_h\": "
++           << (with_vl ? 1 : 0) << ", \"vnl_in_h\": 1, \"dft_plus_u\": 0, \"deepks_scf\": 0},\n"
++           << "  \"inputs\": {\n"
++           << "    \"INPUT\": " << file_record_json(source_input, 4) << ",\n"
++           << "    \"STRU\": " << file_record_json(source_stru, 4) << "\n"
++           << "  },\n"
++           << "  \"dependencies\": [\n";
++    for (std::size_t i = 0; i < dependencies.size(); ++i)
++    {
++        const Dependency& item = dependencies[i];
++        output << "    {\"kind\": " << quote(item.kind) << ", \"name\": " << quote(item.name)
++               << ", \"declared_path\": " << quote(item.declared_path)
++               << ", \"resolved_path\": " << quote(item.file.path)
++               << ", \"size\": " << item.file.size << ", \"mtime_ns\": " << item.file.mtime_ns << "}";
++        output << (i + 1 == dependencies.size() ? "\n" : ",\n");
++    }
++    output << "  ],\n"
++           << "  \"effective_input\": {\n"
++           << "    \"path\": " << quote(effective.path) << ",\n"
++           << "    \"size\": " << effective.size << ",\n"
++           << "    \"mtime_ns\": " << effective.mtime_ns << ",\n"
++           << "    \"removed_unregistered_output_keys\": " << array_json(input.removed_keys) << "\n"
++           << "  },\n"
++           << "  \"resolved_input\": " << file_record_json(resolved, 2) << ",\n"
++           << "  \"optional_terms\": {\n"
++           << "    \"local_pseudopotential\": {\"enabled\": " << (with_vl ? "true" : "false")
++           << ", \"requested_by\": " << array_json(requested_by)
++           << ", \"relative_path\": null, \"density_dependent\": false, \"included_in_h0\": "
++           << (with_vl ? "true" : "false") << ", \"separate_output\": false}\n"
++           << "  },\n"
++           << "  \"case_directory\": " << quote(case_dir.string()) << ",\n"
++           << "  \"provenance_archive\": " << quote(archive.string()) << ",\n"
++           << "  \"outputs\": {\n"
++           << "    \"h0rs1_nao.csr\": {\"path\": " << quote(h0.path)
++           << ", \"relative_path\": \"h0rs1_nao.csr\", \"size\": " << h0.size << "},\n"
++           << "    \"s0r_nao.csr\": {\"path\": " << quote(s0.path)
++           << ", \"relative_path\": \"s0r_nao.csr\", \"size\": " << s0.size << "}\n"
++           << "  }\n"
++           << "}\n";
++    return output.str();
++}
++
++void set_threads(const int cpus)
++{
++    const std::string value = std::to_string(cpus);
++    setenv("OMP_NUM_THREADS", value.c_str(), 1);
++    setenv("OMP_DYNAMIC", "FALSE", 1);
++    setenv("MKL_NUM_THREADS", "1", 1);
++    setenv("MKL_DYNAMIC", "FALSE", 1);
++#ifdef _OPENMP
++    omp_set_dynamic(0);
++    omp_set_num_threads(cpus);
++#endif
++}
++
++int run_case(const fs::path& requested_case,
++             const bool cli_with_vl,
++             const int cpus,
++             const int tasks,
++             const Shard& shard)
++{
++    const fs::path case_dir = fs::absolute(requested_case).lexically_normal();
++    std::error_code error;
++    if (!fs::is_directory(case_dir, error) || error)
++    {
++        throw std::runtime_error("missing case directory: " + case_dir.string());
++    }
++    const fs::path input_path = case_dir / "INPUT";
++    const InputData input = parse_input(input_path);
++    validate_source_input(input);
++    const fs::path stru = resolve_from(case_dir, input_value(input, "stru_file", "STRU"));
++    file_record(stru);
++    const bool vl_from_input = parse_bool("out_mat_h_vl", input_value(input, "out_mat_h_vl", "0"));
++    const bool with_vl = cli_with_vl || vl_from_input;
++    const fs::path destination = case_dir / "OUT.ABACUS";
++    fs::create_directories(destination);
++    const fs::path marker = destination / kMarkerName;
++    if (reusable_marker(marker, with_vl))
++    {
++        std::cout << "H0LITE_REUSE " << case_dir << "\n";
++        return 0;
++    }
++    const std::vector<Dependency> dependencies = resolve_dependencies(case_dir, stru, input);
++    const fs::path final_h0 = destination / "h0rs1_nao.csr";
++    const fs::path final_s0 = destination / "s0r_nao.csr";
++    if (exists_or_symlink(final_h0) || exists_or_symlink(final_s0))
++    {
++        throw std::runtime_error("refusing unmarked pre-existing H0/S0 output in " + destination.string());
++    }
++
++    const std::string tag = unique_tag();
++    const fs::path stage = case_dir / (".get-H0-v311-h0lite-native-" + tag);
++    if (!fs::create_directory(stage))
++    {
++        throw std::runtime_error("cannot create stage: " + stage.string());
++    }
++    write_text_atomic(stage / "INPUT.h0lite", input.effective_text);
++    set_threads(cpus);
++    const fs::path old_directory = fs::current_path();
++    fs::current_path(case_dir);
++    try
++    {
++        h0lite_run_core((stage / "INPUT.h0lite").string(), stage.string(), with_vl);
++        fs::current_path(old_directory);
++    }
++    catch (...)
++    {
++        fs::current_path(old_directory);
++        throw;
++    }
++
++    validate_backend(stage / "running_h0lite.log", with_vl);
++    file_record(stage / "INPUT.resolved");
++    file_record(stage / "h0rs1_nao.csr");
++    file_record(stage / "s0r_nao.csr");
++
++    const fs::path archive_root = destination / "get_H0-v311-h0lite-provenance";
++    fs::create_directories(archive_root);
++    const fs::path archive = archive_root / tag;
++    fs::rename(stage, archive);
++    if (exists_or_symlink(final_h0) || exists_or_symlink(final_s0))
++    {
++        throw std::runtime_error("output appeared during H0Lite export in " + destination.string());
++    }
++    fs::rename(archive / "h0rs1_nao.csr", final_h0);
++    fs::rename(archive / "s0r_nao.csr", final_s0);
++    const FileRecord h0 = file_record(final_h0);
++    const FileRecord s0 = file_record(final_s0);
++    write_text_atomic(marker,
++                      marker_json(case_dir,
++                                  input_path,
++                                  stru,
++                                  input,
++                                  dependencies,
++                                  archive,
++                                  h0,
++                                  s0,
++                                  with_vl,
++                                  vl_from_input,
++                                  cli_with_vl,
++                                  cpus,
++                                  tasks,
++                                  shard));
++    std::cout << "H0LITE_COMPLETE " << case_dir << " h0_bytes=" << h0.size << " s0_bytes=" << s0.size
++              << " cpus=" << cpus << "\n";
++    return 0;
++}
++
++int environment_integer(const char* name, const int fallback)
++{
++    const char* raw = std::getenv(name);
++    if (raw == nullptr || *raw == '\0')
++    {
++        return fallback;
++    }
++    try
++    {
++        return parse_positive(name, raw);
++    }
++    catch (...)
++    {
++        return fallback;
++    }
++}
++
++int available_cpus()
++{
++    const int slurm = environment_integer("SLURM_CPUS_PER_TASK", 0);
++    if (slurm > 0)
++    {
++        return slurm;
++    }
++    cpu_set_t affinity;
++    CPU_ZERO(&affinity);
++    if (sched_getaffinity(0, sizeof(affinity), &affinity) == 0)
++    {
++        const int count = CPU_COUNT(&affinity);
++        if (count > 0)
++        {
++            return count;
++        }
++    }
++    const long online = sysconf(_SC_NPROCESSORS_ONLN);
++    return online > 0 && online <= INT_MAX ? static_cast<int>(online) : 1;
++}
++
++Shard resolve_shard(const Cli& cli)
++{
++    if ((cli.shard_index >= 0) != (cli.shard_count >= 0))
++    {
++        throw std::runtime_error("--shard-index and --shard-count must be given together");
++    }
++    if (cli.shard_count > 0)
++    {
++        if (cli.shard_index >= cli.shard_count)
++        {
++            throw std::runtime_error("--shard-index must be smaller than --shard-count");
++        }
++        return {cli.shard_index, cli.shard_count, "explicit"};
++    }
++    const int ntasks = environment_integer("SLURM_NTASKS", 1);
++    const char* proc_raw = std::getenv("SLURM_PROCID");
++    if (ntasks > 1 && proc_raw != nullptr)
++    {
++        const int proc = parse_nonnegative("SLURM_PROCID", proc_raw);
++        if (proc >= ntasks)
++        {
++            throw std::runtime_error("SLURM_PROCID is outside SLURM_NTASKS");
++        }
++        return {proc, ntasks, "SLURM_PROCID/SLURM_NTASKS"};
++    }
++    const char* array_raw = std::getenv("SLURM_ARRAY_TASK_ID");
++    const char* min_raw = std::getenv("SLURM_ARRAY_TASK_MIN");
++    const char* max_raw = std::getenv("SLURM_ARRAY_TASK_MAX");
++    if (array_raw != nullptr && min_raw != nullptr && max_raw != nullptr)
++    {
++        const int current = parse_nonnegative("SLURM_ARRAY_TASK_ID", array_raw);
++        const int minimum = parse_nonnegative("SLURM_ARRAY_TASK_MIN", min_raw);
++        const int maximum = parse_nonnegative("SLURM_ARRAY_TASK_MAX", max_raw);
++        const int step = environment_integer("SLURM_ARRAY_TASK_STEP", 1);
++        if (maximum < minimum || current < minimum || current > maximum || (current - minimum) % step != 0)
++        {
++            throw std::runtime_error("invalid Slurm array shard environment");
++        }
++        return {(current - minimum) / step, (maximum - minimum) / step + 1, "SLURM_ARRAY_TASK_ID"};
++    }
++    return {};
++}
++
++std::vector<fs::path> collect_cases(const Cli& cli)
++{
++    std::vector<fs::path> cases;
++    for (const std::string& item : cli.positional_cases)
++    {
++        cases.push_back(item);
++    }
++    if (!cli.case_list.empty())
++    {
++        const fs::path list = fs::absolute(cli.case_list).lexically_normal();
++        const fs::path base = list.parent_path();
++        std::ifstream input(list);
++        if (!input)
++        {
++            throw std::runtime_error("cannot read case list: " + list.string());
++        }
++        std::string line;
++        while (std::getline(input, line))
++        {
++            const std::string clean = uncomment(line);
++            if (clean.empty())
++            {
++                continue;
++            }
++            fs::path path(clean);
++            if (path.is_relative())
++            {
++                path = base / path;
++            }
++            cases.push_back(fs::absolute(path).lexically_normal());
++        }
++    }
++    if (cases.empty())
++    {
++        cases.push_back(fs::current_path());
++    }
++    std::set<std::string> seen;
++    std::vector<fs::path> unique;
++    for (const fs::path& requested : cases)
++    {
++        const fs::path path = fs::absolute(requested).lexically_normal();
++        if (!seen.insert(path.string()).second)
++        {
++            throw std::runtime_error("duplicate case directory: " + path.string());
++        }
++        unique.push_back(path);
++    }
++    return unique;
++}
++
++int run_batch(const std::vector<fs::path>& all_cases,
++              const Cli& cli,
++              const int cpus,
++              const Shard& shard)
++{
++    std::vector<fs::path> cases;
++    for (std::size_t index = 0; index < all_cases.size(); ++index)
++    {
++        if (static_cast<int>(index % static_cast<std::size_t>(shard.count)) == shard.index)
++        {
++            cases.push_back(all_cases[index]);
++        }
++    }
++    if (cases.empty())
++    {
++        std::cout << "H0LITE_SHARD_EMPTY index=" << shard.index << " count=" << shard.count << "\n";
++        return 0;
++    }
++    const int parallel = std::min(cli.tasks, static_cast<int>(cases.size()));
++    std::map<pid_t, fs::path> running;
++    std::size_t next = 0;
++    int failures = 0;
++    while (next < cases.size() || !running.empty())
++    {
++        while (next < cases.size() && static_cast<int>(running.size()) < parallel)
++        {
++            std::cout.flush();
++            std::cerr.flush();
++            const fs::path current = cases[next++];
++            const pid_t child = fork();
++            if (child < 0)
++            {
++                throw std::runtime_error("fork failed: " + std::string(std::strerror(errno)));
++            }
++            if (child == 0)
++            {
++                try
++                {
++                    const int status = run_case(current, cli.with_vl, cpus, parallel, shard);
++                    std::cout.flush();
++                    std::cerr.flush();
++                    _exit(status);
++                }
++                catch (const std::exception& error)
++                {
++                    std::cerr << "H0LITE_CASE_ERROR " << current << ": " << error.what() << "\n";
++                    std::cerr.flush();
++                    _exit(2);
++                }
++            }
++            running[child] = current;
++        }
++        int status = 0;
++        const pid_t child = waitpid(-1, &status, 0);
++        if (child < 0)
++        {
++            if (errno == EINTR)
++            {
++                continue;
++            }
++            throw std::runtime_error("waitpid failed: " + std::string(std::strerror(errno)));
++        }
++        const auto found = running.find(child);
++        const fs::path current = found == running.end() ? fs::path("unknown") : found->second;
++        if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
++        {
++            ++failures;
++            std::cerr << "H0LITE_FAILED " << current << " status=" << status << "\n";
++        }
++        running.erase(child);
++    }
++    std::cout << "H0LITE_SUMMARY selected=" << cases.size() << " complete=" << (cases.size() - failures)
++              << " failed=" << failures << " shard=" << shard.index << "/" << shard.count << "\n";
++    return failures == 0 ? 0 : 2;
++}
++
++void print_license()
++{
++    std::cout << "===== ABACUS / LGPL-3.0 =====\n"
++              << kAbacusLicenseText
++              << "\n===== GCC Runtime Library Exception 3.1 =====\n"
++              << kGccRuntimeLicenseText
++              << "\n===== Intel oneMKL license =====\n"
++              << kMklLicenseText
++              << "\n===== Intel oneMKL third-party notices =====\n"
++              << kMklThirdPartyText << "\n";
++}
++
++} // namespace
++
++int main(int argc, char** argv)
++{
++    try
++    {
++        const Cli cli = parse_cli(argc, argv);
++        if (cli.show_help)
++        {
++            usage(std::cout);
++            return 0;
++        }
++        if (cli.show_version)
++        {
++            std::cout << "abacus_h0 ABACUS-source " << H0LITE_ABACUS_COMMIT << "\n";
++            return 0;
++        }
++        if (cli.show_license)
++        {
++            print_license();
++            return 0;
++        }
++        const bool raw_mode = !cli.raw_input.empty() || !cli.raw_output_dir.empty();
++        if (raw_mode)
++        {
++            if (cli.raw_input.empty() || cli.raw_output_dir.empty() || !cli.case_list.empty()
++                || !cli.positional_cases.empty() || cli.tasks != 1 || cli.shard_index >= 0)
++            {
++                throw std::runtime_error("--input and --output-dir form a private compatibility pair");
++            }
++            const int cpus = cli.cpus_per_task > 0 ? cli.cpus_per_task : available_cpus();
++            set_threads(cpus);
++            return h0lite_run_core(cli.raw_input, cli.raw_output_dir, cli.with_vl);
++        }
++
++        const std::vector<fs::path> all_cases = collect_cases(cli);
++        const Shard shard = resolve_shard(cli);
++        const int available = available_cpus();
++        const int cpus = cli.cpus_per_task > 0 ? cli.cpus_per_task : std::max(1, available / cli.tasks);
++        if (cli.tasks > available || static_cast<long long>(cli.tasks) * cpus > available)
++        {
++            throw std::runtime_error("--tasks * --cpus-per-task exceeds CPUs allocated to this process ("
++                                     + std::to_string(available) + ")");
++        }
++        const bool single = all_cases.size() == 1 && shard.count == 1 && cli.tasks == 1;
++        if (single)
++        {
++            return run_case(all_cases.front(), cli.with_vl, cpus, 1, shard);
++        }
++        return run_batch(all_cases, cli, cpus, shard);
++    }
++    catch (const std::exception& error)
++    {
++        std::cerr << "H0LITE_ERROR: " << error.what() << "\n";
++        return 2;
++    }
++}
+diff --git a/source/source_main/h0lite_licenses.h.in b/source/source_main/h0lite_licenses.h.in
+new file mode 100644
+index 0000000..1b265a7
+--- /dev/null
++++ b/source/source_main/h0lite_licenses.h.in
+@@ -0,0 +1,8 @@
++// Generated at configure time. Do not edit.
++#pragma once
++
++inline constexpr const char kAbacusLicenseText[] = R"H0LABACUS(@H0LITE_ABACUS_LICENSE_TEXT@)H0LABACUS";
++inline constexpr const char kGccRuntimeLicenseText[] = R"H0LGCC(@H0LITE_GCC_RUNTIME_LICENSE_TEXT@)H0LGCC";
++inline constexpr const char kMklLicenseText[] = R"H0LMKL(@H0LITE_MKL_LICENSE_TEXT@)H0LMKL";
++inline constexpr const char kMklThirdPartyText[] = R"H0LMKL3P(@H0LITE_MKL_THIRD_PARTY_TEXT@)H0LMKL3P";
++
+diff --git a/source/source_main/licenses/ABACUS-LGPL-3.0.txt b/source/source_main/licenses/ABACUS-LGPL-3.0.txt
+new file mode 100644
+index 0000000..0a04128
+--- /dev/null
++++ b/source/source_main/licenses/ABACUS-LGPL-3.0.txt
+@@ -0,0 +1,165 @@
++                   GNU LESSER GENERAL PUBLIC LICENSE
++                       Version 3, 29 June 2007
++
++ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
++ Everyone is permitted to copy and distribute verbatim copies
++ of this license document, but changing it is not allowed.
++
++
++  This version of the GNU Lesser General Public License incorporates
++the terms and conditions of version 3 of the GNU General Public
++License, supplemented by the additional permissions listed below.
++
++  0. Additional Definitions.
++
++  As used herein, "this License" refers to version 3 of the GNU Lesser
++General Public License, and the "GNU GPL" refers to version 3 of the GNU
++General Public License.
++
++  "The Library" refers to a covered work governed by this License,
++other than an Application or a Combined Work as defined below.
++
++  An "Application" is any work that makes use of an interface provided
++by the Library, but which is not otherwise based on the Library.
++Defining a subclass of a class defined by the Library is deemed a mode
++of using an interface provided by the Library.
++
++  A "Combined Work" is a work produced by combining or linking an
++Application with the Library.  The particular version of the Library
++with which the Combined Work was made is also called the "Linked
++Version".
++
++  The "Minimal Corresponding Source" for a Combined Work means the
++Corresponding Source for the Combined Work, excluding any source code
++for portions of the Combined Work that, considered in isolation, are
++based on the Application, and not on the Linked Version.
++
++  The "Corresponding Application Code" for a Combined Work means the
++object code and/or source code for the Application, including any data
++and utility programs needed for reproducing the Combined Work from the
++Application, but excluding the System Libraries of the Combined Work.
++
++  1. Exception to Section 3 of the GNU GPL.
++
++  You may convey a covered work under sections 3 and 4 of this License
++without being bound by section 3 of the GNU GPL.
++
++  2. Conveying Modified Versions.
++
++  If you modify a copy of the Library, and, in your modifications, a
++facility refers to a function or data to be supplied by an Application
++that uses the facility (other than as an argument passed when the
++facility is invoked), then you may convey a copy of the modified
++version:
++
++   a) under this License, provided that you make a good faith effort to
++   ensure that, in the event an Application does not supply the
++   function or data, the facility still operates, and performs
++   whatever part of its purpose remains meaningful, or
++
++   b) under the GNU GPL, with none of the additional permissions of
++   this License applicable to that copy.
++
++  3. Object Code Incorporating Material from Library Header Files.
++
++  The object code form of an Application may incorporate material from
++a header file that is part of the Library.  You may convey such object
++code under terms of your choice, provided that, if the incorporated
++material is not limited to numerical parameters, data structure
++layouts and accessors, or small macros, inline functions and templates
++(ten or fewer lines in length), you do both of the following:
++
++   a) Give prominent notice with each copy of the object code that the
++   Library is used in it and that the Library and its use are
++   covered by this License.
++
++   b) Accompany the object code with a copy of the GNU GPL and this license
++   document.
++
++  4. Combined Works.
++
++  You may convey a Combined Work under terms of your choice that,
++taken together, effectively do not restrict modification of the
++portions of the Library contained in the Combined Work and reverse
++engineering for debugging such modifications, if you also do each of
++the following:
++
++   a) Give prominent notice with each copy of the Combined Work that
++   the Library is used in it and that the Library and its use are
++   covered by this License.
++
++   b) Accompany the Combined Work with a copy of the GNU GPL and this license
++   document.
++
++   c) For a Combined Work that displays copyright notices during
++   execution, include the copyright notice for the Library among
++   these notices, as well as a reference directing the user to the
++   copies of the GNU GPL and this license document.
++
++   d) Do one of the following:
++
++       0) Convey the Minimal Corresponding Source under the terms of this
++       License, and the Corresponding Application Code in a form
++       suitable for, and under terms that permit, the user to
++       recombine or relink the Application with a modified version of
++       the Linked Version to produce a modified Combined Work, in the
++       manner specified by section 6 of the GNU GPL for conveying
++       Corresponding Source.
++
++       1) Use a suitable shared library mechanism for linking with the
++       Library.  A suitable mechanism is one that (a) uses at run time
++       a copy of the Library already present on the user's computer
++       system, and (b) will operate properly with a modified version
++       of the Library that is interface-compatible with the Linked
++       Version.
++
++   e) Provide Installation Information, but only if you would otherwise
++   be required to provide such information under section 6 of the
++   GNU GPL, and only to the extent that such information is
++   necessary to install and execute a modified version of the
++   Combined Work produced by recombining or relinking the
++   Application with a modified version of the Linked Version. (If
++   you use option 4d0, the Installation Information must accompany
++   the Minimal Corresponding Source and Corresponding Application
++   Code. If you use option 4d1, you must provide the Installation
++   Information in the manner specified by section 6 of the GNU GPL
++   for conveying Corresponding Source.)
++
++  5. Combined Libraries.
++
++  You may place library facilities that are a work based on the
++Library side by side in a single library together with other library
++facilities that are not Applications and are not covered by this
++License, and convey such a combined library under terms of your
++choice, if you do both of the following:
++
++   a) Accompany the combined library with a copy of the same work based
++   on the Library, uncombined with any other library facilities,
++   conveyed under the terms of this License.
++
++   b) Give prominent notice with the combined library that part of it
++   is a work based on the Library, and explaining where to find the
++   accompanying uncombined form of the same work.
++
++  6. Revised Versions of the GNU Lesser General Public License.
++
++  The Free Software Foundation may publish revised and/or new versions
++of the GNU Lesser General Public License from time to time. Such new
++versions will be similar in spirit to the present version, but may
++differ in detail to address new problems or concerns.
++
++  Each version is given a distinguishing version number. If the
++Library as you received it specifies that a certain numbered version
++of the GNU Lesser General Public License "or any later version"
++applies to it, you have the option of following the terms and
++conditions either of that published version or of any later version
++published by the Free Software Foundation. If the Library as you
++received it does not specify a version number of the GNU Lesser
++General Public License, you may choose any version of the GNU Lesser
++General Public License ever published by the Free Software Foundation.
++
++  If the Library as you received it specifies that a proxy can decide
++whether future versions of the GNU Lesser General Public License shall
++apply, that proxy's public statement of acceptance of any version is
++permanent authorization for you to choose that version for the
++Library.
+diff --git a/source/source_main/licenses/GCC-Runtime-Library-Exception-3.1.txt b/source/source_main/licenses/GCC-Runtime-Library-Exception-3.1.txt
+new file mode 100644
+index 0000000..e1b3c69
+--- /dev/null
++++ b/source/source_main/licenses/GCC-Runtime-Library-Exception-3.1.txt
+@@ -0,0 +1,73 @@
++GCC RUNTIME LIBRARY EXCEPTION
++
++Version 3.1, 31 March 2009
++
++Copyright (C) 2009 Free Software Foundation, Inc. <http://fsf.org/>
++
++Everyone is permitted to copy and distribute verbatim copies of this
++license document, but changing it is not allowed.
++
++This GCC Runtime Library Exception ("Exception") is an additional
++permission under section 7 of the GNU General Public License, version
++3 ("GPLv3"). It applies to a given file (the "Runtime Library") that
++bears a notice placed by the copyright holder of the file stating that
++the file is governed by GPLv3 along with this Exception.
++
++When you use GCC to compile a program, GCC may combine portions of
++certain GCC header files and runtime libraries with the compiled
++program. The purpose of this Exception is to allow compilation of
++non-GPL (including proprietary) programs to use, in this way, the
++header files and runtime libraries covered by this Exception.
++
++0. Definitions.
++
++A file is an "Independent Module" if it either requires the Runtime
++Library for execution after a Compilation Process, or makes use of an
++interface provided by the Runtime Library, but is not otherwise based
++on the Runtime Library.
++
++"GCC" means a version of the GNU Compiler Collection, with or without
++modifications, governed by version 3 (or a specified later version) of
++the GNU General Public License (GPL) with the option of using any
++subsequent versions published by the FSF.
++
++"GPL-compatible Software" is software whose conditions of propagation,
++modification and use would permit combination with GCC in accord with
++the license of GCC.
++
++"Target Code" refers to output from any compiler for a real or virtual
++target processor architecture, in executable form or suitable for
++input to an assembler, loader, linker and/or execution
++phase. Notwithstanding that, Target Code does not include data in any
++format that is used as a compiler intermediate representation, or used
++for producing a compiler intermediate representation.
++
++The "Compilation Process" transforms code entirely represented in
++non-intermediate languages designed for human-written code, and/or in
++Java Virtual Machine byte code, into Target Code. Thus, for example,
++use of source code generators and preprocessors need not be considered
++part of the Compilation Process, since the Compilation Process can be
++understood as starting with the output of the generators or
++preprocessors.
++
++A Compilation Process is "Eligible" if it is done using GCC, alone or
++with other GPL-compatible software, or if it is done without using any
++work based on GCC. For example, using non-GPL-compatible Software to
++optimize any GCC intermediate representations would not qualify as an
++Eligible Compilation Process.
++
++1. Grant of Additional Permission.
++
++You have permission to propagate a work of Target Code formed by
++combining the Runtime Library with Independent Modules, even if such
++propagation would otherwise violate the terms of GPLv3, provided that
++all Target Code was generated by Eligible Compilation Processes. You
++may then convey such a combination under terms of your choice,
++consistent with the licensing of the Independent Modules.
++
++2. No Weakening of GCC Copyleft.
++
++The availability of this Exception does not imply any general
++presumption that third-party software is unaffected by the copyleft
++requirements of the license of GCC.
++
+diff --git a/source/source_main/licenses/oneMKL-license.txt b/source/source_main/licenses/oneMKL-license.txt
+new file mode 100644
+index 0000000..a6a45b2
+--- /dev/null
++++ b/source/source_main/licenses/oneMKL-license.txt
+@@ -0,0 +1,71 @@
++Intel Simplified Software License (Version October 2022)
++
++Use and Redistribution.  You may use and redistribute the software, which 
++is provided in binary form only, (the “Software”), without modification, 
++provided the following conditions are met:
++
++* Redistributions must reproduce the above copyright notice and these terms 
++  of use in the Software and in the documentation and/or other materials 
++  provided with the distribution.
++* Neither the name of Intel nor the names of its suppliers may be used to 
++  endorse or promote products derived from this Software without specific 
++  prior written permission.
++* No reverse engineering, decompilation, or disassembly of the Software is 
++  permitted, nor any modification or alteration of the Software or its 
++  operation at any time, including during execution.
++
++No other licenses.  Except as provided in the preceding section, Intel grants no 
++licenses or other rights by implication, estoppel or otherwise to, patent, 
++copyright, trademark, trade name, service mark or other intellectual property 
++licenses or rights of Intel.
++
++Third party software.  “Third Party Software” means the files (if any) listed in 
++the “third-party-software.txt” or other similarly-named text file that may be 
++included with the Software. Third Party Software, even if included with the 
++distribution of the Software, may be governed by separate license terms, 
++including without limitation, third party license terms, open source software 
++notices and terms, and/or other Intel software license terms. These separate 
++license terms solely govern Your use of the Third Party Software.
++
++DISCLAIMER.  THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED 
++WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
++MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT ARE 
++DISCLAIMED. THIS SOFTWARE IS NOT INTENDED FOR USE IN SYSTEMS OR APPLICATIONS 
++WHERE FAILURE OF THE SOFTWARE MAY CAUSE PERSONAL INJURY OR DEATH AND YOU AGREE 
++THAT YOU ARE FULLY RESPONSIBLE FOR ANY CLAIMS, COSTS, DAMAGES, EXPENSES, AND 
++ATTORNEYS’ FEES ARISING OUT OF ANY SUCH USE, EVEN IF ANY CLAIM ALLEGES THAT 
++INTEL WAS NEGLIGENT REGARDING THE DESIGN OR MANUFACTURE OF THE SOFTWARE.
++
++LIMITATION OF LIABILITY. IN NO EVENT WILL INTEL BE LIABLE FOR ANY DIRECT, 
++INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
++BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
++DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
++LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
++OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
++ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++No support.  Intel may make changes to the Software, at any time without notice, 
++and is not obligated to support, update or provide training for the Software. 
++
++Termination. Your right to use the Software is terminated in the event of your 
++breach of this license.
++
++Feedback.  Should you provide Intel with comments, modifications, corrections, 
++enhancements or other input (“Feedback”) related to the Software, Intel will be 
++free to use, disclose, reproduce, license or otherwise distribute or exploit the 
++Feedback in its sole discretion without any obligations or restrictions of any 
++kind, including without limitation, intellectual property rights or licensing 
++obligations.
++
++Compliance with laws.  You agree to comply with all relevant laws and regulations 
++governing your use, transfer, import or export (or prohibition thereof) of the 
++Software.
++
++Governing law.  All disputes will be governed by the laws of the United States of 
++America and the State of Delaware without reference to conflict of law 
++principles and subject to the exclusive jurisdiction of the state or federal 
++courts sitting in the State of Delaware, and each party agrees that it submits 
++to the personal jurisdiction and venue of those courts and waives any 
++objections. THE UNITED NATIONS CONVENTION ON CONTRACTS FOR THE INTERNATIONAL 
++SALE OF GOODS (1980) IS SPECIFICALLY EXCLUDED AND WILL NOT APPLY TO THE 
++SOFTWARE.
+diff --git a/source/source_main/licenses/oneMKL-third-party-programs.txt b/source/source_main/licenses/oneMKL-third-party-programs.txt
+new file mode 100644
+index 0000000..2360585
+--- /dev/null
++++ b/source/source_main/licenses/oneMKL-third-party-programs.txt
+@@ -0,0 +1,526 @@
++Intel(R) oneAPI Math Kernel Library (oneMKL) Third Party Programs File
++
++This file is the "third-party-programs.txt" file specified in the associated Intel end user license agreement for the Intel software you are licensing. 
++
++Third party programs and their corresponding required notices and/or license terms are listed below.
++
++-------------------------------------------------------------
++
++1. Netlib BLACS - Basic Linear Algebra Communication   Subprograms:
++Copyright (c) 1992-2013 The University of Tennessee and The                          University of Tennessee Research Foundation. All rights  reserved.
++Copyright (c) 2000-2013 The University of California Berkeley. All rights reserved.
++Copyright (c) 2006-2013 The University of Colorado Denver. All rights reserved.
++
++   Netlib LAPACK:
++Copyright (c) 1992-2013 The University of Tennessee and The                          University of Tennessee Research Foundation. All rights  reserved.
++Copyright (c) 2000-2013 The University of California Berkeley. All rights reserved.
++Copyright (c) 2006-2013 The University of Colorado Denver. All rights reserved.
++
++
++Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
++
++- Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
++
++- Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer listed in this license in the documentation and/or other materials provided with the distribution.
++
++- Neither the name of the copyright holders nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
++
++The copyright holders provide no reassurances that the source code provided does not infringe any patent, copyright, or any other intellectual property rights of third parties.  The copyright holders disclaim any liability to any recipient for claims brought against recipient by any third party for infringement of that parties intellectual property rights.
++
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++-------------------------------------------------------------
++2. HPCG: High Performance Conjugate Gradient Benchmark: 
++   Copyright (c) 2013-2019, hpcg-benchmark
++   All rights reserved.
++
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are met:
++
++* Redistributions of source code must retain the above copyright notice, this
++  list of conditions and the following disclaimer.
++
++* Redistributions in binary form must reproduce the above copyright notice,
++  this list of conditions and the following disclaimer in the documentation
++  and/or other materials provided with the distribution.
++
++* Neither the name of hpcg nor the names of its
++  contributors may be used to endorse or promote products derived from
++  this software without specific prior written permission.
++
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
++FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
++CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++----------------------------------------------------------------
++3. Mersenne Twister with improved initialization: 
++   Copyright (C) 1997 - 2002, Makoto Matsumoto and Takuji  Nishimura, All rights reserved.
++
++Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
++
++1. Redistributions of source code must retain the above copyright
++notice, this list of conditions and the following disclaimer.
++
++2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
++
++3. The names of its contributors may not be used to endorse or promote products derived from this software without specific prior written permission.
++
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++
++----------------------------------------------------------------
++4. SFMT:
++   Copyright (c) 2006,2007-2014 Mutsuo Saito, Makoto Matsumoto  and Hiroshima University. All rights reserved.
++
++Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
++* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
++* Redistributions in binary form must reproduce the above
++copyright notice, this list of conditions and the following
++disclaimer in the documentation and/or other materials provided with the distribution.
++* Neither the name of the Hiroshima University nor the names of its contributors may be used to endorse or promote products
++derived from this software without specific prior written
++permission.
++
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++
++----------------------------------------------------------------
++5. Sobol sequence generator:
++   Copyright (c) 2008, Frances Y. Kuo and Stephen Joe, All rights reserved.
++
++Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
++
++    * Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
++
++    * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
++
++    * Neither the names of the copyright holders nor the names of the University of New South Wales and the University of Waikato and its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
++
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++
++ ---------------------------------------------------------------  
++6. The FEAST Eigenvalue Solver:
++   Copyright (c) 2009-2012, The Regents of the University of  Massachusetts, Amherst. Developed by E. Polizzi. All rights reserved.
++
++Redistribution and use in source and binary forms, with or without modification,are permitted provided that the following conditions are met:
++
++1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
++2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
++3. Neither the name of the University nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
++
++THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
++LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++
++----------------------------------------------------------------
++7. Intel(R) Instrumentation and Tracing Technology API: 
++   Copyright(c) 2019, Intel Corporation, All rights reserved.
++
++   LAPACK95
++   Copyright (c) 2000, Netlib
++   All rights reserved.
++
++   XBLAS
++   Copyright (c) 2008-2009 The University of California Berkeley.  All rights reserved.
++
++   xbyak:
++   Copyright (c) 2007 MITSUNARI Shigeo
++   All rights reserved.
++
++
++Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met: 
++* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer. 
++* Redistributions in binary form must reproduce the above copyright notice, his list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution. 
++* Neither the name of Intel Corporation nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission. 
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++
++----------------------------------------------------------------
++8. Intel Open Source Technology Center Safe String Library: 
++         strcat_s.c
++   October 2008, Bo Berry
++   Copyright (c) 2008-2011 by Cisco Systems, Inc. All rights          reserved.
++
++   
++   level-zero:
++   Copyright (c) 2019 Intel Corporation
++
++Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights
++to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
++
++
++-------------------------------------------------------------
++9. KhronosGroup/OpenCL-Headers
++
++                               Apache License
++                           Version 2.0, January 2004
++                        http://www.apache.org/licenses/
++
++   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
++
++   1. Definitions.
++
++      "License" shall mean the terms and conditions for use, reproduction,
++      and distribution as defined by Sections 1 through 9 of this document.
++
++      "Licensor" shall mean the copyright owner or entity authorized by
++      the copyright owner that is granting the License.
++
++      "Legal Entity" shall mean the union of the acting entity and all
++      other entities that control, are controlled by, or are under common
++      control with that entity. For the purposes of this definition,
++      "control" means (i) the power, direct or indirect, to cause the
++      direction or management of such entity, whether by contract or
++      otherwise, or (ii) ownership of fifty percent (50%) or more of the
++      outstanding shares, or (iii) beneficial ownership of such entity.
++
++      "You" (or "Your") shall mean an individual or Legal Entity
++      exercising permissions granted by this License.
++
++      "Source" form shall mean the preferred form for making modifications,
++      including but not limited to software source code, documentation
++      source, and configuration files.
++
++      "Object" form shall mean any form resulting from mechanical
++      transformation or translation of a Source form, including but
++      not limited to compiled object code, generated documentation,
++      and conversions to other media types.
++
++      "Work" shall mean the work of authorship, whether in Source or
++      Object form, made available under the License, as indicated by a
++      copyright notice that is included in or attached to the work
++      (an example is provided in the Appendix below).
++
++      "Derivative Works" shall mean any work, whether in Source or Object
++      form, that is based on (or derived from) the Work and for which the
++      editorial revisions, annotations, elaborations, or other modifications
++      represent, as a whole, an original work of authorship. For the purposes
++      of this License, Derivative Works shall not include works that remain
++      separable from, or merely link (or bind by name) to the interfaces of,
++      the Work and Derivative Works thereof.
++
++      "Contribution" shall mean any work of authorship, including
++      the original version of the Work and any modifications or additions
++      to that Work or Derivative Works thereof, that is intentionally
++      submitted to Licensor for inclusion in the Work by the copyright owner
++      or by an individual or Legal Entity authorized to submit on behalf of
++      the copyright owner. For the purposes of this definition, "submitted"
++      means any form of electronic, verbal, or written communication sent
++      to the Licensor or its representatives, including but not limited to
++      communication on electronic mailing lists, source code control systems,
++      and issue tracking systems that are managed by, or on behalf of, the
++      Licensor for the purpose of discussing and improving the Work, but
++      excluding communication that is conspicuously marked or otherwise
++      designated in writing by the copyright owner as "Not a Contribution."
++
++      "Contributor" shall mean Licensor and any individual or Legal Entity
++      on behalf of whom a Contribution has been received by Licensor and
++      subsequently incorporated within the Work.
++
++   2. Grant of Copyright License. Subject to the terms and conditions of
++      this License, each Contributor hereby grants to You a perpetual,
++      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
++      copyright license to reproduce, prepare Derivative Works of,
++      publicly display, publicly perform, sublicense, and distribute the
++      Work and such Derivative Works in Source or Object form.
++
++   3. Grant of Patent License. Subject to the terms and conditions of
++      this License, each Contributor hereby grants to You a perpetual,
++      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
++      (except as stated in this section) patent license to make, have made,
++      use, offer to sell, sell, import, and otherwise transfer the Work,
++      where such license applies only to those patent claims licensable
++      by such Contributor that are necessarily infringed by their
++      Contribution(s) alone or by combination of their Contribution(s)
++      with the Work to which such Contribution(s) was submitted. If You
++      institute patent litigation against any entity (including a
++      cross-claim or counterclaim in a lawsuit) alleging that the Work
++      or a Contribution incorporated within the Work constitutes direct
++      or contributory patent infringement, then any patent licenses
++      granted to You under this License for that Work shall terminate
++      as of the date such litigation is filed.
++
++   4. Redistribution. You may reproduce and distribute copies of the
++      Work or Derivative Works thereof in any medium, with or without
++      modifications, and in Source or Object form, provided that You
++      meet the following conditions:
++
++      (a) You must give any other recipients of the Work or
++          Derivative Works a copy of this License; and
++
++      (b) You must cause any modified files to carry prominent notices
++          stating that You changed the files; and
++
++      (c) You must retain, in the Source form of any Derivative Works
++          that You distribute, all copyright, patent, trademark, and
++          attribution notices from the Source form of the Work,
++          excluding those notices that do not pertain to any part of
++          the Derivative Works; and
++
++      (d) If the Work includes a "NOTICE" text file as part of its
++          distribution, then any Derivative Works that You distribute must
++          include a readable copy of the attribution notices contained
++          within such NOTICE file, excluding those notices that do not
++          pertain to any part of the Derivative Works, in at least one
++          of the following places: within a NOTICE text file distributed
++          as part of the Derivative Works; within the Source form or
++          documentation, if provided along with the Derivative Works; or,
++          within a display generated by the Derivative Works, if and
++          wherever such third-party notices normally appear. The contents
++          of the NOTICE file are for informational purposes only and
++          do not modify the License. You may add Your own attribution
++          notices within Derivative Works that You distribute, alongside
++          or as an addendum to the NOTICE text from the Work, provided
++          that such additional attribution notices cannot be construed
++          as modifying the License.
++
++      You may add Your own copyright statement to Your modifications and
++      may provide additional or different license terms and conditions
++      for use, reproduction, or distribution of Your modifications, or
++      for any such Derivative Works as a whole, provided Your use,
++      reproduction, and distribution of the Work otherwise complies with
++      the conditions stated in this License.
++
++   5. Submission of Contributions. Unless You explicitly state otherwise,
++      any Contribution intentionally submitted for inclusion in the Work
++      by You to the Licensor shall be under the terms and conditions of
++      this License, without any additional terms or conditions.
++      Notwithstanding the above, nothing herein shall supersede or modify
++      the terms of any separate license agreement you may have executed
++      with Licensor regarding such Contributions.
++
++   6. Trademarks. This License does not grant permission to use the trade
++      names, trademarks, service marks, or product names of the Licensor,
++      except as required for reasonable and customary use in describing the
++      origin of the Work and reproducing the content of the NOTICE file.
++
++   7. Disclaimer of Warranty. Unless required by applicable law or
++      agreed to in writing, Licensor provides the Work (and each
++      Contributor provides its Contributions) on an "AS IS" BASIS,
++      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
++      implied, including, without limitation, any warranties or conditions
++      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
++      PARTICULAR PURPOSE. You are solely responsible for determining the
++      appropriateness of using or redistributing the Work and assume any
++      risks associated with Your exercise of permissions under this License.
++
++   8. Limitation of Liability. In no event and under no legal theory,
++      whether in tort (including negligence), contract, or otherwise,
++      unless required by applicable law (such as deliberate and grossly
++      negligent acts) or agreed to in writing, shall any Contributor be
++      liable to You for damages, including any direct, indirect, special,
++      incidental, or consequential damages of any character arising as a
++      result of this License or out of the use or inability to use the
++      Work (including but not limited to damages for loss of goodwill,
++      work stoppage, computer failure or malfunction, or any and all
++      other commercial damages or losses), even if such Contributor
++      has been advised of the possibility of such damages.
++
++   9. Accepting Warranty or Additional Liability. While redistributing
++      the Work or Derivative Works thereof, You may choose to offer,
++      and charge a fee for, acceptance of support, warranty, indemnity,
++      or other liability obligations and/or rights consistent with this
++      License. However, in accepting such obligations, You may act only
++      on Your own behalf and on Your sole responsibility, not on behalf
++      of any other Contributor, and only if You agree to indemnify,
++      defend, and hold each Contributor harmless for any liability
++      incurred by, or claims asserted against, such Contributor by reason
++      of your accepting any such warranty or additional liability.
++
++   END OF TERMS AND CONDITIONS
++
++   APPENDIX: How to apply the Apache License to your work.
++
++      To apply the Apache License to your work, attach the following
++      boilerplate notice, with the fields enclosed by brackets "[]"
++      replaced with your own identifying information. (Don't include
++      the brackets!)  The text should be enclosed in the appropriate
++      comment syntax for the file format. We also recommend that a
++      file or class name and description of purpose be included on the
++      same "printed page" as the copyright notice for easier
++      identification within third-party archives.
++
++   Copyright [yyyy] [name of copyright owner]
++
++   Licensed under the Apache License, Version 2.0 (the "License");
++   you may not use this file except in compliance with the License.
++   You may obtain a copy of the License at
++
++       http://www.apache.org/licenses/LICENSE-2.0
++
++   Unless required by applicable law or agreed to in writing, software
++   distributed under the License is distributed on an "AS IS" BASIS,
++   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++   See the License for the specific language governing permissions and
++   limitations under the License.
++
++-------------------------------------------------------------
++10. HPL - High-Performance Linpack Benchmark:
++    HPL - 2.3 - December 2, 2018                        
++    Antoine P. Petitet                                                
++    University of Tennessee, Knoxville                                
++    Innovative Computing Laboratory                                 
++    (C) Copyright 2000-2008 All Rights Reserved  
++
++    HPL License
++
++ Redistribution  and  use in  source and binary forms, with or without modification, are  permitted provided  that the following  conditions are met:                                                             
++                                                                      
++ 1. Redistributions  of  source  code  must retain the above copyright notice, this list of conditions and the following disclaimer.        
++                                                                      
++ 2. Redistributions in binary form must reproduce  the above copyright notice, this list of conditions,  and the following disclaimer in the documentation and/or other materials provided with the distribution. 
++                                                                      
++ 3. All  advertising  materials  mentioning  features  or  use of this software must display the following acknowledgement:                 
++   This  product  includes  software  developed  at  the  University  of Tennessee, Knoxville, Innovative Computing Laboratory.             
++                                                                      
++ 4. The name of the  University,  the name of the  Laboratory,  or the names  of  its  contributors  may  not  be used to endorse or promote products  derived   from   this  software  without  specific  written permission.                                                          
++                                                                      
++ -- Disclaimer:                                                       
++                                                                      
++THIS  SOFTWARE  IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,  INCLUDING,  BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE UNIVERSITY OR  CONTRIBUTORS  BE  LIABLE FOR ANY  DIRECT,  INDIRECT,  INCIDENTAL, SPECIAL,  EXEMPLARY,  OR  CONSEQUENTIAL DAMAGES  (INCLUDING,  BUT NOT
++LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA OR PROFITS; OR BUSINESS INTERRUPTION)  HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,  STRICT LIABILITY,  OR TORT(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
++
++-------------------------------------------------------------
++11. Intel(R) oneAPI Threading Building Blocks: 
++    Copyright 2005-2019 Intel Corporation. All Rights Reserved.
++
++    Intel(R) Integrated Performance Primitives Library
++    Copyright 2020 Intel Corporation. All Rights Reserved.
++
++    Intel(R) OpenMP* Runtime:
++    Copyright 1985-2019 Intel Corporation. All Rights Reserved.
++
++
++Intel Simplified Software License (Version October 2022)
++
++Use and Redistribution. You may use and redistribute the software, which is provided in binary form only, (the "Software"), without modification, provided the following conditions are met:
++
++* 	Redistributions must reproduce the above copyright notice and these terms of use in the Software and in the documentation and/or other materials provided with the distribution.
++* 	Neither the name of Intel nor the names of its suppliers may be used to endorse or promote products derived from this Software without specific prior written permission.
++* 	No reverse engineering, decompilation, or disassembly of the Software is permitted, nor any modification or alteration of the Software or its operation at any time, including during execution.
++
++No other licenses. Except as provided in the preceding section, Intel grants no licenses or other rights by implication, estoppel or otherwise to, patent, copyright, trademark, trade name, service mark or other intellectual property licenses or rights of Intel.
++
++Third party software.  "Third Party Software" means the files (if any) listed in the "third-party-software.txt" or other similarly-named text file that may be included with the Software. Third Party Software, even if included with the distribution of the Software, may be governed by separate license terms, including without limitation, third party license terms, open source software notices and terms, and/or other Intel software license terms. These separate license terms solely govern Your use of the Third Party Software.
++
++DISCLAIMER. THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT ARE DISCLAIMED. THIS SOFTWARE IS NOT INTENDED FOR USE IN SYSTEMS OR APPLICATIONS WHERE FAILURE OF THE SOFTWARE MAY CAUSE PERSONAL INJURY OR DEATH AND YOU AGREE THAT YOU ARE FULLY RESPONSIBLE FOR ANY CLAIMS, COSTS, DAMAGES, EXPENSES, AND ATTORNEYS FEES ARISING OUT OF ANY SUCH USE, EVEN IF ANY CLAIM ALLEGES THAT INTEL WAS NEGLIGENT REGARDING THE DESIGN OR MANUFACTURE OF THE SOFTWARE.
++
++LIMITATION OF LIABILITY. IN NO EVENT WILL INTEL BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++No support.  Intel may make changes to the Software, at any time without notice, and is not obligated to support, update or provide training for the Software. 
++
++Termination. Your right to use the Software is terminated in the event of your breach of this license.
++
++Feedback.  Should you provide Intel with comments, modifications, corrections, enhancements or other input ("Feedback") related to the Software, Intel will be free to use, disclose, reproduce, license or otherwise distribute or exploit the Feedback in its sole discretion without any obligations or restrictions of any kind, including without limitation, intellectual property rights or licensing obligations.
++
++Compliance with laws.  You agree to comply with all relevant laws and regulations governing your use, transfer, import or export (or prohibition thereof) of the Software.
++
++Governing law.  All disputes will be governed by the laws of the United States of America and the State of Delaware without reference to conflict of law principles and subject to the exclusive jurisdiction of the state or federal courts sitting in the State of Delaware, and each party agrees that it submits to the personal jurisdiction and venue of those courts and waives any objections. THE UNITED NATIONS CONVENTION ON CONTRACTS FOR THE INTERNATIONAL SALE OF GOODS (1980) IS SPECIFICALLY EXCLUDED AND WILL NOT APPLY TO THE SOFTWARE.
++
++
++----------------------------------------------------------------
++
++12. Microsoft HPC Pack Software Development Kit (SDK)
++    Copyright Microsoft Corp.
++
++    Terms for Microsoft "Distributable Code."
++1.	License. This software package from Intel (the "Software Package") contains code from Microsoft (the "Distributable Code").  You are provided a non-transferable, non-exclusive, non-sublicensable, limited right and license only to use and redistribute the Distributable Code as part of this Software Package.  You are not allowed to copy, modify, remove the Distributable Code from the Software Package or redistribute the Distributable Code on a stand-alone basis.
++2.	Restrictions. The Distributable Code is licensed, not sold. You are only provided the above rights to use the Distributable Code.  Intel and Microsoft reserve all other rights. Unless applicable law gives you more rights, you may use the Distributable Code only as expressly permitted in these terms. In using the Distributable Code, you must comply with any technical limitations in the Distributable Code that only allow you to use it in certain ways. You may not:
++*	work around any technical limitations in the Distributable Code; 
++*	reverse engineer, decompile or disassemble the software, or otherwise attempt to derive the source code for the Distributable Code, except and to the extent required by third party licensing terms governing use of certain open source components that may be included in the Distributable Code; 
++*	remove, minimize, block or modify any notices of Intel, Microsoft or its suppliers in the Distributable Code; 
++*	use the Distributable Code in any way that is against the law; or
++*	share, publish, rent or lease the software, or provide the Distributable Code as a stand-alone offering for others to use. 
++3.	NO WARRANTY.  THE  DISTRIBUTABLE CODE IS PROVIDED "AS IS" WITHOUT ANY EXPRESS OR IMPLIED WARRANTY OF ANY KIND INCLUDING WARRANTIES OF MERCHANTABILITY, NONINFRINGEMENT, OR FITNESS FOR A PARTICULAR PURPOSE.  
++4.	LIMITATION ON AND EXCLUSION OF DAMAGES. YOU CAN RECOVER FROM INTEL, MICROSOFT OR THEIR SUPPLIERS ONLY DIRECT DAMAGES UP TO $5.00. YOU CANNOT RECOVER ANY OTHER DAMAGES, INCLUDING CONSEQUENTIAL, LOST PROFITS, SPECIAL, INDIRECT OR INCIDENTAL DAMAGES. 
++This limitation applies to (a) anything related to the Distributable Code; and (b) claims for breach of contract, breach of warranty, guarantee or condition, strict liability, negligence, or other tort to the extent permitted by applicable law.  It also applies even if Intel or Microsoft knew or should have known about the possibility of the damages. The above limitation or exclusion may not apply to you because your state or country may not allow the exclusion or limitation of incidental, consequential or other damages. 
++5.	Export Restrictions. You must comply with all domestic and international export laws and regulations that apply to the software, which include restrictions on destinations, end users, and end use. For further information on export restrictions, visit www.microsoft.com/exporting.
++
++
++----------------------------------------------------------------
++13. memkind
++    Copyright (C) 2014-2020 Intel Corporation
++
++Unless otherwise specified, files in the memkind source distribution are
++subject to the following license:
++
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are met:
++
++    * Redistributions of source code must retain the above copyright notice,
++      this list of conditions and the following disclaimer.
++    * Redistributions in binary form must reproduce the above copyright
++      notice, this list of conditions and the following disclaimer in the
++      documentation and/or other materials provided with the distribution.
++    * Neither the name of Intel Corporation nor the names of its contributors
++      may be used to endorse or promote products derived from this software
++      without specific prior written permission.
++
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
++FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
++CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++----------------------------------------------------------------
++14. spiralgen
++    Some or all of this work - Copyright (c) 1999 - 2005, Intel Corp. All rights reserved.
++
++3.3. Redistribution of Executable. Redistribution in executable form of any substantial portion of the Covered Code or modification must reproduce the above Copyright Notice, and the following Disclaimer and Export Compliance provision in the documentation and/or other materials provided with the distribution.
++
++3.4. Intel retains all right, title, and interest in and to the Original Intel Code.
++
++3.5. Neither the name Intel nor any other trademark owned or controlled by Intel shall be used in advertising or otherwise to promote the sale, use or other dealings in products derived from or relating to the Covered Code without prior written authorization from Intel.
++
++4. Disclaimer and Export Compliance
++
++
++4.1. INTEL MAKES NO WARRANTY OF ANY KIND REGARDING ANY SOFTWARE PROVIDED HERE. ANY SOFTWARE ORIGINATING FROM INTEL OR DERIVED FROM INTEL SOFTWARE IS PROVIDED "AS IS," AND INTEL WILL NOT PROVIDE ANY SUPPORT, ASSISTANCE, INSTALLATION, TRAINING OR OTHER SERVICES. INTEL WILL NOT PROVIDE ANY UPDATES, ENHANCEMENTS OR EXTENSIONS. INTEL SPECIFICALLY DISCLAIMS ANY IMPLIED WARRANTIES OF MERCHANTABILITY, NONINFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE.
++
++4.2. IN NO EVENT SHALL INTEL HAVE ANY LIABILITY TO LICENSEE, ITS LICENSEES OR ANY OTHER THIRD PARTY, FOR ANY LOST PROFITS, LOST DATA, LOSS OF USE OR COSTS OF PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES, OR FOR ANY INDIRECT, SPECIAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THIS AGREEMENT, UNDER ANY CAUSE OF ACTION OR THEORY OF LIABILITY, AND IRRESPECTIVE OF WHETHER INTEL HAS ADVANCE NOTICE OF THE POSSIBILITY OF SUCH DAMAGES. THESE LIMITATIONS SHALL APPLY NOTWITHSTANDING THE FAILURE OF THE ESSENTIAL PURPOSE OF ANY LIMITED REMEDY.
++
++4.3. Licensee shall not export, either directly or indirectly, any of this software or system incorporating such software without first obtaining any required license or other approval from the U. S. Department of Commerce or any other agency or department of the United States Government. In the event Licensee exports any such software from the United States or re-exports any such software from a foreign destination, Licensee shall ensure that the distribution and export/re-export of the software is in compliance with all laws, regulations, orders, or other restrictions of the U.S. Export Administration Regulations. Licensee agrees that neither it nor any of its subsidiaries will export/re-export any technical data, process, software, or service, directly or indirectly, to any country for which the United States government or any agency thereof requires an export license, other governmental approval, or letter of assurance, without first obtaining such license, approval or letter.
++
++
++----------------------------------------------------------------
++
++The following third party programs have their own third party program files. These additional third party program files are as follows:
++
++1. List of third party for Intel Open Source Technology Center Safe String Library is available in the third-party-programs-safestring.txt.
++
++2. List of third party for Intel(R) oneAPI Threading Building Blocks for Linux is available in <install-dir>/tbb/<version>/licensing/third-party-programs.txt.
++
++3. List of third party for Intel(R) oneAPI Threading Building Blocks for Windows is available in <install-dir>\tbb\<version>\licensing\third-party-programs.txt.
++
++4. List of third party for Intel(R) OpenMP* Runtime is available in the third-party-programs-openmp.txt file.
++
++5. List of third party for Intel(R) Integrated Performance Primitives Library is available in the third-party-programs-ipp.txt file.
++
++----------------------------------------------------------------
++
++    
++
++
++
++
++
