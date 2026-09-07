@@ -61,7 +61,7 @@ ABACUS 3.11. It reads an ordinary LCAO SCF case but evaluates only
 `H0=T+Vnl` and `S0`; `--with-vl` changes H0 to `T+Vnl+Vl`. It runs no SCF
 iteration and no diagonalization.
 
-The `h0lite-v311-simpson-20260906` revision uses ABACUS 3.11's finite-grid
+The `h0lite-v311-simpson-buffered-20260907` revision uses ABACUS 3.11's finite-grid
 Simpson integrator and orbital/projector transforms. An explicitly selected
 H0 table mode restores historical distance spacing, per-pair cutoff/padding
 and four-point interpolation; scalar diagonal-projector D is retained.
@@ -92,6 +92,23 @@ and `1.30e-11` (S0). Two separate 16-case Slurm jobs on the same node,
 completion (previous imported tables versus this revision). This observed
 no end-to-end slowdown; it does not establish a significant speedup.
 
+The 2026-09-07 buffered revision retains the existing 3.11 CSR writer but
+removes per-line flushes and read-only atom-pair copies. Numerical kernels,
+formatting, sparse thresholds and precision are unchanged. Independent jobs
+actually exporting all 16 cases with 16 CPUs and four concurrent cases took
+47 s before optimization and 29 s in both optimized runs; the genuine 3.5.3
+exporter took 49/44 s (the first run included 5 s of queueing). Including Vl
+improved from 73 s to 57 s. Times are Slurm Submit-to-End, excluding separate
+numerical comparisons; no old outputs were reused or single cases extrapolated.
+
+Default H0/S0 are byte-identical before/after this optimization and still pass
+all old-3.5.3 numerical checks. With Vl, S0 is byte-identical; H0 differences
+are at most about 1e-11 Ry. Repeating the unmodified binary also shows last-bit
+variation from dynamic parallel grid integration; two single-thread controls
+are byte-identical. The Vl kernel is unchanged. Compatible v3 markers remain
+reusable: this serialization-only update does not require regeneration.
+Backend logs now include `h0_write_ms` and `s0_write_ms`.
+
 ```bash
 cd CASE
 /path/to/abacus_h0
@@ -105,6 +122,12 @@ For one case, the CPU count defaults to `SLURM_CPUS_PER_TASK`, or the CPUs
 available to the process outside Slurm. In a Slurm multi-task or array launch,
 the case list is sharded automatically before each node runs its local dynamic
 case queue.
+
+The local queue sets thread counts but does not assign disjoint CPU masks to
+children. For batch execution, use `OMP_PROC_BIND=FALSE` and unset `OMP_PLACES`,
+`GOMP_CPU_AFFINITY` and `KMP_AFFINITY`; retain Slurm's rank CPU binding.
+Forcing `OMP_PROC_BIND=close` with `OMP_PLACES=cores` can make all children
+contend for the same cores despite a larger Slurm allocation.
 
 The runtime artifact is one `abacus_h0` file; do not commit that generated ELF
 back into this source directory.

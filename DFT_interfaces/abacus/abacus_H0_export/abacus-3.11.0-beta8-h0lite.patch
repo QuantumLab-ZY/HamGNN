@@ -554,6 +554,76 @@ index dc97787..e27fcf8 100644
      char op_ = '\0';   //!< operator associated with the present table
      int ntab_ = 0;     //!< number of table entries
      int nr_ = 0;       //!< number of radial points of each table
+diff --git a/source/source_hamilt/module_hcontainer/output_hcontainer.cpp b/source/source_hamilt/module_hcontainer/output_hcontainer.cpp
+index 4197157..9023d99 100644
+--- a/source/source_hamilt/module_hcontainer/output_hcontainer.cpp
++++ b/source/source_hamilt/module_hcontainer/output_hcontainer.cpp
+@@ -1,3 +1,5 @@
++// Modified by HamGNN H0Lite contributors (2004huwa), 2026-09-07:
++// avoid copying every atom pair and its R blocks during read-only CSR output.
+ #include "output_hcontainer.h"
+ 
+ #include "source_io/module_output/sparse_matrix.h"
+@@ -123,7 +125,7 @@ void Output_HContainer<T>::write_single_R(int rx, int ry, int rz)
+ 
+     for (int iap = 0; iap < this->_hcontainer->size_atom_pairs(); ++iap)
+     {
+-        auto atom_pair = this->_hcontainer->get_atom_pair(iap);
++        auto& atom_pair = this->_hcontainer->get_atom_pair(iap);
+         const int r_index = atom_pair.find_R(rx, ry, rz);
+         if (r_index < 0) continue;
+         auto tmp_matrix_info = atom_pair.get_matrix_values(r_index);
+diff --git a/source/source_io/module_output/sparse_matrix.cpp b/source/source_io/module_output/sparse_matrix.cpp
+index c6d0249..d6f72bd 100644
+--- a/source/source_io/module_output/sparse_matrix.cpp
++++ b/source/source_io/module_output/sparse_matrix.cpp
+@@ -1,3 +1,5 @@
++// Modified by HamGNN H0Lite contributors (2004huwa), 2026-09-07:
++// buffer CSR line breaks without changing serialization or numerical values.
+ #include "sparse_matrix.h"
+ 
+ #include <algorithm>
+@@ -41,23 +43,23 @@ void SparseMatrix<T>::printToCSR(std::ostream& ofs, int precision)
+     size_t count1 = 0;
+     for (const auto &element : elements)
+     {
+-	if(count1%6==0) ofs << std::endl;
++	if(count1%6==0) ofs << '\n';
+ 	count1++;
+         ofs << " " << element.second;
+     }
+-    ofs << std::endl;
++    ofs << '\n';
+     // print the CSR column indices
+     ofs << " # CSR column indices";
+     size_t count2 = 0;
+     for (const auto &element : elements)
+     {
+-	if(count2%16==0) ofs << std::endl;
++	if(count2%16==0) ofs << '\n';
+ 	count2++;
+         ofs << " " << element.first.second;
+         int row = element.first.first;
+         csr_row_ptr[row + 1]++;
+     }
+-    ofs << std::endl;
++    ofs << '\n';
+ 
+     // Compute the row pointers
+     for (int i = 1; i <= _rows; i++)
+@@ -69,10 +71,10 @@ void SparseMatrix<T>::printToCSR(std::ostream& ofs, int precision)
+     ofs << " # CSR row pointers";
+     for (int i = 0; i < csr_row_ptr.size(); i++)
+     {
+-        if(i%16==0) ofs << std::endl;
++        if(i%16==0) ofs << '\n';
+         ofs << " " << csr_row_ptr[i];
+     }
+-    ofs << std::endl << std::endl;
++    ofs << '\n' << '\n';
+ }
+ 
+ /**
 diff --git a/source/source_io/module_parameter/read_input.cpp b/source/source_io/module_parameter/read_input.cpp
 index b98254a..b8da1b2 100644
 --- a/source/source_io/module_parameter/read_input.cpp
@@ -602,13 +672,13 @@ index c938bdb..5d458f9 100644
      /**
 diff --git a/source/source_main/h0lite.cpp b/source/source_main/h0lite.cpp
 new file mode 100644
-index 0000000..155386c
+index 0000000..fc06c59
 --- /dev/null
 +++ b/source/source_main/h0lite.cpp
-@@ -0,0 +1,560 @@
+@@ -0,0 +1,566 @@
 +// SPDX-License-Identifier: LGPL-3.0-or-later
 +// Copyright (C) 2026 HamGNN H0Lite contributors (2004huwa).
-+// Modified ABACUS frontend, updated 2026-09-06; see licenses/H0Lite-NOTICE.txt.
++// Modified ABACUS frontend, updated 2026-09-07; see licenses/H0Lite-NOTICE.txt.
 +// A minimal H0/S0 frontend built from ABACUS numerical-orbital components.
 +
 +#include "source_main/h0lite_core.h"
@@ -1129,8 +1199,12 @@ index 0000000..155386c
 +                             << "vl_r_blocks_merged: " << vl_matrix.size_R_loop() << "\n";
 +    }
 +
++    const auto h0_write_start = std::chrono::steady_clock::now();
 +    write_matrix(config.output_dir + "h0rs1_nao.csr", "H", ucell, kinetic_matrix, PARAM.inp.out_hsr.at(1));
++    const long long h0_write_ms = milliseconds(h0_write_start);
++    const auto s0_write_start = std::chrono::steady_clock::now();
 +    write_matrix(config.output_dir + "s0r_nao.csr", "S", ucell, s0, PARAM.inp.out_hsr.at(1));
++    const long long s0_write_ms = milliseconds(s0_write_start);
 +    const long long total_ms = milliseconds(total_start);
 +
 +    GlobalV::ofs_running << active_contract << "\n"
@@ -1140,6 +1214,8 @@ index 0000000..155386c
 +                         << "setup_ms: " << setup_ms << "\n"
 +                         << "matrix_ms: " << matrix_ms << "\n"
 +                         << "vl_ms: " << vl_ms << "\n"
++                         << "h0_write_ms: " << h0_write_ms << "\n"
++                         << "s0_write_ms: " << s0_write_ms << "\n"
 +                         << "total_ms: " << total_ms << "\n"
 +                         << "Finish Time\n";
 +    GlobalV::ofs_running.close();
@@ -2363,7 +2439,7 @@ index 0000000..e71c797
 +}
 diff --git a/source/source_main/h0lite_licenses.h.in b/source/source_main/h0lite_licenses.h.in
 new file mode 100644
-index 0000000..67a7feb
+index 0000000..ab89f19
 --- /dev/null
 +++ b/source/source_main/h0lite_licenses.h.in
 @@ -0,0 +1,13 @@
@@ -2372,7 +2448,7 @@ index 0000000..67a7feb
 +// Generated at configure time. Do not edit the generated header.
 +#pragma once
 +
-+inline constexpr const char kH0LitePackageRevision[] = "h0lite-v311-simpson-20260906";
++inline constexpr const char kH0LitePackageRevision[] = "h0lite-v311-simpson-buffered-20260907";
 +inline constexpr const char kAbacusLicenseText[] = R"H0LABACUS(@H0LITE_ABACUS_LICENSE_TEXT@)H0LABACUS";
 +inline constexpr const char kGplLicenseText[] = R"H0LGPL(@H0LITE_GPL_LICENSE_TEXT@)H0LGPL";
 +inline constexpr const char kH0LiteNoticeText[] = R"H0LNOTICE(@H0LITE_NOTICE_TEXT@)H0LNOTICE";
@@ -3344,13 +3420,13 @@ index 0000000..f288702
 +<https://www.gnu.org/licenses/why-not-lgpl.html>.
 diff --git a/source/source_main/licenses/H0Lite-NOTICE.txt b/source/source_main/licenses/H0Lite-NOTICE.txt
 new file mode 100644
-index 0000000..03d30f1
+index 0000000..319272d
 --- /dev/null
 +++ b/source/source_main/licenses/H0Lite-NOTICE.txt
 @@ -0,0 +1,47 @@
 +ABACUS H0Lite: modified ABACUS source, not an official ABACUS release
-+Package revision: h0lite-v311-simpson-20260906
-+Modification date: 2026-09-06
++Package revision: h0lite-v311-simpson-buffered-20260907
++Modification date: 2026-09-07
 +Modifications by: HamGNN H0Lite contributors (2004huwa)
 +Copyright (C) 2026 HamGNN H0Lite contributors for their additions.
 +

@@ -4,7 +4,7 @@ H0Lite is a modified subset of ABACUS 3.11.0-beta8, not an official ABACUS
 release. Upstream: https://github.com/deepmodeling/abacus-develop, commit
 `d88b719ea287e13b0e133eb57b8e16baa5361fa6`.
 
-Modification date: **2026-09-06**. Package revision: `h0lite-v311-simpson-20260906`.
+Modification date: **2026-09-07**. Package revision: `h0lite-v311-simpson-buffered-20260907`.
 Modifications by HamGNN H0Lite contributors (2004huwa); copyright (C) 2026 for
 their additions. Original authors' copyright and license notices are retained.
 ABACUS is licensed under LGPLv3; the new H0Lite code is LGPL-3.0-or-later.
@@ -25,6 +25,10 @@ retained in the H0 frontend. Imported `ORB_gen_tables`, `ORB_table_phi` and
 `ORB_table_beta` modules from the previous revision are no longer included.
 The separate historical 3.5.3 archive remains unchanged and is not compiled
 into H0Lite. Original 3.11 notices and full GPLv3/LGPLv3 texts are retained.
+
+The 2026-09-07 changes additionally buffer CSR line breaks, avoid read-only
+atom-pair copies in the existing 3.11 writer, and record separate H0/S0 write
+timers. Numerical kernels and the CSR format/precision are unchanged.
 
 ## Source and binary distribution
 
