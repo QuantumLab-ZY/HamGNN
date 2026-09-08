@@ -375,11 +375,15 @@ pattern_latt = re.compile(r'<Atoms.UnitVectors.+\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d
 pattern_coor = re.compile(r'\s+\d+\s+(\w+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+(\-?\d+\.?\d+)\s+\-?\d+\.?\d+\s+\-?\d+\.?\d+')
 pattern_eng_siesta = re.compile(r'siesta: Etot\s+=\s+(\-\d+\.?\d*)')
 pattern_md_siesta = re.compile(r'scf:\s+(\d+)')
-pattern_eng_abacus = re.compile(r'final etot is\s*(-?\d+\.?\d*)')
-pattern_md_abacus = re.compile(r'ELEC=\s*(\d+)')
+_abacus_float = r'[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?'
+pattern_eng_abacus = re.compile(
+    rf'final[\s_]*etot[\s_]*is\s*({_abacus_float})', re.IGNORECASE
+)
+pattern_md_abacus = re.compile(
+    r'(?:ELEC\s*=\s*|#ELEC\s+ITER#\s*)(\d+)', re.IGNORECASE
+)
 
 # default values
 max_SCF_skip = 200
 device = 'cpu'
-
 

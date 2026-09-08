@@ -3,8 +3,9 @@
 
 """Batch generation of training graphs and labels from ABACUS SCF / sparse outputs.
 
-Reads STRU and Hamiltonian data, writes LMDB shards with PyG :class:`~torch_geometric.data.Data`
-for HamGNN training or inference prep.
+Reads ABACUS log/CSR structure metadata and Hamiltonian data, then writes LMDB
+shards with PyG :class:`~torch_geometric.data.Data` for HamGNN training or
+inference preparation.
 """
 
 import os
@@ -19,13 +20,22 @@ from tqdm import tqdm
 import multiprocessing
 from functools import lru_cache
 import argparse
-from read_abacus import STRU, ABACUSHS, read_abacus_input, get_neutral_electrons, calculate_doping_charge
+from pathlib import Path
+from read_abacus import (
+    STRU,
+    ABACUSHS,
+    calculate_doping_charge,
+    get_neutral_electrons,
+    read_abacus_input,
+    select_structure_for_matrices,
+)
 from build_graph_from_coordinates import build_graph, compute_graph_difference, find_inverse_edge_index
 from utils import *
 
 ################################ Input Parameters ##############################
 # Maximum number of atomic orbitals (basis set size)
 NAO_MAX = 13
+SUPPORTED_NAO_MAX = (13, 15, 27, 40)
 
 # Scaling factor for radius, used for graph construction.
 # Suggested scaling factors for different functionals:
@@ -39,8 +49,6 @@ SKIP_DFT_HAMILTONIAN = False
 # Paths for input and output data
 # Base directories containing SCF calculations (each dir has OUT.ABACUS/ with
 # running_scf.log and sparse CSR files, plus INPUT)
-# Default value if not provided via command line
-DEFAULT_DATA_DIRS = [f"/data/home/whlu/144-ham_V_Si/scf/{i:04d}" for i in range(1,500)]
 DEFAULT_GRAPH_DATA_FOLDER = '../graph/'
 DEFAULT_OUTPUT_FORMAT = 'lmdb'
 DEFAULT_NUM_PROCESSES = 0
@@ -72,6 +80,15 @@ def _parse_abacus_scf_log(log_content: str, scf_log_path: str) -> tuple[float, i
     Raises:
         ValueError: If the expected total energy or ELEC iteration marker is missing.
     """
+    if 'Finish Time' not in log_content:
+        raise ValueError(f"missing ABACUS completion marker 'Finish Time' in {scf_log_path}")
+    log_lower = log_content.lower()
+    if (
+        'charge density convergence is achieved' not in log_lower
+        and '#scf is converged#' not in log_lower
+    ):
+        raise ValueError(f"missing ABACUS SCF convergence marker in {scf_log_path}")
+
     energy_matches = pattern_eng_abacus.findall(log_content)
     if not energy_matches:
         unconverged_hint = ""
@@ -85,15 +102,16 @@ def _parse_abacus_scf_log(log_content: str, scf_log_path: str) -> tuple[float, i
     if not iteration_matches:
         raise ValueError(f"missing SCF iteration marker 'ELEC=' in {scf_log_path}")
 
-    energy = float(energy_matches[0])
+    energy = float(energy_matches[-1])
     max_scf_iterations = int(iteration_matches[-1])
     return energy, max_scf_iterations
 
 # Command line argument parsing
 def parse_args():
     parser = argparse.ArgumentParser(description='Generate graph data from ABACUS SCF calculations')
-    parser.add_argument('--data-dirs', nargs='+', type=str, default=DEFAULT_DATA_DIRS,
-                       help='Directories containing SCF calculations (each dir has OUT.ABACUS/ and INPUT)')
+    parser.add_argument('--data-dirs', nargs='+', type=str, required=True,
+                       help=('Case directories containing INPUT and one OUT.ABACUS with the completed '
+                             'SCF log, ordinary H when required, and matching H0/S0 matrices'))
     parser.add_argument('--graph-data-folder', type=str, default=DEFAULT_GRAPH_DATA_FOLDER,
                        help='Output folder for graph data. LMDB is the default output format.')
     parser.add_argument('--output-format', choices=('lmdb', 'npz', 'both'), default=DEFAULT_OUTPUT_FORMAT,
@@ -108,12 +126,27 @@ def parse_args():
                        help='Number of graphs buffered before each LMDB write transaction.')
     parser.add_argument('--if-hamnet', '--if_hamnet', dest='if_hamnet', action='store_true',
                        default=DEFAULT_IF_HAMNET,
-                       help='Add HamNet metadata fields (nao_max, ham_type, units) to each graph and LMDB metadata_json.')
+                       help=('Add HamNet metadata fields (nao_max, ham_type, units) to each graph '
+                             'and LMDB metadata_json.'))
+    parser.add_argument('--nao-max', type=int, choices=SUPPORTED_NAO_MAX, default=NAO_MAX,
+                       help='Padded atomic-orbital dimension used by the target graph representation.')
+    parser.add_argument('--radius-scale', type=float, default=RADIUS_SCALE_FACTOR,
+                       help='Scale applied to the ABACUS orbital radius when expanding H0 graph edges.')
+    parser.add_argument('--skip-dft-hamiltonian', action='store_true', default=SKIP_DFT_HAMILTONIAN,
+                       help='Use H0 as H and omit the ordinary SCF Hamiltonian target.')
+    parser.add_argument('--max-scf-iterations', type=int, default=MAX_SCF_SKIP,
+                       help='Reject SCF outputs whose final ELEC iteration is at least this value.')
+    parser.add_argument('--overwrite', action='store_true',
+                       help='Replace complete graph_data outputs only after a new full conversion succeeds.')
     return parser.parse_args()
 
 
 def build_runtime_config(parsed_args):
     data_dirs = parsed_args.data_dirs
+    if parsed_args.radius_scale <= 0:
+        raise ValueError('--radius-scale must be positive')
+    if parsed_args.max_scf_iterations <= 0:
+        raise ValueError('--max-scf-iterations must be positive')
     scf_output_dirs = [os.path.join(d, 'OUT.ABACUS') for d in data_dirs]
     return {
         'data_dirs': data_dirs,
@@ -124,8 +157,12 @@ def build_runtime_config(parsed_args):
         'chunksize': parsed_args.chunksize,
         'lmdb_commit_interval': parsed_args.lmdb_commit_interval,
         'if_hamnet': parsed_args.if_hamnet,
+        'nao_max': parsed_args.nao_max,
+        'radius_scale': parsed_args.radius_scale,
+        'skip_dft_hamiltonian': parsed_args.skip_dft_hamiltonian,
+        'max_scf_iterations': parsed_args.max_scf_iterations,
         'scf_output_dirs': scf_output_dirs,
-        'input_file_paths': [os.path.join(d, 'INPUT') for d in scf_output_dirs],
+        'input_file_paths': [os.path.join(d, 'INPUT') for d in data_dirs],
     }
 
 
@@ -133,6 +170,7 @@ def configure_runtime(runtime_config):
     global DATA_DIRS, GRAPH_DATA_FOLDER, OUTPUT_FORMAT
     global NUM_PROCESSES, WORKER_THREADS, POOL_CHUNKSIZE, LMDB_COMMIT_INTERVAL, IF_HAMNET
     global SCF_OUTPUT_DIRS, INPUT_FILE_PATHS
+    global RADIUS_SCALE_FACTOR, SKIP_DFT_HAMILTONIAN, MAX_SCF_SKIP
 
     DATA_DIRS = runtime_config['data_dirs']
     GRAPH_DATA_FOLDER = runtime_config['graph_data_folder']
@@ -142,6 +180,10 @@ def configure_runtime(runtime_config):
     POOL_CHUNKSIZE = runtime_config['chunksize']
     LMDB_COMMIT_INTERVAL = runtime_config['lmdb_commit_interval']
     IF_HAMNET = runtime_config['if_hamnet']
+    configure_basis(runtime_config['nao_max'])
+    RADIUS_SCALE_FACTOR = runtime_config['radius_scale']
+    SKIP_DFT_HAMILTONIAN = runtime_config['skip_dft_hamiltonian']
+    MAX_SCF_SKIP = runtime_config['max_scf_iterations']
     SCF_OUTPUT_DIRS = runtime_config['scf_output_dirs']
     INPUT_FILE_PATHS = runtime_config['input_file_paths']
 
@@ -150,7 +192,13 @@ def get_hamnet_metadata() -> dict:
     return {
         'ham_type': 'abacus',
         'nao_max': int(NAO_MAX),
-        'units': {'energy': 'Hartree', 'length': 'Bohr'},
+        'units': {
+            'energy': 'Hartree',
+            'hamiltonian': 'Hartree',
+            'total_energy': 'eV',
+            'overlap': 'dimensionless',
+            'length': 'Bohr',
+        },
     }
 
 
@@ -208,16 +256,79 @@ def initialize_worker(runtime_config) -> None:
     configure_worker_threads(WORKER_THREADS)
 
 
+def _single_matrix_path(candidates, purpose: str) -> Path:
+    existing = [path for path in candidates if path.is_file()]
+    if not existing:
+        raise FileNotFoundError(
+            f"missing {purpose}; checked: {', '.join(str(path) for path in candidates)}"
+        )
+    if len(existing) != 1:
+        raise ValueError(
+            f"ambiguous {purpose}; found: {', '.join(str(path) for path in existing)}"
+        )
+    if existing[0].stat().st_size == 0:
+        raise FileNotFoundError(f"empty {purpose}: {existing[0]}")
+    return existing[0]
+
+
+def resolve_matrix_paths(output_dir: str, require_h: bool = True) -> dict:
+    """Resolve either legacy 3.10 or HContainer 3.11 matrix filenames."""
+
+    root = Path(output_dir)
+    h0 = _single_matrix_path(
+        [root / 'data-H0R-sparse_SPIN0.csr', root / 'h0rs1_nao.csr'],
+        'ABACUS H0(R)',
+    )
+    s0 = _single_matrix_path(
+        [root / 'data-S0R-sparse_SPIN0.csr', root / 's0r_nao.csr'],
+        'ABACUS S0(R)',
+    )
+    h = None
+    if require_h:
+        h_candidates = [root / 'data-HR-sparse_SPIN0.csr', root / 'hrs1_nao.csr']
+        h_candidates.extend(sorted(root.glob('hrs1g*_nao.csr')))
+        h = _single_matrix_path(h_candidates, 'ordinary ABACUS H(R)')
+    return {'h': h, 'h0': h0, 's0': s0}
+
+
 def remove_output_path(path: str) -> None:
-    if os.path.isdir(path):
+    if os.path.islink(path):
+        os.unlink(path)
+    elif os.path.isdir(path):
         shutil.rmtree(path)
-    elif os.path.exists(path):
+    elif os.path.lexists(path):
         os.remove(path)
 
 
+def install_staged_output(stage_path: str, final_path: str) -> None:
+    """Install a complete staged artifact while preserving an old directory on failure."""
+    if not os.path.lexists(final_path) or (
+        not os.path.isdir(stage_path) and not os.path.isdir(final_path)
+    ):
+        os.replace(stage_path, final_path)
+        return
+
+    backup_path = os.path.join(
+        os.path.dirname(final_path), f'.{os.path.basename(final_path)}.backup-{os.getpid()}'
+    )
+    if os.path.lexists(backup_path):
+        raise FileExistsError(f"refusing existing graph backup path: {backup_path}")
+    os.replace(final_path, backup_path)
+    try:
+        os.replace(stage_path, final_path)
+    except Exception:
+        os.replace(backup_path, final_path)
+        raise
+    remove_output_path(backup_path)
+
+
 class LMDBGraphWriter:
-    def __init__(self, lmdb_path: str, map_size: int = LMDB_INITIAL_MAP_SIZE, commit_interval: int = DEFAULT_LMDB_COMMIT_INTERVAL):
-        remove_output_path(lmdb_path)
+    def __init__(
+        self,
+        lmdb_path: str,
+        map_size: int = LMDB_INITIAL_MAP_SIZE,
+        commit_interval: int = DEFAULT_LMDB_COMMIT_INTERVAL,
+    ):
         self.lmdb_path = lmdb_path
         self.map_size = map_size
         self.commit_interval = max(1, int(commit_interval))
@@ -270,10 +381,6 @@ class LMDBGraphWriter:
             self.env.close()
             self.env = None
 
-# Derived paths (automatically generated from DATA_DIRS)
-SCF_OUTPUT_DIRS = [os.path.join(d, 'OUT.ABACUS') for d in DATA_DIRS]  # Directory containing sparse CSR files
-INPUT_FILE_PATHS = [os.path.join(d, 'INPUT') for d in SCF_OUTPUT_DIRS]
-
 # Maximum SCF iterations (to check for convergence)
 MAX_SCF_SKIP = 200
 
@@ -285,28 +392,36 @@ DOPING_CHARGE_MIN = -8.0
 DOPING_CHARGE_MAX = 8.0
 ################################################################################
 
-# Load basis definitions based on NAO_MAX
-if NAO_MAX == 13:
-    BASIS_DEF = basis_def_13_abacus
-elif NAO_MAX == 15:
-    BASIS_DEF = basis_def_15_abacus
-elif NAO_MAX == 27:
-    BASIS_DEF = basis_def_27_abacus
-elif NAO_MAX == 40:
-    BASIS_DEF = basis_def_40_abacus
-else:
-    raise NotImplementedError("Unsupported NAO_MAX value.")
-
-# Cache basis sizes for faster edge tensor expansion
+BASIS_DEF = {}
 BASIS_NUM = np.zeros((99,), dtype=int)
-for k in BASIS_DEF.keys():
-    BASIS_NUM[k] = len(BASIS_DEF[k])
+
+
+def configure_basis(nao_max: int) -> None:
+    global NAO_MAX, BASIS_DEF, BASIS_NUM
+    definitions = {
+        13: basis_def_13_abacus,
+        15: basis_def_15_abacus,
+        27: basis_def_27_abacus,
+        40: basis_def_40_abacus,
+    }
+    if nao_max not in definitions:
+        raise NotImplementedError(f"Unsupported NAO_MAX value: {nao_max}")
+    NAO_MAX = int(nao_max)
+    BASIS_DEF = definitions[NAO_MAX]
+    BASIS_NUM = np.zeros((99,), dtype=int)
+    for atomic_number, indices in BASIS_DEF.items():
+        BASIS_NUM[atomic_number] = len(indices)
+    if '_get_mask_indices' in globals():
+        _get_mask_indices.cache_clear()
 
 @lru_cache(maxsize=None)
 def _get_mask_indices(z_src: int, z_tar: int) -> np.ndarray:
     mask = np.zeros((NAO_MAX, NAO_MAX), dtype=bool)
     mask[np.ix_(BASIS_DEF[z_src], BASIS_DEF[z_tar])] = True
     return np.flatnonzero(mask.ravel())
+
+
+configure_basis(NAO_MAX)
 
 def generate_hamiltonian_and_overlap(graph_h0, graph_h, graph_s, z_indices, basis_definition, nao_max, use_soc=False):
     """
@@ -392,17 +507,13 @@ def generate_hamiltonian_and_overlap(graph_h0, graph_h, graph_s, z_indices, basi
             return H, H0, S
 
     except Exception as e:
-        print(f"Error generating Hamiltonian and overlap matrices: {e}")
-        if use_soc:
-            return None, None, None, None
-        else:
-            return None, None, None
+        raise ValueError(f"Error generating Hamiltonian and overlap matrices: {e}") from e
 
 
 def _fill_soc_terms(H, iH, H0, iH0, mask, graph_hon, graph_hon0, index):
     """
     Helper function to fill in Hamiltonian and overlap matrices for spin-orbit coupling (SOC) terms.
-    
+
     Parameters:
     - H, iH, H0, iH0 (numpy.ndarray): The matrices to be populated.
     - mask (numpy.ndarray): A boolean mask to indicate the positions to populate.
@@ -413,7 +524,7 @@ def _fill_soc_terms(H, iH, H0, iH0, mask, graph_hon, graph_hon0, index):
     - Updated matrices (H, iH, H0, iH0).
     """
     tH = np.zeros((2 * H.shape[0], 2 * H.shape[0]), dtype=np.complex64)
-    
+
     # Populate the Hamiltonian matrix with SOC terms
     tH[:H.shape[0], :H.shape[0]][mask] = graph_hon[0][index]  # uu
     tH[:H.shape[0], H.shape[0]:][mask] = graph_hon[1][index]  # ud
@@ -449,22 +560,22 @@ def generate_expanded_graph_h0(atomic_numbers, lattice, pos, graph_h0, soc_enabl
     Returns:
     - dict: The updated graph_h0 with expanded edge indices, cell shifts, and tensors.
     """
-    
+
     # Build the graph using the specified radius type, scale, and atomic information
-    graph_ref = build_graph(radius_type=radius_type, radius_scale=radius_scale, 
+    graph_ref = build_graph(radius_type=radius_type, radius_scale=radius_scale,
                             atomic_numbers=atomic_numbers, lattice=lattice, positions=pos)
 
     # Select tensors to expand based on SOC_ENABLED flag
     tensors_to_expand = [graph_h0['Hoff']] + ([graph_h0['iHoff']] if soc_enabled else [])
-    
+
     # Expand the graph by adjusting the edge indices, cell shifts, and tensors
     edge_indices_exp, cell_shifts_exp, nbr_shifts_exp, inv_edge_idx_exp, tensors_expanded = expand_graph(
         lattice=lattice,
-        edge_indices_1=graph_ref['edge_index'], 
-        cell_shifts_1=graph_ref['cell_shift'], 
-        edge_indices_2=graph_h0['edge_index'], 
-        cell_shifts_2=graph_h0['cell_shift'], 
-        nbr_shifts_2=graph_h0['nbr_shift'], 
+        edge_indices_1=graph_ref['edge_index'],
+        cell_shifts_1=graph_ref['cell_shift'],
+        edge_indices_2=graph_h0['edge_index'],
+        cell_shifts_2=graph_h0['cell_shift'],
+        nbr_shifts_2=graph_h0['nbr_shift'],
         inv_edge_idx_2=graph_h0['inv_edge_idx'],
         atomic_numbers=atomic_numbers,
         tensors_to_expand=tensors_to_expand,
@@ -478,7 +589,7 @@ def generate_expanded_graph_h0(atomic_numbers, lattice, pos, graph_h0, soc_enabl
         'nbr_shift': nbr_shifts_exp,
         'inv_edge_idx': inv_edge_idx_exp,
     })
-    
+
     # Handle the tensors for SOC or non-SOC cases
     if soc_enabled:
         graph_h0['Hoff'], graph_h0['iHoff'] = tensors_expanded
@@ -494,30 +605,30 @@ def expand_graph(lattice, edge_indices_1, cell_shifts_1, edge_indices_2, cell_sh
 
     This function calculates the difference in edges and cell shifts between two graphs, then
     expands the graph by adding the new edges, shifts, and expanding the associated tensors.
-    
+
     Parameters:
     -----------
     lattice : np.ndarray
         A matrix representing the lattice used for periodic boundary conditions (shape: (3, 3)).
-        
+
     edge_indices_1 : np.ndarray
         A 2xN numpy array of edge indices for the first graph (shape: (2, n_edges_1)).
-    
+
     cell_shifts_1 : np.ndarray
         A Nx3 numpy array of cell shifts corresponding to the edges in edge_indices_1 (shape: (n_edges_1, 3)).
-    
+
     edge_indices_2 : np.ndarray
         A 2xM numpy array of edge indices for the second graph (shape: (2, n_edges_2)).
-    
+
     cell_shifts_2 : np.ndarray
         A Mx3 numpy array of cell shifts corresponding to the edges in edge_indices_2 (shape: (n_edges_2, 3)).
-    
+
     inv_edge_idx2 : np.ndarray
         A numpy array containing the inverse edge indices for the second graph (shape: (n_edges_2,)).
-    
+
     tensors_to_expand : list of np.ndarray
         A list of tensors to be expanded, where each tensor has at least two dimensions.
-    
+
     soc_switch : bool
         A flag that enables or disables the SOC (Spin-Orbit Coupling) calculations. If True, SOC is enabled.
 
@@ -525,38 +636,38 @@ def expand_graph(lattice, edge_indices_1, cell_shifts_1, edge_indices_2, cell_sh
     --------
     edge_indices_exp : np.ndarray
         A 2x(N+M) numpy array of the expanded edge indices after combining the two graphs.
-    
+
     cell_shifts_exp : np.ndarray
         A (N+M)x3 numpy array of the expanded cell shifts corresponding to the new edge indices.
-    
+
     inv_edge_idx_exp : np.ndarray
         A numpy array of the expanded inverse edge indices for the graph.
-    
+
     tensors_expanded : list of np.ndarray
         A list of tensors with expanded shapes to accommodate the new edges.
     """
-    
+
     # Compute the difference in edges and cell shifts between the two graphs (new edges to add)
     edge_indices_diff, cell_shifts_diff = compute_graph_difference(edge_indices_1, cell_shifts_1, edge_indices_2, cell_shifts_2)
-    
+
     # Find the inverse edge indices for the new edges
     inv_edge_idx_diff = find_inverse_edge_index(edge_indices_diff, cell_shifts_diff) + len(edge_indices_2[0])
     inv_edge_idx_exp = np.concatenate([inv_edge_idx_2, inv_edge_idx_diff], axis=0)
-    
+
     # Compute the neighbor shifts using lattice matrix for PBC correction
     nbr_shifts_diff = np.einsum('ni, ij -> nj', cell_shifts_diff, lattice)
     nbr_shifts_exp = np.concatenate([nbr_shifts_2, nbr_shifts_diff], axis=0)
-    
+
     # Number of new edges to expand
     num_edges_diff = len(edge_indices_diff[0])
-    
+
     # Concatenate the existing and new edge indices, and the cell shifts
     edge_indices_exp = np.concatenate([edge_indices_2, edge_indices_diff], axis=-1)
-    cell_shifts_exp = np.concatenate([cell_shifts_2, cell_shifts_diff], axis=0)  
-    
-    src_diff, dst_diff = atomic_numbers[edge_indices_diff] 
+    cell_shifts_exp = np.concatenate([cell_shifts_2, cell_shifts_diff], axis=0)
+
+    src_diff, dst_diff = atomic_numbers[edge_indices_diff]
     num_orbs_edge_diff = BASIS_NUM[src_diff]*BASIS_NUM[dst_diff]
-    
+
     # Expand the tensors by adding the new edges
     tensors_expanded = []
     for tensor in tensors_to_expand:
@@ -571,9 +682,9 @@ def expand_graph(lattice, edge_indices_1, cell_shifts_1, edge_indices_2, cell_sh
             else:
                 # If SOC is not enabled, expand only the first tensor component
                 tensor[0] += [new_tensor_values]
-        
+
         tensors_expanded.append(tensor)
-    
+
     return edge_indices_exp, cell_shifts_exp, nbr_shifts_exp, inv_edge_idx_exp, tensors_expanded
 
 
@@ -595,21 +706,25 @@ def generate_graph(task: tuple) -> tuple:
     # Define paths for the required files
     scf_log_path = os.path.join(scf_path, SCF_LOG_FILENAME)
 
-    # Read energy and SCF iteration data
-    if SKIP_DFT_HAMILTONIAN:
-        energy = 0.0
-        max_scf_iterations = 0
-    else:
-        try:
-            with open(scf_log_path, 'r') as f:
-                log_content = f.read().strip()
-                energy, max_scf_iterations = _parse_abacus_scf_log(log_content, scf_log_path)
-        except Exception as e:
-            print(
-                f"Error reading SCF log file for scf_path={scf_path}, "
-                f"scf_log_path={scf_log_path}: {type(e).__name__}: {e}. Skipping..."
-            )
-            return idx, False, None, None
+    # Read completion, energy, and SCF iteration data.
+    try:
+        with open(scf_log_path, 'r') as f:
+            log_content = f.read().strip()
+        if SKIP_DFT_HAMILTONIAN:
+            if 'Finish Time' not in log_content:
+                raise ValueError(
+                    f"missing ABACUS completion marker 'Finish Time' in {scf_log_path}"
+                )
+            energy = 0.0
+            max_scf_iterations = 0
+        else:
+            energy, max_scf_iterations = _parse_abacus_scf_log(log_content, scf_log_path)
+    except Exception as e:
+        print(
+            f"Error reading SCF log file for scf_path={scf_path}, "
+            f"scf_log_path={scf_log_path}: {type(e).__name__}: {e}. Skipping..."
+        )
+        return idx, False, None, None
 
     # Check SCF convergence
     if max_scf_iterations >= MAX_SCF_SKIP:
@@ -620,12 +735,32 @@ def generate_graph(task: tuple) -> tuple:
         )
         return idx, False, None, None
 
-    # Read crystal structure parameters
+    # Resolve both filename generations before choosing the structure source.
+    try:
+        matrix_paths = resolve_matrix_paths(
+            scf_path, require_h=not SKIP_DFT_HAMILTONIAN
+        )
+        h0_sparse = ABACUSHS(str(matrix_paths['h0']))
+        h_sparse = None if SKIP_DFT_HAMILTONIAN else ABACUSHS(str(matrix_paths['h']))
+        s_sparse = ABACUSHS(str(matrix_paths['s0']))
+    except Exception as e:
+        print(
+            f"Error resolving Hamiltonian or overlap matrices for scf_path={scf_path}: "
+            f"{type(e).__name__}: {e}. Skipping..."
+        )
+        return idx, False, None, None
+
+    # Read log-only metadata, then select geometry by the ordinary matrix format.
     try:
         crystal = STRU(scf_log_path)
+        primary_matrix = h0_sparse if SKIP_DFT_HAMILTONIAN else h_sparse
+        other_matrices = (
+            (s_sparse,) if SKIP_DFT_HAMILTONIAN else (h0_sparse, s_sparse)
+        )
+        crystal = select_structure_for_matrices(crystal, primary_matrix, *other_matrices)
         lattice = crystal.cell
         atomic_numbers = crystal.atomic_numbers.astype(int)
-        
+
         # Calculate doping charge from INPUT file
         input_file_path = INPUT_FILE_PATHS[idx]
         input_params = read_abacus_input(input_file_path)
@@ -637,10 +772,24 @@ def generate_graph(task: tuple) -> tuple:
                 f"[{DOPING_CHARGE_MIN}, {DOPING_CHARGE_MAX}] for {input_file_path}"
             )
         doping_charge_tensor = torch.tensor([doping_charge], dtype=torch.float32)
-        
+
+        matrix_metadata = {
+            'h': str(matrix_paths['h']) if matrix_paths['h'] is not None else None,
+            'h0': str(matrix_paths['h0']),
+            's0': str(matrix_paths['s0']),
+            'h_format': None if h_sparse is None else h_sparse.csr_file.format_version,
+            'h0_format': h0_sparse.csr_file.format_version,
+            's0_format': s_sparse.csr_file.format_version,
+        }
+        matrix_metadata['structure'] = crystal.structure_source
+        matrix_metadata['structure_format'] = crystal.structure_format
+        matrix_provenance_json = json.dumps(
+            matrix_metadata, sort_keys=True, separators=(',', ':')
+        )
+
     except Exception as e:
         print(
-            f"Error reading structure from SCF log or calculating doping charge for "
+            f"Error reading ABACUS structure metadata or calculating doping charge for "
             f"scf_path={scf_path}, scf_log_path={scf_log_path}: "
             f"{type(e).__name__}: {e}. Skipping..."
         )
@@ -648,17 +797,17 @@ def generate_graph(task: tuple) -> tuple:
 
     # Read hopping and overlap parameters
     try:
-        # Load sparse Hamiltonian and overlap matrices
-        h0_sparse = ABACUSHS(os.path.join(scf_path, 'data-H0R-sparse_SPIN0.csr'))
-        if SKIP_DFT_HAMILTONIAN:
-            h_sparse = None
-        else:
-            h_sparse = ABACUSHS(os.path.join(scf_path, 'data-HR-sparse_SPIN0.csr'))
-        s_sparse = ABACUSHS(os.path.join(scf_path, 'data-S0R-sparse_SPIN0.csr'))
-
-        # Generate graphs for Hamiltonian and overlap     
+        # Generate graphs for Hamiltonian and overlap
         graph_h0 = h0_sparse.getGraph(crystal, graph={}, isH=True, isSOC=SOC_ENABLED)
-        graph_h0 = generate_expanded_graph_h0(atomic_numbers, lattice, crystal.positions, graph_h0, soc_enabled=SOC_ENABLED, radius_type='abacus', radius_scale=RADIUS_SCALE_FACTOR)
+        graph_h0 = generate_expanded_graph_h0(
+            atomic_numbers,
+            lattice,
+            crystal.positions,
+            graph_h0,
+            soc_enabled=SOC_ENABLED,
+            radius_type='abacus',
+            radius_scale=RADIUS_SCALE_FACTOR,
+        )
         if SKIP_DFT_HAMILTONIAN:
             graph_h = graph_h0
         else:
@@ -687,9 +836,15 @@ def generate_graph(task: tuple) -> tuple:
     # Prepare Hamiltonian and overlap matrices
     try:
         if SOC_ENABLED:
-            H, iH, H0, iH0 = generate_hamiltonian_and_overlap(graph_h0, graph_h, graph_s, atomic_numbers, BASIS_DEF, NAO_MAX, use_soc=SOC_ENABLED)
+            H, iH, H0, iH0 = generate_hamiltonian_and_overlap(
+                graph_h0, graph_h, graph_s, atomic_numbers, BASIS_DEF, NAO_MAX,
+                use_soc=SOC_ENABLED,
+            )
         else:
-            H, H0, S = generate_hamiltonian_and_overlap(graph_h0, graph_h, graph_s, atomic_numbers, BASIS_DEF, NAO_MAX, use_soc=SOC_ENABLED)
+            H, H0, S = generate_hamiltonian_and_overlap(
+                graph_h0, graph_h, graph_s, atomic_numbers, BASIS_DEF, NAO_MAX,
+                use_soc=SOC_ENABLED,
+            )
     except Exception as e:
         print(
             f"Error preparing Hamiltonian or overlap matrices for scf_path={scf_path}: "
@@ -718,7 +873,8 @@ def generate_graph(task: tuple) -> tuple:
                     Hoff0 = torch.FloatTensor(H0[pos.shape[0]:,:]),
                     Son = torch.FloatTensor(S[:pos.shape[0],:]),
                     Soff = torch.FloatTensor(S[pos.shape[0]:,:]),
-                    doping_charge=doping_charge_tensor)
+                    doping_charge=doping_charge_tensor,
+                    abacus_matrix_provenance=matrix_provenance_json)
     else:
         graph = Data(z=torch.LongTensor(atomic_numbers),
                     cell = torch.Tensor(lattice[None,:,:]),
@@ -740,7 +896,8 @@ def generate_graph(task: tuple) -> tuple:
                     iHoff0 = torch.FloatTensor(iH0[pos.shape[0]:,:]),
                     Son = torch.FloatTensor(S[:pos.shape[0],:]),
                     Soff = torch.FloatTensor(S[pos.shape[0]:,:]),
-                    doping_charge=doping_charge_tensor)
+                    doping_charge=doping_charge_tensor,
+                    abacus_matrix_provenance=matrix_provenance_json)
 
     if IF_HAMNET:
         graph = annotate_graph_for_hamnet(graph)
@@ -769,17 +926,41 @@ def main():
     save_lmdb = OUTPUT_FORMAT in ('lmdb', 'both')
     graph_data = {} if save_npz else None
     lmdb_path = os.path.join(GRAPH_DATA_FOLDER, LMDB_OUTPUT_FILENAME)
-    lmdb_writer = LMDBGraphWriter(lmdb_path, commit_interval=LMDB_COMMIT_INTERVAL) if save_lmdb else None
+    npz_path = os.path.join(GRAPH_DATA_FOLDER, NPZ_OUTPUT_FILENAME)
+    lmdb_stage_path = os.path.join(
+        GRAPH_DATA_FOLDER, f'.{LMDB_OUTPUT_FILENAME}.tmp-{os.getpid()}'
+    )
+    npz_stage_path = os.path.join(
+        GRAPH_DATA_FOLDER, f'.{NPZ_OUTPUT_FILENAME}.tmp-{os.getpid()}.npz'
+    )
+    requested_outputs = [path for enabled, path in ((save_lmdb, lmdb_path), (save_npz, npz_path)) if enabled]
+    existing_outputs = [path for path in requested_outputs if os.path.lexists(path)]
+    if existing_outputs and not args.overwrite:
+        raise FileExistsError(
+            f"refusing existing graph output(s) without --overwrite: {existing_outputs}"
+        )
+    for stage_path in (lmdb_stage_path, npz_stage_path):
+        if os.path.lexists(stage_path):
+            raise FileExistsError(f"refusing existing graph staging path: {stage_path}")
+
+    lmdb_writer = (
+        LMDBGraphWriter(lmdb_stage_path, commit_interval=LMDB_COMMIT_INTERVAL)
+        if save_lmdb else None
+    )
     saved_graphs = 0
+    committed = False
 
-    print(f'Processing {total_tasks} SCF outputs with {num_processes} worker(s), worker_threads={max(1, WORKER_THREADS)}, chunksize={chunksize}.')
+    print(
+        f'Processing {total_tasks} SCF outputs with {num_processes} worker(s), '
+        f'worker_threads={max(1, WORKER_THREADS)}, chunksize={chunksize}.'
+    )
 
-    def handle_graph_result(success: bool, graph: Data = None, payload: bytes = None) -> None:
+    def handle_graph_result(index: int, success: bool, graph: Data = None, payload: bytes = None) -> None:
         nonlocal saved_graphs
         if not success:
             return
         if graph_data is not None:
-            graph_data[saved_graphs] = graph
+            graph_data[index] = graph
         if lmdb_writer is not None:
             if payload is not None:
                 lmdb_writer.write_payload(payload)
@@ -790,36 +971,54 @@ def main():
     try:
         if num_processes <= 1:
             for task in tqdm(tasks, desc="Processing SCF Outputs", total=total_tasks):
-                _, success, graph, payload = generate_graph(task)
-                handle_graph_result(success, graph, payload)
+                index, success, graph, payload = generate_graph(task)
+                handle_graph_result(index, success, graph, payload)
         else:
             with multiprocessing.Pool(
                 processes=num_processes,
                 initializer=initialize_worker,
                 initargs=(runtime_config,),
             ) as pool:
-                for _, success, graph, payload in tqdm(
-                    pool.imap_unordered(generate_graph, tasks, chunksize=chunksize),
+                for index, success, graph, payload in tqdm(
+                    pool.imap(generate_graph, tasks, chunksize=chunksize),
                     desc="Processing SCF Outputs",
                     total=total_tasks,
                 ):
-                    handle_graph_result(success, graph, payload)
+                    handle_graph_result(index, success, graph, payload)
 
-        if saved_graphs == 0:
-            print('No valid data found! Please check the input paths or if the DFT calculations are converged.')
-            return
+        if saved_graphs != total_tasks:
+            raise RuntimeError(
+                f'ABACUS graph conversion incomplete: saved {saved_graphs} of {total_tasks}; '
+                'no final output was replaced'
+            )
 
         if graph_data is not None:
-            graph_data_path = os.path.join(GRAPH_DATA_FOLDER, NPZ_OUTPUT_FILENAME)
-            np.savez(graph_data_path, graph=graph_data)
-            print(f'Saved {saved_graphs} graphs to {graph_data_path}')
+            np.savez(npz_stage_path, graph=graph_data)
 
         if lmdb_writer is not None:
             lmdb_writer.finalize(get_hamnet_metadata() if IF_HAMNET else None)
-            print(f'Saved {lmdb_writer.count} graphs to {lmdb_path}')
+            lmdb_writer.close()
+
+        staged_outputs = []
+        if save_lmdb:
+            staged_outputs.append((lmdb_stage_path, lmdb_path))
+        if save_npz:
+            staged_outputs.append((npz_stage_path, npz_path))
+        for stage_path, final_path in staged_outputs:
+            install_staged_output(stage_path, final_path)
+        committed = True
+
+        if save_npz:
+            print(f'Saved {saved_graphs} graphs to {npz_path}')
+        if save_lmdb:
+            print(f'Saved {saved_graphs} graphs to {lmdb_path}')
     finally:
         if lmdb_writer is not None:
             lmdb_writer.close()
+        if not committed:
+            for stage_path in (lmdb_stage_path, npz_stage_path):
+                if os.path.lexists(stage_path):
+                    remove_output_path(stage_path)
 
 
 if __name__ == "__main__":

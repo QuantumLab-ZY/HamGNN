@@ -1,0 +1,2 @@
+# Preserve unified-diff context and third-party license formatting.
+*.patch -whitespace
