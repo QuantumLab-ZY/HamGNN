@@ -1013,7 +1013,7 @@ class HamGNNPlusPlusOut(nn.Module):
                 (batch_size, nao_max, nao_max).
         """
         # Split coupling coefficients into spherical components
-        spherical_components = torch.split(coupling_coefficients, self.J_irreps_dim.tolist(), dim=-1)
+        spherical_components = torch.split(coupling_coefficients, self.J_irreps_dimensions.tolist(), dim=-1)
 
         if self.soc_switch:  # If spin-orbit coupling is enabled
             # Use rank-2 tensor merge for spin-orbit coupling
