@@ -376,7 +376,12 @@ def load_or_create_model(config, graph_representation, output_module, post_proce
         'lr_decay': config.optim_params.lr_decay,
         'lr_patience': config.optim_params.lr_patience,
         'use_muon': getattr(config.optim_params, 'use_muon', False),
-        'muon_lr': getattr(config.optim_params, 'muon_lr', 0.02)
+        'muon_lr': getattr(config.optim_params, 'muon_lr', 0.02),
+        'use_spectral_hybrid': getattr(config.optim_params, 'use_spectral_hybrid', False),
+        'spectral_lr': getattr(config.optim_params, 'spectral_lr', 0.02),
+        'spectral_rank': getattr(config.optim_params, 'spectral_rank', 32),
+        'spectral_period': getattr(config.optim_params, 'spectral_period', 4),
+        'spectral_metric': getattr(config.optim_params, 'spectral_metric', False)
     }
     
     # Load from checkpoint or create new model
