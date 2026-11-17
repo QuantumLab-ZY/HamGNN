@@ -77,7 +77,12 @@ class Model(pl.LightningModule):
             max_points_to_scatter: int = 100000,
             post_processing: Optional[Callable] = None,
             use_muon: bool = False,
-            muon_lr: float = 0.02
+            muon_lr: float = 0.02,
+            use_spectral_hybrid: bool = False,
+            spectral_lr: float = 0.02,
+            spectral_rank: int = 32,
+            spectral_period: int = 4,
+            spectral_metric: bool = False
     ):
         super().__init__()
         self.representation = representation
@@ -96,6 +101,11 @@ class Model(pl.LightningModule):
         self.amsgrad = amsgrad
         self.use_muon = use_muon
         self.muon_lr = muon_lr
+        self.use_spectral_hybrid = use_spectral_hybrid
+        self.spectral_lr = spectral_lr
+        self.spectral_rank = spectral_rank
+        self.spectral_period = spectral_period
+        self.spectral_metric = spectral_metric
         
         # Visualization parameters
         self.max_points_to_scatter = max_points_to_scatter
@@ -453,7 +463,33 @@ class Model(pl.LightningModule):
         Dict
             Configuration dictionary for PyTorch Lightning
         """
-        if self.use_muon:
+        if self.use_muon and self.use_spectral_hybrid:
+            raise ValueError("use_muon and use_spectral_hybrid cannot both be enabled.")
+        if self.use_spectral_hybrid:
+            from ..nn.muon import classify_params_for_muon
+            from ..nn.spectral_hybrid import SpectralHybrid
+
+            spectral_params, adamw_params = classify_params_for_muon(self)
+            print(
+                f"[Spectral-hybrid] {len(spectral_params)} spectral params, "
+                f"{len(adamw_params)} AdamW params, spectral lr={self.spectral_lr}, "
+                f"rank={self.spectral_rank}, period={self.spectral_period}, "
+                f"metric={self.spectral_metric}"
+            )
+            optimizer = SpectralHybrid(
+                [
+                    {"params": spectral_params, "use_spectral": True, "lr": self.spectral_lr},
+                    {"params": adamw_params, "use_spectral": False, "lr": self.lr},
+                ],
+                lr=self.spectral_lr,
+                rank=self.spectral_rank,
+                period=self.spectral_period,
+                metric=self.spectral_metric,
+                betas=(self.beta1, self.beta2),
+                eps=self.epsilon,
+                weight_decay=0.0,
+            )
+        elif self.use_muon:
             from ..nn.muon import MuonAdamW, classify_params_for_muon
 
             muon_params, adamw_params = classify_params_for_muon(self)

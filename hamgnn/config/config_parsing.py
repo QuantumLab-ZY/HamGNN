@@ -105,6 +105,11 @@ config_default_optimizer['min_epochs'] = 100
 config_default_optimizer['max_epochs'] = 3000
 config_default_optimizer['use_muon'] = False
 config_default_optimizer['muon_lr'] = 0.02
+config_default_optimizer['use_spectral_hybrid'] = False
+config_default_optimizer['spectral_lr'] = 0.02
+config_default_optimizer['spectral_rank'] = 32
+config_default_optimizer['spectral_period'] = 4
+config_default_optimizer['spectral_metric'] = False
 config_default['optim_params'] = config_default_optimizer
 
 """The parameters for losses_metrics."""
