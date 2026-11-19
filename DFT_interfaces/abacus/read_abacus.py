@@ -506,6 +506,47 @@ class STRU:
         cartesian_positions = np.dot(self.positions, self.cell)
         return cartesian_positions
 
+def _stored_atom_blocks(matrix, no, indo, natoms):
+    """Yield occupied atom blocks in ia/ja order, including stored zeros.
+
+    Only storage occupancy determines edges. Uniform AO sizes use SciPy's BSR;
+    mixed AO sizes enumerate the unique pairs touched by CSR entries and use
+    the original CSR slicing/toarray operation on those pairs only.
+    """
+    if len(no) == natoms and natoms and no[0] > 0 and np.all(no == no[0]):
+        size = int(no[0])
+        blocks = matrix.tobsr(blocksize=(size, size))
+        blocks.sort_indices()
+        for ia in range(natoms):
+            for k in range(blocks.indptr[ia], blocks.indptr[ia + 1]):
+                # CSR toarray adds stored values into initialized zeros. Do the
+                # same for BSR to preserve even the sign of stored zero values.
+                dense = np.zeros((size, size), dtype=matrix.dtype)
+                dense += blocks.data[k]
+                yield ia, int(blocks.indices[k]), dense
+        return
+
+    owner = np.repeat(np.arange(len(no)), no)
+    row = np.repeat(np.arange(matrix.shape[0]), np.diff(matrix.indptr))
+    pair = owner[row] * natoms + owner[matrix.indices]
+    for key in np.unique(pair):
+        ia, ja = divmod(int(key), natoms)
+        # The baseline loops over exactly natoms. Invalid metadata with more
+        # orbital groups must not quietly introduce additional atoms.
+        if ia >= natoms or ja >= natoms:
+            continue
+        yield ia, ja, matrix[
+            indo[ia]:indo[ia] + no[ia], indo[ja]:indo[ja] + no[ja]
+        ].toarray()
+
+
+def _channels(dense, is_soc):
+    if not is_soc:
+        return (dense.flatten(),)
+    return tuple(dense[a::2, b::2].flatten()
+                 for a, b in ((0, 0), (0, 1), (1, 0), (1, 1)))
+
+
 class ABACUSHS:
     """
     A class to handle the ABACUS Hamiltonian structure and related operations.
@@ -622,62 +663,50 @@ class ABACUSHS:
         # Initialize the atomic orbital indices
         no, indo = self._calculate_atom_orbitals(stru, repeat)
 
+        natoms = stru.num_atoms_unit_cell
+        lookup = None
         for block in self.csr_file.iter_blocks(is_soc=isSOC):
             cx, cy, cz = block.cell_shift
-            hamilt = csr(
-                (block.values, block.columns, block.row_pointers),
-                shape=[self.no_u, self.no_u],
-                dtype=dtype,
-            )
-
+            matrix = csr((block.values, block.columns, block.row_pointers),
+                         shape=(self.no_u, self.no_u), dtype=dtype)
             if isH:
-                hamilt *= ry2ha
+                matrix *= ry2ha
+            if skip and lookup is None:
+                # Keep the original concatenate's shape validation. Keys retain
+                # numeric values; no rounding/int conversion of graph input occurs.
+                edge_info = np.concatenate(
+                    [np.array(graph_['edge_index']), np.array(cell_shift).T], axis=0)
+                lookup = {}
+                for i, column in enumerate(edge_info.T):
+                    # setdefault preserves first matching duplicate-edge semantics.
+                    lookup.setdefault(tuple(column), i)
 
-            if skip:
-                edge_info_array = np.concatenate([np.array(graph_['edge_index']), np.array(cell_shift).T], axis=0)
-            else:
-                edge_info_array = None
-
-            # Process Hamiltonian and populate graph data
-            for ia in range(stru.num_atoms_unit_cell):
-                for ja in range(stru.num_atoms_unit_cell):
-                    ham = hamilt[indo[ia]:indo[ia] + no[ia], indo[ja]:indo[ja] + no[ja]]
-                    if ia == ja and cx == 0 and cy == 0 and cz == 0:
-                        # Onsite Hamiltonian
-                        if not isSOC:
-                            Hon[0].append(ham.toarray().flatten())
-                        else:
-                            Hon[0].append(ham[0::2, 0::2].toarray().flatten())  # uu
-                            Hon[1].append(ham[0::2, 1::2].toarray().flatten())  # ud
-                            Hon[2].append(ham[1::2, 0::2].toarray().flatten())  # du
-                            Hon[3].append(ham[1::2, 1::2].toarray().flatten())  # dd
-                    elif ham.getnnz() > 0:
-                        # Offsite Hamiltonian
-                        if not skip:
-                            if not isSOC:
-                                Hoff[0].append(ham.toarray().flatten())
-                            else:
-                                Hoff[0].append(ham[0::2, 0::2].toarray().flatten())  # uu
-                                Hoff[1].append(ham[0::2, 1::2].toarray().flatten())  # ud
-                                Hoff[2].append(ham[1::2, 0::2].toarray().flatten())  # du
-                                Hoff[3].append(ham[1::2, 1::2].toarray().flatten())  # dd
-                            edge_idx_src.append(ia)
-                            edge_idx_dst.append(ja)
-                            cell_shift.append(np.array([cx, cy, cz], dtype=int))
-                            nbr_shift.append(np.array([cx, cy, cz]) @ stru.cell)
-                        else:
-                            ierr, ioff = self._fill_offsite_hamiltonian(
-                                cx, cy, cz, ia, ja, edge_info_array
-                            )
-                            if ierr:
-                                continue
-                            if not isSOC:
-                                Hoff[0][ioff] = ham.toarray().flatten()
-                            else:
-                                Hoff[0][ioff] = ham[0::2, 0::2].toarray().flatten()  # uu
-                                Hoff[1][ioff] = ham[0::2, 1::2].toarray().flatten()  # ud
-                                Hoff[2][ioff] = ham[1::2, 0::2].toarray().flatten()  # du
-                                Hoff[3][ioff] = ham[1::2, 1::2].toarray().flatten()  # dd
+            origin = cx == 0 and cy == 0 and cz == 0
+            if origin:
+                # Missing onsite blocks still contribute correctly shaped zeros.
+                current_onsite = [np.zeros((no[ia], no[ia]), dtype=dtype)
+                                  for ia in range(natoms)]
+            for ia, ja, dense in _stored_atom_blocks(matrix, no, indo, natoms):
+                if origin and ia == ja:
+                    current_onsite[ia] = dense
+                    continue
+                if skip:
+                    i = lookup.get((ia, ja, cx, cy, cz))
+                    if i is None:
+                        continue
+                    for spin, value in enumerate(_channels(dense, isSOC)):
+                        Hoff[spin][i] = value
+                else:
+                    for spin, value in enumerate(_channels(dense, isSOC)):
+                        Hoff[spin].append(value)
+                    edge_idx_src.append(ia)
+                    edge_idx_dst.append(ja)
+                    cell_shift.append(np.array([cx, cy, cz], dtype=int))
+                    nbr_shift.append(np.array([cx, cy, cz]) @ stru.cell)
+            if origin:
+                for dense in current_onsite:
+                    for spin, value in enumerate(_channels(dense, isSOC)):
+                        Hon[spin].append(value)
 
         if calcRcut:
             self._calculate_rcut(stru, edge_idx_src, edge_idx_dst, cell_shift)
@@ -708,17 +737,6 @@ class ABACUSHS:
                 graph_['Hoff'], graph_['iHoff'] = convert_complex(Hoff)
 
         return graph_
-
-    def _fill_offsite_hamiltonian(self, cx, cy, cz, ia, ja, edge_info_array):
-        """
-        Checks if an offsite Hamiltonian term already exists and returns the appropriate index.
-        """
-        ioff = find_matching_column_index(edge_info_array, [ia, ja, cx, cy, cz])
-
-        if ioff is not None:
-            return False, ioff
-        else:
-            return True, ioff
 
     def _calculate_rcut(self, stru, edge_idx_src, edge_idx_dst, cell_shift):
         """
