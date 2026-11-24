@@ -41,49 +41,25 @@ diagonalizations = 0
 Hartree、交换关联、DFT+U、EXX、DeePKS 等密度或电子态相关项始终不进入
 H0。
 
-### 与旧 3.5.3 的数值兼容
+### FFT 默认路径与历史兼容性
 
-当前修订 `h0lite-v311-simpson-buffered-20260907` 直接使用 ABACUS 3.11 的
-有限 k 网格 Simpson 积分器、轨道/投影子变换和矩阵组装，不再编译
-移植的旧积分表模块。仅为 H0 显式选择固定距离网格、逐对截止/辅助点
-和四点插值，并保留历史标量非局域赝势的对角 D 约定。普通 3.11 的
-默认样条路径不变；独立距离点的直接积分采用 OpenMP 并行。
-这是复现旧版的数值兼容路径，不等同于原生 3.11 的默认 FFT 和完整
-径向投影子耦合；下游将 H 与 S0 配对时仍须明确数值约定。
+`h0lite-v311-native-fft-20261124` 使用 ABACUS 3.11 原生 FFT 两中心积分表
+和原生非局域投影子耦合。该积分路径与 HamGNN 自
+[2025 年 9 月更新](https://github.com/QuantumLab-ZY/HamGNN/commit/65b16478aa867225eaff661bf4add4b8e2ceb4ac)
+随附的 ABACUS 3.5.3 导出器的 CMake 默认配置一致
+（`ENABLE_FFT_TWO_CENTER=ON`）。此前 H0Lite 的 Simpson 模式复现
+旧源码包的 Makefile 构建及其有限 k 积分表。在 100 Ry 和
+`lcao_dk=0.01` 下，该积分表截断于 10.04 bohr⁻¹。对所测的 Si 基组，
+截断损失的高 k 尾部对应约 80 meV 的同原子 d 轨道动能。
 
-完成标记的 generator 已更新为
-`ABACUS-3.11-H0Lite-native-simpson-v3`。旧版 H0Lite 的 v1/FFT 和
-v2/移植积分表标记会被拒绝，既不静默跳过，也不覆盖其矩阵。升级后应在新的 case/
-输出目录重新导出，不要通过改写标记让旧结果冒充新结果。调用参数不变。
+三帧 Si143 算例各有 1,859 个基函数。逐个对齐 27 个实空间块后，H0 和 S0
+与旧 CMake FFT 版在导出精度下逐元素一致。此对照适用于所测的 Si
+轨道和赝势。ABACUS 3.11 使用完整的原生投影子耦合，含非对角耦合的赝势
+可能出现差异。另一个 Ti₂O₄ 算例验证了 `--with-vl` 会将局域离子势加到 H0，
+同时保持 S0 相同。
 
-`--with-vl` 仍只把局域离子势加进 H0；它不属于旧包默认 H0 的数值对照。
-`legacy_v353/` 及其四个编译单元已移除；保留的旧 3.5.3 压缩包仅用于
-历史参考，不参与 H0Lite 构建。源码来源见包内 `SOURCE_INFO.md`。
-
-数值验收使用旧包编译的真实 3.5.3 导出器，同一批 10 个 TiO2 和
-6 个 Si 结构、同一赝势/轨道和物理输入。H0（Ry）与 S0（无量纲）
-均要求最大绝对差及相对 Frobenius 差不超过 `1e-8`。这一验收范围
-不代表任意赝势、轨道或未支持模式均已验证。
-
-2026-09-06 实测上述 16 例全部通过：H0/S0 最大绝对差均约 `1e-10`，
-最大相对 Frobenius 差分别为 `2.36e-12`、`1.30e-11`。相同节点、
-16 核、4 case 并发下，两组独立 Slurm 作业各完整计算 16 例，从提交
-到结束均为 50 秒（旧积分表实现与本修订），未观察到总耗时退化；
-这不是单例外推，也不是显著提速的证据。
-
-2026-09-07 的 buffered 修订只优化现有 3.11 CSR writer：换行不再逐行
-强制刷新，并去掉只读原子对遍历中的复制；没有更换数值算法、降低精度或
-改变文件格式。相同 16 例、16 核、4 case 并发的独立作业实测：优化前
-H0Lite 为 47 秒，优化后两次均为 29 秒；原始 3.5.3 两次为 49/44 秒
-（首轮含 5 秒排队）。含 Vl 模式由 73 秒降至 57 秒。均为提交到全部
-结束的墙钟时间，不含另行运行的数值比较，也没有复用旧输出或单例外推。
-
-默认 H0/S0 优化前后全部逐字节相同，与真实旧 3.5.3 的数值比较仍全部
-通过。含 Vl 的 16 例 S0 全部逐字节相同；H0 的最大差约 `1e-11 Ry`，
-未优化程序重复运行也存在 3.11 动态并行积分的末位波动；两例单线程
-对照逐字节一致。本轮未修改 Vl 算法，不声称其对齐旧包没有导出的 Vl。
-纯输出优化保持 v3 数值标记兼容，不需要重算已有匹配模式的 v3 结果。
-日志新增 `h0_write_ms`、`s0_write_ms`，区分矩阵写出与算符计算开销。
+完成标记的 generator 为 `ABACUS-3.11-H0Lite-native-fft-v4`，
+旧生成器的标记会被拒绝。切换生成器时使用新的 case 或输出目录。
 
 ## 输入要求
 
@@ -101,8 +77,8 @@ STRU、赝势和轨道也可由 INPUT 中的 `stru_file`、`pseudo_dir`、
 `orbital_dir` 指定。当前严格支持 `basis_type=lcao`、`gamma_only=0`、标量
 `nspin=1`、无 SOC 和守恒赝势。
 
-程序使用 ABACUS 3.11 的 INPUT/STRU/UPF/轨道解析；H0/S0 使用上述
-3.5.3 兼容积分路径，可选 Vl 使用 3.11 的局域势积分。旧
+程序使用 ABACUS 3.11 的 INPUT/STRU/UPF/轨道解析。H0/S0 使用原生
+FFT 两中心积分，可选 Vl 使用 3.11 的局域势积分。旧
 3.10 INPUT 中已取消注册的 `out_interval` 会被删除，其余参数保持不变并
 保存为 `INPUT.resolved`。`KPT` 不参与实空间 H0/S0 构造。CSR 精度来自
 INPUT 的 `out_hsr`，旧参数 `out_mat_hs2` 仍按 3.11 别名规则解析。3.11
@@ -284,9 +260,8 @@ export H0LITE_MKL_LICENSE_DIR=/path/to/the/same/mkl/installation/licensing
 也可直接配置 CMake 时传 `-DH0LITE_MKL_LICENSE_DIR=/path/to/licensing`。
 缺失时构建会明确报错，不能拿另一版本的许可文本替代。
 
-当前 3.11-Simpson 修订已在 GCC 10.5.0、CMake 3.31.7、oneMKL 2024.2、
-glibc 2.28 环境从新解压目录完成编译，默认 H0 和 `--with-vl` 均成功
-运行，数值验证见上文。
+FFT 版已用 GCC 10.5.0、CMake 3.31.7 和 oneMKL 2024.2 从新解压目录
+完成编译。默认 H0 和 `--with-vl` 均通过运行验证，数值比较见上文。
 生成文件仅动态依赖 glibc 基础组件，MKL/C++/OpenMP 运行库均静态链接。
 先前修订也曾使用 oneMKL 2023.2.0 编译；2023.2/2024.2 的许可目录
 自动选择及缺失目录报错已验证，当前程序的嵌入许可输出也已检查。
@@ -304,12 +279,14 @@ glibc 2.28 环境从新解压目录完成编译，默认 H0 和 `--with-vl` 均�
    ```bash
    module load compiler/oneAPI/2024.2.1
    module load gcc/10.5.0
+   unset LD_RUN_PATH
    export PATH=/data/src/abacus-lts-3.10/toolchain/install/cmake-3.31.7/bin:$PATH
    g++ --version
    ```
 
    oneAPI 模块提供 MKL，但不会替换系统的 `g++`，因此 GCC 模块也必须
-   加载。上面的 CMake 路径是集群共享工具，可在计算节点使用。
+   加载。清除 GCC 模块设置的 `LD_RUN_PATH` 可避免链接器嵌入集群路径。
+   上面的 CMake 路径是集群共享工具，可在计算节点使用。
    Jinsi 上对应的模块名称不同：
 
    ```bash

@@ -672,13 +672,13 @@ index c938bdb..5d458f9 100644
      /**
 diff --git a/source/source_main/h0lite.cpp b/source/source_main/h0lite.cpp
 new file mode 100644
-index 0000000..fc06c59
+index 0000000..8713f82
 --- /dev/null
 +++ b/source/source_main/h0lite.cpp
-@@ -0,0 +1,566 @@
+@@ -0,0 +1,550 @@
 +// SPDX-License-Identifier: LGPL-3.0-or-later
 +// Copyright (C) 2026 HamGNN H0Lite contributors (2004huwa).
-+// Modified ABACUS frontend, updated 2026-09-07; see licenses/H0Lite-NOTICE.txt.
++// Modified ABACUS frontend, updated 2026-11-24; see licenses/H0Lite-NOTICE.txt.
 +// A minimal H0/S0 frontend built from ABACUS numerical-orbital components.
 +
 +#include "source_main/h0lite_core.h"
@@ -737,7 +737,7 @@ index 0000000..fc06c59
 +{
 +
 +constexpr const char* kContract
-+    = "H0LITE_V353_CONTRACT: H0=T+Vnl; S0=NAO overlap; SCF iterations=0; diagonalizations=0";
++    = "H0LITE_FFT_CONTRACT: H0=T+Vnl; S0=NAO overlap; SCF iterations=0; diagonalizations=0";
 +constexpr const char* kVlContract
 +    = "H0LITE_VL_MERGED_CONTRACT: H0=T+Vnl+Vl; Vl=<NAO|Vlocal_pseudopotential|NAO>; density inputs=0; separate Vl output=0; SCF iterations=0; diagonalizations=0";
 +
@@ -1032,25 +1032,9 @@ index 0000000..fc06c59
 +                                 PARAM.inp.nspin);
 +    ucell.infoNL.reset(nonlocal_info);
 +    two_center.build_beta(ucell.ntype, nonlocal_info->get_nonlocal().Beta);
-+    // The archived scalar 3.5.3 exporter retained only diagonal projector D.
-+    for (int it = 0; it < ucell.ntype; ++it)
-+    {
-+        auto& pseudo = ucell.atoms[it].ncpp;
-+        if (!pseudo.has_so)
-+        {
-+            ModuleBase::ComplexMatrix diagonal_d(2 * pseudo.nh, 2 * pseudo.nh);
-+            for (int ip = 0; ip < pseudo.nh; ++ip)
-+            {
-+                diagonal_d(ip, ip) = pseudo.d_real(ip, ip);
-+                diagonal_d(ip + pseudo.nh, ip + pseudo.nh) = pseudo.d_real(ip, ip);
-+            }
-+            pseudo.set_d_so(diagonal_d, pseudo.nbeta, pseudo.nh, false, false, 1);
-+        }
-+    }
-+    two_center.tabulate_h0_compat(PARAM.inp.lcao_ecut, PARAM.inp.lcao_dk,
-+                                  PARAM.inp.lcao_dr, PARAM.inp.lcao_rmax);
-+    GlobalV::ofs_running << "numerical_backend: abacus-v311-simpson-compatible\n"
-+                         << "nonlocal_projector_coupling: v353-scalar-diagonal\n";
++    two_center.tabulate();
++    GlobalV::ofs_running << "numerical_backend: abacus-v311-native-fft\n"
++                         << "nonlocal_projector_coupling: abacus-v311-native\n";
 +    const long long setup_ms = milliseconds(total_start);
 +
 +    Parallel_Orbitals pv;
@@ -1259,13 +1243,13 @@ index 0000000..aad1694
 +int h0lite_run_core(const std::string& input, const std::string& output_dir, bool with_vl);
 diff --git a/source/source_main/h0lite_frontend.cpp b/source/source_main/h0lite_frontend.cpp
 new file mode 100644
-index 0000000..e71c797
+index 0000000..fb66c20
 --- /dev/null
 +++ b/source/source_main/h0lite_frontend.cpp
 @@ -0,0 +1,1174 @@
 +// SPDX-License-Identifier: LGPL-3.0-or-later
 +// Copyright (C) 2026 HamGNN H0Lite contributors (2004huwa).
-+// Modified ABACUS frontend, updated 2026-09-06; see licenses/H0Lite-NOTICE.txt.
++// Modified ABACUS frontend, updated 2026-11-24; see licenses/H0Lite-NOTICE.txt.
 +// Case-oriented, dependency-free frontend for the standalone ABACUS H0Lite core.
 +
 +#include "source_main/h0lite_core.h"
@@ -1306,12 +1290,12 @@ index 0000000..e71c797
 +namespace
 +{
 +
-+constexpr const char* kGenerator = "ABACUS-3.11-H0Lite-native-simpson-v3";
++constexpr const char* kGenerator = "ABACUS-3.11-H0Lite-native-fft-v4";
 +constexpr const char* kMarkerName = "get_H0-v311-strict.json";
 +constexpr const char* kH0Contract = "H0=T+Vnl; S0=NAO overlap; no Vl/Veff/DFT+U/EXX/DeePKS";
 +constexpr const char* kH0VlContract = "H0=T+Vnl+Vl; S0=NAO overlap; no Hartree/XC/DFT+U/EXX/DeePKS";
 +constexpr const char* kBackendContract
-+    = "H0LITE_V353_CONTRACT: H0=T+Vnl; S0=NAO overlap; SCF iterations=0; diagonalizations=0";
++    = "H0LITE_FFT_CONTRACT: H0=T+Vnl; S0=NAO overlap; SCF iterations=0; diagonalizations=0";
 +constexpr const char* kBackendVlContract
 +    = "H0LITE_VL_MERGED_CONTRACT: H0=T+Vnl+Vl; Vl=<NAO|Vlocal_pseudopotential|NAO>; density inputs=0; separate Vl output=0; SCF iterations=0; diagonalizations=0";
 +
@@ -1986,8 +1970,8 @@ index 0000000..e71c797
 +           << "  \"status\": \"complete\",\n"
 +           << "  \"created_at_utc\": " << quote(utc_now()) << ",\n"
 +           << "  \"generator\": " << quote(kGenerator) << ",\n"
-+           << "  \"numerical_backend\": \"abacus-v311-simpson-compatible\",\n"
-+           << "  \"nonlocal_projector_coupling\": \"v353-scalar-diagonal\",\n"
++           << "  \"numerical_backend\": \"abacus-v311-native-fft\",\n"
++           << "  \"nonlocal_projector_coupling\": \"abacus-v311-native\",\n"
 +           << "  \"operator_contract\": " << quote(with_vl ? kH0VlContract : kH0Contract) << ",\n"
 +           << "  \"output_validation\": {\"integrity_on_demand\": true, \"recorded_size_check\": false},\n"
 +           << "  \"binary\": {\"source_commit\": " << quote(H0LITE_ABACUS_COMMIT)
@@ -2439,7 +2423,7 @@ index 0000000..e71c797
 +}
 diff --git a/source/source_main/h0lite_licenses.h.in b/source/source_main/h0lite_licenses.h.in
 new file mode 100644
-index 0000000..ab89f19
+index 0000000..d87062a
 --- /dev/null
 +++ b/source/source_main/h0lite_licenses.h.in
 @@ -0,0 +1,13 @@
@@ -2448,7 +2432,7 @@ index 0000000..ab89f19
 +// Generated at configure time. Do not edit the generated header.
 +#pragma once
 +
-+inline constexpr const char kH0LitePackageRevision[] = "h0lite-v311-simpson-buffered-20260907";
++inline constexpr const char kH0LitePackageRevision[] = "h0lite-v311-native-fft-20261124";
 +inline constexpr const char kAbacusLicenseText[] = R"H0LABACUS(@H0LITE_ABACUS_LICENSE_TEXT@)H0LABACUS";
 +inline constexpr const char kGplLicenseText[] = R"H0LGPL(@H0LITE_GPL_LICENSE_TEXT@)H0LGPL";
 +inline constexpr const char kH0LiteNoticeText[] = R"H0LNOTICE(@H0LITE_NOTICE_TEXT@)H0LNOTICE";
@@ -3420,13 +3404,13 @@ index 0000000..f288702
 +<https://www.gnu.org/licenses/why-not-lgpl.html>.
 diff --git a/source/source_main/licenses/H0Lite-NOTICE.txt b/source/source_main/licenses/H0Lite-NOTICE.txt
 new file mode 100644
-index 0000000..319272d
+index 0000000..ce0b408
 --- /dev/null
 +++ b/source/source_main/licenses/H0Lite-NOTICE.txt
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,45 @@
 +ABACUS H0Lite: modified ABACUS source, not an official ABACUS release
-+Package revision: h0lite-v311-simpson-buffered-20260907
-+Modification date: 2026-09-07
++Package revision: h0lite-v311-native-fft-20261124
++Modification date: 2026-11-24
 +Modifications by: HamGNN H0Lite contributors (2004huwa)
 +Copyright (C) 2026 HamGNN H0Lite contributors for their additions.
 +
@@ -3441,10 +3425,8 @@ index 0000000..319272d
 +Changes: standalone H0/S0 frontend without SCF or diagonalization; optional
 +local ionic potential merged into H0; preserved SCF input parsing; native
 +batch scheduling and Slurm sharding; static build and license embedding.
-+Numerical integration uses the ABACUS 3.11 finite-grid Simpson implementation.
-+An explicit H0-only table mode restores historical distance-grid, cutoff and
-+four-point interpolation conventions; scalar diagonal-projector coupling is
-+retained for compatibility. Independent direct-transform rows use OpenMP.
++Numerical integration uses the ABACUS 3.11 native FFT two-center tables
++and native nonlocal-projector coupling.
 +The previous imported ORB_gen_tables/ORB_table_phi/ORB_table_beta modules have
 +been removed; the separate historical 3.5.3 archive remains unchanged.
 +The trimmed package omits unused code and the optional MemCheckDeluxe debug

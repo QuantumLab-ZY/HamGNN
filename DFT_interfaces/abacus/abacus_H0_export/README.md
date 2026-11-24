@@ -20,13 +20,6 @@ oneAPI symlinks. For a nonstandard layout, set `H0LITE_MKL_LICENSE_DIR` to the
 licensing directory from that exact installation; another version's notices
 are not a substitute.
 
-The current 3.11-Simpson revision was built from a fresh extraction with
-GCC 10.5.0, CMake 3.31.7, oneMKL 2024.2, and glibc 2.28. Both default H0 and
-`--with-vl` executed successfully; only basic glibc libraries remain dynamically
-linked. Numerical validation is described below. Earlier revisions also built
-with oneMKL 2023.2.0. License discovery was checked for 2023.2/2024.2 and missing
-notices, and the current executable's embedded-license output was checked.
-
 Extract outside the repository and build on allocated compute resources:
 
 ```bash
@@ -61,53 +54,32 @@ ABACUS 3.11. It reads an ordinary LCAO SCF case but evaluates only
 `H0=T+Vnl` and `S0`; `--with-vl` changes H0 to `T+Vnl+Vl`. It runs no SCF
 iteration and no diagonalization.
 
-The `h0lite-v311-simpson-buffered-20260907` revision uses ABACUS 3.11's finite-grid
-Simpson integrator and orbital/projector transforms. An explicitly selected
-H0 table mode restores historical distance spacing, per-pair cutoff/padding
-and four-point interpolation; scalar diagonal-projector D is retained.
-Imported legacy table modules are no longer included or compiled. Ordinary
-3.11 tables keep their default spline path; independent direct-transform rows
-use OpenMP without changing per-row arithmetic. This compatibility mode is
-not equivalent to native 3.11 FFT/full-projector numerics when pairing H/S.
+### FFT default and compatibility
 
-The marker generator is now `ABACUS-3.11-H0Lite-native-simpson-v3`.
-Previous v1/FFT and v2/imported-table markers are rejected without overwriting or silently reusing
-their matrices. Export into a fresh case/output directory when upgrading;
-do not relabel old markers as new results. CLI arguments remain unchanged.
-The optional Vl contribution remains merged into H0 and is tested separately
-from the historical default-H0 comparison. The retained 3.5.3 archive is a
-historical reference, not a build dependency; see SOURCE_INFO.md in the archive.
+`h0lite-v311-native-fft-20261124` uses the native ABACUS 3.11 FFT two-center
+tables and native nonlocal projector couplings. This follows the FFT route
+enabled by default in CMake (`ENABLE_FFT_TWO_CENTER=ON`) in the ABACUS 3.5.3
+exporter shipped with HamGNN since its [September 2025 update](https://github.com/QuantumLab-ZY/HamGNN/commit/65b16478aa867225eaff661bf4add4b8e2ceb4ac).
+The previous H0Lite Simpson mode reproduced the archive's Makefile build,
+which uses finite-k tables. At 100 Ry and `lcao_dk=0.01`, that route stops at
+10.04 bohr⁻¹. For the tested Si basis, the omitted tail accounted for about
+80 meV of the onsite d-orbital kinetic energy.
 
-Acceptance compares 10 TiO2 and 6 Si cases with the real exporter built from
-the retained 3.5.3 archive, using identical structures, pseudopotentials,
-orbitals and physical inputs. Both maximum-absolute and relative-Frobenius
-differences must be at most `1e-8` for H0 (Ry) and S0 (dimensionless).
-This coverage does not establish arbitrary pseudopotential/orbital or
-unsupported calculation-mode compatibility.
+In three Si143 geometries with 1,859 orbitals each, both H0 and S0 matched the
+older CMake FFT build element by element across all 27 real-space blocks at
+export precision. This comparison covers the tested Si orbitals and
+pseudopotential. ABACUS 3.11 uses the full native nonlocal projector
+couplings, so results can differ for pseudopotentials with off-diagonal
+projector couplings. A separate Ti₂O₄ case verified that `--with-vl` adds to H0
+and leaves S0 unchanged.
 
-On 2026-09-06 all 16 cases passed: worst absolute differences were about
-`1e-10` for both matrices, with relative differences below `2.36e-12` (H0)
-and `1.30e-11` (S0). Two separate 16-case Slurm jobs on the same node,
-16 CPUs and four concurrent cases each took 50 seconds from submission to
-completion (previous imported tables versus this revision). This observed
-no end-to-end slowdown; it does not establish a significant speedup.
+The completion marker identifies `ABACUS-3.11-H0Lite-native-fft-v4` and rejects
+earlier generator identities. Export to a fresh case/output directory when
+switching generators. The archive builds with GCC 10.5.0, CMake 3.31.7 and
+static oneMKL 2024.2. Runtime tests passed with only basic glibc libraries
+dynamically linked.
 
-The 2026-09-07 buffered revision retains the existing 3.11 CSR writer but
-removes per-line flushes and read-only atom-pair copies. Numerical kernels,
-formatting, sparse thresholds and precision are unchanged. Independent jobs
-actually exporting all 16 cases with 16 CPUs and four concurrent cases took
-47 s before optimization and 29 s in both optimized runs; the genuine 3.5.3
-exporter took 49/44 s (the first run included 5 s of queueing). Including Vl
-improved from 73 s to 57 s. Times are Slurm Submit-to-End, excluding separate
-numerical comparisons; no old outputs were reused or single cases extrapolated.
-
-Default H0/S0 are byte-identical before/after this optimization and still pass
-all old-3.5.3 numerical checks. With Vl, S0 is byte-identical; H0 differences
-are at most about 1e-11 Ry. Repeating the unmodified binary also shows last-bit
-variation from dynamic parallel grid integration; two single-thread controls
-are byte-identical. The Vl kernel is unchanged. Compatible v3 markers remain
-reusable: this serialization-only update does not require regeneration.
-Backend logs now include `h0_write_ms` and `s0_write_ms`.
+### Running the exporter
 
 ```bash
 cd CASE
